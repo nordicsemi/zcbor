@@ -19,6 +19,7 @@
 	bool(*)(zcbor_state_t *, struct Pet *): ((zcbor_decoder_t *)func), \
 	default: ZCBOR_CAST_FP(func))
 
+
 #define log_result(state, result, func) do { \
 	if (!result) { \
 		zcbor_trace_file(state); \
@@ -70,6 +71,5 @@ int cbor_decode_Pet(
 		decode_Pet(states, result);
 	}
 
-	return zcbor_entry_function(payload, payload_len, (void *)result, payload_len_out, states,
-		(zcbor_decoder_t *)ZCBOR_CUSTOM_CAST_FP(decode_Pet), sizeof(states) / sizeof(zcbor_state_t), ZCBOR_LARGE_ELEM_COUNT);
+	return zcbor_entry_function(payload, payload_len, (void *)result, payload_len_out, states, (zcbor_decoder_t *)ZCBOR_CUSTOM_CAST_FP(decode_Pet), sizeof(states) / sizeof(zcbor_state_t), ZCBOR_LARGE_ELEM_COUNT);
 }

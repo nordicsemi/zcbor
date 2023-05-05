@@ -152,9 +152,9 @@ struct {
 	size_t map_elems_processed; /**< The number of elements of an unordered map
 	                                 that have been processed. */
 #endif
-	size_t map_start_backup_num; /** The index of the backup made at the start of the current map.
-	                                 This is used to move to the start of the map when searching
-	                                 unordered maps. */
+	size_t map_start_backup_num; /** The index of the backup made at the start of the current
+	                                 map. This is used to move to the start of the map when
+	                                 traversing unordered maps during zcbor_unordered_map_search. */
 	size_t map_elem_count; /**< Number of elements in the current unordered map.
 	                            This also serves as the number of bits (not bytes)
 	                            in the map_search_elem_state array (when applicable). */
@@ -588,8 +588,10 @@ float zcbor_float16_to_32(uint16_t input);
  */
 uint16_t zcbor_float32_to_16(float input);
 
-#ifdef ZCBOR_MAP_SMART_SEARCH
+/** Round up x to the nearest multiple of align. */
 #define ZCBOR_ROUND_UP(x, align) (((x) + (align) - 1) / (align) * (align))
+
+#ifdef ZCBOR_MAP_SMART_SEARCH
 #define ZCBOR_BITS_PER_BYTE 8
 
 /** Calculate the number of bytes needed to hold @p num_flags 1 bit flags

@@ -4,13 +4,11 @@
 ; SPDX-License-Identifier: Apache-2.0
 ;
 
-Member = ("image" => int) /
-	("data" => bstr) /
-	("len" => int) /
-	("off" => int) /
-	("sha" => bstr) /
-	(tstr => any)
-
 Upload = {
-	3*8members: Member
+	? "image" => uint,
+	? "len" => uint,
+	  "off" => uint,
+	? "sha" => bstr,
+	? "data" => bstr,
+	? "upgrade" => bool,
 }

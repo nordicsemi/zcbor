@@ -35,6 +35,7 @@ set(py_command_serial_recovery
   -d
   ${bit_arg}
   --short-names
+  --unordered-maps
 
   # Testing the --include-prefix option
   --include-prefix serial

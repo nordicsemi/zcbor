@@ -492,7 +492,7 @@ usage: zcbor code [-h] -c CDDL [--no-prelude] [-v] [-q]
                   -t ENTRY_TYPES [ENTRY_TYPES ...] [-d] [-e] [--time-header]
                   [--git-sha-header] [-b {8,16,32,64}]
                   [--include-prefix INCLUDE_PREFIX] [-s]
-                  [--file-header FILE_HEADER] [--defines]
+                  [--file-header FILE_HEADER] [--defines] [--unordered-maps]
 
 Parse a CDDL file and produce C code that validates and xcodes CBOR.
 The output from this script is a C file and a header file. The header file
@@ -599,6 +599,16 @@ options:
                         and place them in the generated header file. This is
                         off by default because it may create naming conflicts
                         that don't show up otherwise.
+  --unordered-maps      [EXPERIMENTAL] Generate code in such a way that it can
+                        decode maps with unknown element order. When enabled,
+                        the generated code will use the
+                        zcbor_unordered_map_*() API to decode data whenever
+                        inside a map. zcbor detects from the CDDL whether
+                        ZCBOR_MAP_SMART_SEARCH is needed and enables it in the
+                        generated cmake file if so. Enabling --unordered-maps
+                        places some restrictions on the level of ambiguity
+                        allowed between map keys in a map. This option only
+                        affects decoding (--decode/-d).
 
 ```
 

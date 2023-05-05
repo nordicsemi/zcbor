@@ -8,6 +8,7 @@ cmake_minimum_required(VERSION 3.13.1)
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(test9_manifest14)
+set(MAP_SEARCH_FLAGS ON)  # Because of --unordered maps
 include(../../cmake/test_template.cmake)
 
 if (NOT MANIFEST)
@@ -30,6 +31,7 @@ set(py_command
   SUIT_Common_Sequence
   -d
   ${bit_arg}
+  --unordered-maps
   )
 
 execute_process(

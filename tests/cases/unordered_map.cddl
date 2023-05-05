@@ -1,0 +1,84 @@
+;
+; Copyright (c) 2023 Nordic Semiconductor ASA
+;
+; SPDX-License-Identifier: Apache-2.0
+;
+
+UnorderedMap1 = {
+	1 => "one",
+	2 => "two",
+	int => bstr,
+	"foo" => "bar",
+	bazboz,
+	*bstr => intlist,
+}
+
+bazboz = ("baz" => "boz")
+intlist = [*int]
+
+UnorderedMap2 = {
+	+typeUnion,
+	"map" => {
+		?-1 => bstr,
+		?-2 => bstr,
+		?bool => int,
+	}
+}
+
+typeUnion = type1 / type2 / typeDefault
+type1 = 1 => tstr
+type2 = 2 => tstr
+typeDefault = int => nil
+
+UnorderedMap3 = {
+	1*2000 uint => uint,
+	1*2000 nint => nint,
+}
+
+group1 = 3*3 (
+	uint => tstr,
+	nint => bstr,
+)
+
+UnorderedMap4 = {
+	1*3 group1,
+	?int => (tstr / bstr)
+}
+
+UnorderedMap5 = {
+	1 => bool,
+	2 => {
+		-1 => int,
+		-2 => int,
+		-3 => UnorderedMap2,
+		*uint => bstr,
+	},
+
+}
+
+; NOTE: This is bad CDDL design, but used here to test a corner case.
+UnorderedMap6 = {
+	(
+		(typechoice2: 1 => uint,
+		2 => tstr) //
+		(typechoice3: 1 => uint,
+		3 => tstr) //
+		(typechoice4: 1 => uint,
+		4 => tstr)
+	)
+}
+
+bool_or_nil = bool / nil
+
+UnorderedMap7 = {
+	1*6 (
+		(-1 => tstr) / (-2 => bstr) / (+nint .lt -2 => bool_or_nil)
+	),
+	1*100 uint => int,
+}
+
+UnorderedMap8 = {
+	union1: (1 => int // 2 => int // 3 => int),
+	union2: (4 => int // 5 => int // 6 => int),
+	?union3: (7 => 42 // 8 => int // 9 => int) .default (7 => 42)
+}
