@@ -9,4 +9,4 @@ if [[ -z "$ZEHPYR_BASE" ]]; then
         ZEPHYR_BASE=$(west topdir)/zephyr
 fi
 
-$ZEPHYR_BASE/scripts/twister -M -v -T . -W --platform qemu_malta_be $*
+$ZEPHYR_BASE/scripts/twister -M -v -T . -W --platform qemu_malta/qemu_malta/be $*

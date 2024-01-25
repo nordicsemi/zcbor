@@ -8,7 +8,7 @@ on:
 
 env:
   ZEPHYR_SDK_VERSION: 0.16.5
-  ZEPHYR_REV: v3.6.0
+  ZEPHYR_REV: 5046229bb94cd2683ec1022848991d387152a0d2
 
 jobs:
   merge-test-1:
@@ -207,7 +207,7 @@ jobs:
     - name: Prepare and run tests
       uses: ./.github/actions/prepare_and_run_tests
       with:
-        twister_arguments: "--timestamps --platform native_posix --platform native_posix_64 --platform mps2/an521/cpu0 --platform qemu_malta_be ${{ matrix.asserts }}"
+        twister_arguments: "--timestamps --platform native_posix --platform native_posix_64 --platform mps2/an521/cpu0 --platform qemu_malta/qemu_malta/be ${{ matrix.asserts }}"
         zephyr_toolchain: zephyr
         zephyr_toolchain_arch: arm,mips
 
