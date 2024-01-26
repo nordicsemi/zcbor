@@ -1,3 +1,32 @@
+# zcbor v. 0.8.3 (2026-11-12)
+
+This is a bugfix release on top of 0.8.1, fixing issues in `zcbor_any_skip()`.
+0.8.2 had no changes to the library or the script compared to 0.8.1, only an updated board name in the tests.
+
+Any new bugs, requests, or missing features should be reported as [Github issues](https://github.com/NordicSemiconductor/zcbor/issues).
+
+See also the [release notes for 0.8.1](#zcbor-v-081-2024-01-26) below.
+
+## Bugfixes:
+
+ * zcbor_decode: Limit recursion depth in `zcbor_any_skip()`. Fail with the new `ZCBOR_ERR_MAX_DEPTH` when nesting exceeds `ZCBOR_MAX_SKIP_DEPTH` (default 8, can be overridden in the build).
+ * zcbor_decode: Fix infinite loop in `zcbor_unordered_map_end_decode()` when `zcbor_any_skip()` fails.
+ * zcbor_decode: Add missing checks to `zcbor_any_skip()`
+   * Fail with `ZCBOR_ERR_MAP_MISALIGNED` if an indefinite-length map has a key without a value.
+   * Fail with `ZCBOR_ERR_INT_SIZE` when list/map element counts don't fit in `size_t`.
+ * requirements: Pin `cbor2` to `<6.0.0`, since cbor2 6.x is not supported by zcbor 0.8.x.
+ * README: Update the link to Zephyr's Getting Started Guide.
+
+## Other changes to run tests:
+
+ * Run tests on Zephyr v3.7.2 (SDK 0.16.9):
+   * Use HWMv2 board names, and remove or rename Kconfig options that are no longer in Zephyr (`CONFIG_ZTEST_NEW_API`, `CONFIG_CPLUSPLUS` -> `CONFIG_CPP`).
+   * Only run twister tests on Python 3.10 and newer, as required by Zephyr.
+   * Run CI on Ubuntu 24.04 instead of 22.04, installing `qemu-system-arm`/`qemu-system-mips` instead of the removed `qemu` package.
+   * Fix a float/double comparison in `test5_corner_cases`.
+ * Don't check the Wikipedia link in the docs tests, since it returns 403 to GitHub Actions.
+
+
 # zcbor v. 0.8.1 (2024-01-26)
 
 Any new bugs, requests, or missing features should be reported as [Github issues](https://github.com/NordicSemiconductor/zcbor/issues).
