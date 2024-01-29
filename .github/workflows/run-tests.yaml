@@ -20,7 +20,7 @@ jobs:
     name: Merge tests 1 (${{ matrix.platform }}${{ matrix.asserts != '' && ' with asserts' || '' }})
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install zcbor
       uses: ./.github/actions/install_zcbor
@@ -40,10 +40,10 @@ jobs:
     name: Merge tests 2 (Python ${{ matrix.python-version }})
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Setup Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         allow-prereleases: true
@@ -63,7 +63,7 @@ jobs:
     name: Merge tests 3 (Windows)
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Read zcbor version
       run: |
@@ -93,10 +93,10 @@ jobs:
     name: Merge tests 4 (Test repo files)
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Setup Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
@@ -121,7 +121,7 @@ jobs:
     if: "startswith(github.head_ref, 'release/')"
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Read zcbor version
       run: echo "ZCBOR_VERSION=$(cat zcbor/VERSION)" >> $GITHUB_ENV
@@ -165,13 +165,13 @@ jobs:
 
     - name: Upload fuzz failures
       if: ${{ failure() }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: fuzz-failures
         path: tests/fuzz/build-afl/output/default/crashes/
 
     - name: Upload release files
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: zcbor-release-$ZCBOR_VERSION
         path: dist/*
@@ -191,10 +191,10 @@ jobs:
     if: "github.event_name == 'schedule' || (github.event_name == 'pull_request' && startswith(github.head_ref, 'release/'))"
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Setup Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         allow-prereleases: true
@@ -226,10 +226,10 @@ jobs:
     if: "github.event_name == 'schedule' || (github.event_name == 'pull_request' && startswith(github.head_ref, 'release/'))"
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Setup Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         allow-prereleases: true
