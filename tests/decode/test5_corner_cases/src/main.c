@@ -1516,7 +1516,7 @@ ZTEST(cbor_decode_test5, test_floats)
 	zassert_equal((float)1234567.89, result.float_32, NULL);
 	zassert_equal((double)-98765.4321, result.float_64, NULL);
 	zassert_equal(2, result.floats_count, NULL);
-	zassert_equal((float)(123.0/456789.0), result.floats[0], NULL);
+	zassert_equal((double)(float)(123.0/456789.0), result.floats[0], NULL);
 	zassert_equal((double)(-1.0/(1LL << 42)), result.floats[1], NULL);
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_Floats(
@@ -1543,7 +1543,7 @@ ZTEST(cbor_decode_test5, test_floats)
 	zassert_equal((double)-98765.4321, result.float_64, NULL);
 	zassert_equal(1, result.floats_count, NULL);
 	zassert_false((double)(123.0/456789.0) == result.floats[0], NULL);
-	zassert_equal((float)(123.0/456789.0), result.floats[0], NULL);
+	zassert_equal((double)(float)(123.0/456789.0), result.floats[0], NULL);
 
 	ret = cbor_decode_Floats(
 		floats_payload5, sizeof(floats_payload5), &result, &num_decode);
@@ -1555,7 +1555,7 @@ ZTEST(cbor_decode_test5, test_floats)
 	zassert_equal(1, result.floats_count, NULL);
 	zassert_false((double)(123.0/456789.0) == result.floats[0], NULL);
 	expected = 0.00026917458f; /* 0x398d2000 */
-	zassert_equal(expected, result.floats[0], NULL);
+	zassert_equal((double)expected, result.floats[0], NULL);
 
 	zassert_equal(ZCBOR_ERR_FLOAT_SIZE, cbor_decode_Floats(
 		floats_payload6_inv, sizeof(floats_payload6_inv), &result, &num_decode), NULL);
