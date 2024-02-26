@@ -7,8 +7,8 @@ on:
 
 
 env:
-  ZEPHYR_SDK_VERSION: 0.16.5
-  ZEPHYR_REV: 5cbf7b1b9d13a39f36ad8dabfaeaec21d98cf5ff
+  ZEPHYR_SDK_VERSION: 1.0.1
+  ZEPHYR_REV: v4.4.2
 
 jobs:
   merge-test-1:
