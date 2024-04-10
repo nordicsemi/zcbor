@@ -1,4 +1,4 @@
 tests:
   zcbor.decode.test1_suit_old_formats:
-    platform_allow: native_posix native_posix_64 mps2/an521/cpu0 qemu_malta/qemu_malta/be
+    platform_allow: native_posix native_posix/native/64 mps2/an521/cpu0 qemu_malta/qemu_malta/be
     tags: zcbor decode test1

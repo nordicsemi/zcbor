@@ -1,8 +1,8 @@
 tests:
   zcbor.decode.test9_manifest14:
-    platform_allow: native_posix native_posix_64 mps2/an521/cpu0 qemu_malta/qemu_malta/be
+    platform_allow: native_posix native_posix/native/64 mps2/an521/cpu0 qemu_malta/qemu_malta/be
     tags: zcbor decode manifest14 test9
   zcbor.cbor_decode.test9_manifest16.canonical:
-    platform_allow: native_posix native_posix_64 mps2/an521/cpu0 qemu_malta/qemu_malta/be
+    platform_allow: native_posix native_posix/native/64 mps2/an521/cpu0 qemu_malta/qemu_malta/be
     tags: zcbor decode manifest16 test9 canonical
     extra_args: MANIFEST=manifest16 CANONICAL=ON
