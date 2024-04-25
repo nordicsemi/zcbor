@@ -88,6 +88,31 @@ ZCBOR_STATE_D(decode_state, n, payload, payload_len, elem_count, n_flags);
 ZCBOR_STATE_E(encode_state, n, payload, payload_len, 0);
 ```
 
+Fragmented payloads
+-------------------
+
+zcbor can encode and decode payloads in sections, i.e. the payload can be split into separate buffers/arrays.
+This can be useful e.g. if you send or receive your payload in multiple packets.
+When the current payload section is done, call `zcbor_update_state()` to introduce the next section.
+Note that zcbor does not allow section boundaries to split a zcbor header/value pair.
+This means that the following elements cannot be split between sections:
+
+- Numbers and simple values (integers, floats, bools, undefined, nil)
+- Tags
+- Headers of lists, maps, tstrs, and bstrs
+
+If your payload is split in an unsupported way, you can get around it by making a small section out of the remaining bytes of one section spliced with the start of the next.
+Another option is to leave a little room at the start of each section buffer, and copy the remaining end of one section into the start of the next buffer.
+8 bytes should be enough for this.
+
+Lists and maps can span multiple sections, as long as the individual elements are not split as to break the above rule.
+
+String payloads can be split across multiple payload sections, if `ZCBOR_FRAGMENTS` is enabled, and the `*str_fragments_*()` APIs are used. Note that in the zcbor docs, the term "string fragment" is used for fragmented strings, while the term "payload section" is used for fragmented CBOR payloads, as passed to `zcbor_update_state()`. These do not always line up perfectly, particularly at the start and end of fragmented strings.
+
+CBOR-encoded bstrs can be nested, and there can also be a non-CBOR-encoded innermost string.
+The current innermost string (CBOR-encoded or otherwise) is called the "current string".
+`zcbor_update_state()` modifies all backups so that outer nested CBOR-encoded strings have updated information about the new section.
+
 Configuration
 -------------
 

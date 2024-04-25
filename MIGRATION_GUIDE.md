@@ -17,6 +17,17 @@
 * [Deprecation] In the function `zcbor_process_backup()` and the new `zcbor_process_backup_num()`, it is deprecated to use the argument `max_elem_count` with values other than `ZCBOR_MAX_ELEM_COUNT`.
   Using `ZCBOR_MAX_ELEM_COUNT` means the internal check on the `max_elem_count` has no effect, and the argument (and check) may be removed altogether in later releases.
 
+* The fragmented payload API has been completely redesigned to accomodate adding the encoding counterpart.
+  The docs have been updated and there's a new section in the README to explain the functionality.
+
+  * You must now define ZCBOR_FRAGMENTS to access the API
+  * `zcbor_*str_decode_fragment()` has been renamed to `zcbor_*str_fragments_start_decode()`
+  * After calling `zcbor_*str_fragments_start_decode()`, you must now retrieve the first fragment manually with `zcbor_str_fragment_decode()`, instead of via an argument.
+  * `zcbor_next_fragment()` and `zcbor_bstr_next_fragment()` have merged and is now called `zcbor_str_fragment_decode()`.
+    It does not take a `prev_fragment` argument, instead, this state is kept internally in the state struct.
+  * `zcbor_bstr_start_decode_fragment()` has been renamed to `zcbor_cbor_bstr_fragments_start_decode()` and does not return a fragment.
+    To retrieve fragments when decoding a CBOR-encoded bstr, use `zcbor_str_fragment_decode()`
+
 * Code generation:
 
   * Integers whose values are known to be within 8 or 16 bytes now use the corresponding integer types (`uint8_t`/`int8_t`/`uint16_t`/`int16_t`) instead of larger types.
