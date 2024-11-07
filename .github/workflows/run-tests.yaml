@@ -12,7 +12,7 @@ env:
 
 jobs:
   merge-test-1:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         platform: ["native_posix", "native_posix/native/64", "mps2/an521/cpu0"]
@@ -33,7 +33,7 @@ jobs:
         zephyr_toolchain_arch: ${{ matrix.platform == 'mps2/an521/cpu0' && 'arm' || ''}}
 
   merge-test-2:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
@@ -89,7 +89,7 @@ jobs:
         python3 -m unittest test_zcbor
 
   merge-test-4:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     name: Merge tests 4 (Test repo files)
     steps:
     - name: Checkout the code
@@ -111,7 +111,7 @@ jobs:
         python3 -m unittest test_repo_files
 
   release-test-1:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     name: Release tests 1 (Fuzz)
     needs:
     - merge-test-1
@@ -177,7 +177,7 @@ jobs:
         path: dist/*
 
   release-test-2:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
@@ -212,7 +212,7 @@ jobs:
         zephyr_toolchain_arch: arm,mips
 
   release-test-3:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
