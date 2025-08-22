@@ -56,7 +56,7 @@ runs:
         wget -nv -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v$ZEPHYR_SDK_VERSION/sha256.sum | shasum --check --ignore-missing
         tar -xf zephyr-sdk-${ZEPHYR_SDK_VERSION}_linux-x86_64_minimal.tar.xz
         mv zephyr-sdk-$ZEPHYR_SDK_VERSION zephyr-sdk
-        west update cmsis
+        west update cmsis_6
 
     - name: Install Zephyr SDK (ARM)
       if: ${{ inputs.zephyr_toolchain == 'zephyr' && contains(inputs.zephyr_toolchain_arch, 'arm') }}
