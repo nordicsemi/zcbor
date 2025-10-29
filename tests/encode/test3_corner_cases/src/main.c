@@ -121,7 +121,7 @@ ZTEST(cbor_encode_test3, test_tagged_union)
 	input.Bool = true;
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_encode_TaggedUnion(output,
-		sizeof(output), &input, &encode_len), "%d\r\n");
+		sizeof(output), &input, &encode_len));
 
 	zassert_equal(sizeof(exp_payload_tagged_union1), encode_len, NULL);
 	zassert_mem_equal(exp_payload_tagged_union1, output, sizeof(exp_payload_tagged_union1), NULL);

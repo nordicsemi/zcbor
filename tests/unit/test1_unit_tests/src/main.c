@@ -749,7 +749,7 @@ ZTEST(zcbor_unit_tests, test_int)
 	zassert_equal(int8, 12, "%d\r\n", int8);
 	zassert_equal(int16, 1234, "%d\r\n", int16);
 	zassert_equal(int32, 12345678, "%d\r\n", int32);
-	zassert_equal(int64, 1234567812345678, "%d\r\n", int64);
+	zassert_equal(int64, 1234567812345678, "%lld\r\n", int64);
 
 	/* Arbitrary negative numbers in each size */
 	zassert_true(zcbor_int_decode(state_d, &int8, sizeof(int8)), NULL);
@@ -847,7 +847,7 @@ ZTEST(zcbor_unit_tests, test_uint)
 	zassert_equal(uint8, 12, "%d\r\n", uint8);
 	zassert_equal(uint16, 1234, "%d\r\n", uint16);
 	zassert_equal(uint32, 12345678, "%d\r\n", uint32);
-	zassert_equal(uint64, 1234567812345678, "%d\r\n", uint64);
+	zassert_equal(uint64, 1234567812345678, "%llu\r\n", uint64);
 
 	/* Check absolute maximum number. */
 	zassert_true(zcbor_uint_decode(state_d, &uint64, sizeof(uint64)), NULL);
@@ -1096,7 +1096,7 @@ ZTEST(zcbor_unit_tests, test_any_skip)
 	zassert_true(zcbor_float64_put(state_e, 3.14), NULL);
 	zassert_true(zcbor_map_end_encode(state_e, 6), NULL);
 	zassert_true(zcbor_any_skip(state_d, NULL));
-	zassert_equal(state_d->payload, state_e->payload, "0x%x != 0x%x\n",
+	zassert_equal(state_d->payload, state_e->payload, "%p != %p\n",
 		state_d->payload, state_e->payload);
 	zassert_equal(state_d->elem_count, --exp_elem_count, NULL);
 }
@@ -1236,7 +1236,7 @@ ZTEST(zcbor_unit_tests, test_unordered_map)
 	/* Test single entry map */
 	zassert_true(zcbor_unordered_map_start_decode(state_d), NULL);
 	ret = zcbor_unordered_map_search((zcbor_decoder_t *)zcbor_int32_pexpect, state_d, &(int32_t){1});
-	zassert_true(ret, "err: %d\n", zcbor_peek_error);
+	zassert_true(ret, "err: %d\n", zcbor_peek_error(state_d));
 	zassert_true(zcbor_int32_expect(state_d, 1), NULL);
 	ret = zcbor_unordered_map_end_decode(state_d);
 	zassert_true(ret, "err: %d\n", zcbor_peek_error(state_d));
@@ -1356,7 +1356,7 @@ ZTEST(zcbor_unit_tests, test_unordered_map)
 	zassert_true(ret, "err: %d\n", zcbor_peek_error(state_d));
 
 	zassert_equal(int_result1, -2, NULL);
-	zassert_true(zcbor_compare_strings(&str_result1, &(struct zcbor_string){"world", 5}), "%s (len: %d)\n", &str_result1.value, str_result1.len);
+	zassert_true(zcbor_compare_strings(&str_result1, &(struct zcbor_string){"world", 5}), "%s (len: %d)\n", (char*)&str_result1.value, str_result1.len);
 	zassert_true(zcbor_compare_strings(&str_result2, &(struct zcbor_string){"foo", 3}), NULL);
 	zassert_true(zcbor_compare_strings(&str_result3, &(struct zcbor_string){"hello", 5}), NULL);
 }
@@ -1524,7 +1524,7 @@ ZTEST(zcbor_unit_tests, test_remaining_str_len)
 
 		size_t total_len = zcbor_remaining_str_len(state_e)
 					+ zcbor_header_len(zcbor_remaining_str_len(state_e));
-		zassert_equal(i - offset, total_len, "i: %ld, len: %zu\n", i, total_len);
+		zassert_equal(i - offset, total_len, "i: %llu, len: %zu\n", i, total_len);
 	}
 
 #if SIZE_MAX == UINT64_MAX

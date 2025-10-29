@@ -246,7 +246,7 @@ ZTEST(cbor_decode_test5, test_tagged_union)
 	struct TaggedUnion_r result;
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_TaggedUnion(payload_tagged_union1,
-		sizeof(payload_tagged_union1), &result, &decode_len), "%d\r\n");
+		sizeof(payload_tagged_union1), &result, &decode_len));
 
 	zassert_equal(sizeof(payload_tagged_union1), decode_len, NULL);
 	zassert_equal(TaggedUnion_bool_c, result.TaggedUnion_choice, NULL);
