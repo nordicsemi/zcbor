@@ -15,7 +15,7 @@ from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormat
 from datetime import datetime
 from copy import copy
 from itertools import tee, chain
-from cbor2 import (loads, dumps, CBORTag, load, CBORDecodeValueError, CBORDecodeEOF, undefined,
+from cbor2 import (loads, dumps, CBORTag, CBORDecoder, CBORDecodeValueError, CBORDecodeEOF, undefined,
                    CBORSimpleValue)
 from yaml import safe_load as yaml_load, dump as yaml_dump
 from json import loads as json_load, dumps as json_dump
@@ -104,6 +104,24 @@ def counter(reset=False):
         return global_counter
     global_counter += 1
     return global_counter
+
+
+def strict_load(f):
+    """Strict variety of cbor2.load that ensures all data is consumed by a single CBOR element."""
+    dec = CBORDecoder(f)
+    obj = dec.decode()  # Raises CBORDecodeEOF or CBORDecodeValueError on failure.
+    try:
+        dec.read(1)
+    except CBORDecodeEOF:
+        return obj
+    else:
+        raise CBORDecodeValueError("Data not fully decoded.")
+
+
+def strict_loads(b):
+    """Strict variety of cbor2.loads that ensures all data is consumed."""
+    f = BytesIO(b)
+    return strict_load(f)
 
 
 def list_replace_if_not_null(lst, i, r):
@@ -1789,16 +1807,10 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
                     retval[key] = self._to_yaml_obj(val)
             return retval
         elif isinstance(obj, bytes):
-            f = BytesIO(obj)
             try:
-                bstr_obj = self._to_yaml_obj(load(f))
+                bstr_obj = self._to_yaml_obj(strict_loads(obj))
             except (CBORDecodeValueError, CBORDecodeEOF):
-                # failed decoding
                 bstr_obj = obj.hex()
-            else:
-                if f.read(1) != b'':
-                    # not fully decoded
-                    bstr_obj = obj.hex()
             return {"zcbor_bstr": bstr_obj}
         elif isinstance(obj, CBORTag):
             return {"zcbor_tag": obj.tag, "zcbor_tag_val": self._to_yaml_obj(obj.value)}
