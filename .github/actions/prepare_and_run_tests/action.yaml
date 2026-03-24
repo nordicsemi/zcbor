@@ -86,6 +86,7 @@ runs:
         export ZEPHYR_BASE=$(pwd)/../zephyr-clone
         export ZEPHYR_TOOLCHAIN_VARIANT=${{ inputs.zephyr_toolchain }}
         ${{ inputs.zephyr_toolchain == 'zephyr' && 'export ZEPHYR_SDK_INSTALL_DIR=$(pwd)/../zephyr-sdk' || '' }}
+        export PATH="$ZEPHYR_SDK_INSTALL_DIR/gnu/arm-zephyr-eabi/bin:$ZEPHYR_SDK_INSTALL_DIR/gnu/mips-zephyr-elf/bin:$HOME/bin:$PATH"
         ZCBOR_TEST_COMMAND="$ZEPHYR_BASE/scripts/twister -i -v -T . -W ${{ inputs.twister_arguments }}"
         echo $ZCBOR_TEST_COMMAND
         $ZCBOR_TEST_COMMAND
