@@ -19,6 +19,7 @@
 	bool(*)(zcbor_state_t *, const struct Pet *): ((zcbor_encoder_t *)func), \
 	default: ZCBOR_CAST_FP(func))
 
+
 #define log_result(state, result, func) do { \
 	if (!result) { \
 		zcbor_trace_file(state); \
@@ -71,6 +72,5 @@ int cbor_encode_Pet(
 		encode_Pet(states, input);
 	}
 
-	return zcbor_entry_function(payload, payload_len, (void *)input, payload_len_out, states,
-		(zcbor_decoder_t *)ZCBOR_CUSTOM_CAST_FP(encode_Pet), sizeof(states) / sizeof(zcbor_state_t), 0);
+	return zcbor_entry_function(payload, payload_len, (void *)input, payload_len_out, states, (zcbor_decoder_t *)ZCBOR_CUSTOM_CAST_FP(encode_Pet), sizeof(states) / sizeof(zcbor_state_t), 0);
 }

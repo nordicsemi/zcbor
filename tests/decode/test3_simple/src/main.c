@@ -487,19 +487,15 @@ ZTEST(cbor_decode_test3, test_serial1)
 	zassert_equal(ZCBOR_SUCCESS, ret, "decoding failed: %d.", ret);
 	zassert_equal(sizeof(serial_rec_input1), decode_len, NULL);
 
-	zassert_equal(5, upload.members_count,
-		"expect 5 members");
-	zassert_equal(Member_data_c, upload.members[0].members
-		.Member_choice, "expect data 1st");
-	zassert_equal(Member_image_c, upload.members[1].members
-		.Member_choice, "expect image 2nd");
-	zassert_equal(Member_len_c, upload.members[2].members
-		.Member_choice, "was %d\r\n", upload.members[2].members
-		.Member_choice);
-	zassert_equal(Member_off_c, upload.members[3].members
-		.Member_choice, "expect off 4th");
-	zassert_equal(Member_sha_c, upload.members[4].members
-		.Member_choice, "expect sha 5th");
+	zassert_true(upload.data_present, NULL);
+	zassert_equal(0x129, upload.data.data.len, NULL);
+	zassert_true(upload.image_present, NULL);
+	zassert_equal(0, upload.image.image, NULL);
+	zassert_true(upload.len_present, NULL);
+	zassert_equal(0x3b2c, upload.len.len, NULL);
+	zassert_equal(0, upload.off, NULL);
+	zassert_true(upload.sha_present, NULL);
+	zassert_equal(0x20, upload.sha.sha.len, NULL);
 }
 
 ZTEST(cbor_decode_test3, test_serial2)
@@ -511,18 +507,15 @@ ZTEST(cbor_decode_test3, test_serial2)
 	zassert_equal(ZCBOR_SUCCESS, ret, "decoding failed: %d.", ret);
 	zassert_equal(sizeof(serial_rec_input2), decode_len, NULL);
 
-	zassert_equal(5, upload.members_count,
-		"expect 5 members");
-	zassert_equal(Member_data_c, upload.members[0].members
-		.Member_choice, "expect data 1st");
-	zassert_equal(Member_image_c, upload.members[1].members
-		.Member_choice, "expect image 2nd");
-	zassert_equal(Member_len_c, upload.members[2].members
-		.Member_choice, "expect len 3rd");
-	zassert_equal(Member_off_c, upload.members[3].members
-		.Member_choice, "expect off 4th");
-	zassert_equal(Member_sha_c, upload.members[4].members
-		.Member_choice, "expect sha 5th");
+	zassert_true(upload.data_present, NULL);
+	zassert_equal(0x129, upload.data.data.len, NULL);
+	zassert_true(upload.image_present, NULL);
+	zassert_equal(0, upload.image.image, NULL);
+	zassert_true(upload.len_present, NULL);
+	zassert_equal(0x2fe0, upload.len.len, NULL);
+	zassert_equal(0, upload.off, NULL);
+	zassert_true(upload.sha_present, NULL);
+	zassert_equal(0x20, upload.sha.sha.len, NULL);
 }
 
 ZTEST_SUITE(cbor_decode_test3, NULL, NULL, NULL, NULL, NULL);

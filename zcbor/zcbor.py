@@ -1599,6 +1599,7 @@ class CddlXcoder(CddlParser):
         self.dependsOnCall = False
         self.skipped = False
         self.stored_id = None
+        self.unordered_maps = False
 
     def var_name(self, with_prefix=False, observe_skipped=True):
         """Name of variables and enum members for this element."""
@@ -1614,6 +1615,7 @@ class CddlXcoder(CddlParser):
             name = name.capitalize()
         elif name in c_keywords_underscore:
             name = "_" + name
+        assert name is not None and name != "None", "No name for %s" % self
         return name
 
     def skip_condition(self):
@@ -1853,6 +1855,11 @@ class CddlXcoder(CddlParser):
             or self.type_def_condition()
             or (self.type in ["LIST", "MAP"])
             or (self.type == "GROUP" and len(self.value) != 0)
+            or (
+                self.unordered_maps
+                and self.is_key
+                and (self.repeated_single_func_impl_condition() or self.range_check_condition())
+            )
         )
 
     def repeated_single_func_impl_condition(self):
@@ -2524,6 +2531,7 @@ class CodeGenerator(CddlXcoder):
         add_defines=False,
         default_bit_size=defaults["default_bit_size"],
         default_max_qty_define="ZCBOR_DEFAULT_MAX_QTY",
+        unordered_maps=False,
         **kwargs,
     ):
         super(CodeGenerator, self).__init__(**kwargs)
@@ -2532,6 +2540,7 @@ class CodeGenerator(CddlXcoder):
         self.add_defines = add_defines
         self.default_bit_size = default_bit_size
         self.default_max_qty_define = default_max_qty_define
+        self.unordered_maps = unordered_maps
 
     @classmethod
     def from_cddl(cddl_class, *, mode, **kwargs):
@@ -2565,6 +2574,7 @@ class CodeGenerator(CddlXcoder):
             "add_defines": self.add_defines,
             "default_bit_size": self.default_bit_size,
             "default_max_qty_define": self.default_max_qty_define,
+            "unordered_maps": self.unordered_maps,
         }
 
     def delegate_type_condition(self):
@@ -2997,8 +3007,12 @@ class CodeGenerator(CddlXcoder):
         else:
             return self.single_func_prim(self.repeated_val_access(), ptr_result=ptr_result)
 
-    def has_backup(self):
-        return self.cbor_var_condition() or self.type in ["LIST", "MAP", "UNION"]
+    def num_backups_self(self):
+        return (
+            int(self.cbor_var_condition())
+            + int(self.type in ["LIST", "MAP", "UNION"])
+            + int(self.multi_decode_w_backup_condition())
+        )
 
     def num_backups(self):
         """Calculate the number of state var backups needed for this element and all descendants."""
@@ -3011,9 +3025,139 @@ class CodeGenerator(CddlXcoder):
             total += max([child.num_backups() for child in self.value] + [0])
         if self.type == "OTHER":
             total += self.my_types[self.value].num_backups()
-        if self.has_backup():
-            total += 1
+        total += self.num_backups_self()
         return total
+
+    def _num_map_search_flags(self, is_in_map=False):
+        """Calculate the number of map search flags needed for this element and all descendants.
+
+        When maps are nested, they all need flags at the same time, so this functions finds the
+        "longest path", i.e. which combination of nestings needs the highest number of flags.
+
+        Some of the calculations are returned as strings representing C expressions, since they
+        might involve C macros, e.g. *_DEFAULT_MAX_QTY."""
+
+        def s_filter(it):
+            return filter(lambda x: x not in ("", "0"), it)
+
+        def s_sum(it):
+            filtered_it = list(s_filter(it))
+            if all(x.isdigit() for x in filtered_it):
+                return str(sum(int(x) for x in filtered_it))
+            return " + ".join(filtered_it)
+
+        def s_max(it):
+            filtered_it = list(s_filter(it))
+            if len(filtered_it) == 0:
+                return ""
+            elif len(filtered_it) == 1:
+                return str(filtered_it[0])
+            elif all(x.isdigit() for x in filtered_it):
+                return str(max(int(x) for x in filtered_it))
+            else:
+                return f"MAX({filtered_it[0]}, {s_max(filtered_it[1:])})"
+
+        def s_mult(it):
+            list_it = list(it)
+            if len(list_it) == 0 or any(x in ("", "0") for x in list_it):
+                return ""
+            filtered_it = [f"{x}" if "+" in x else x for x in filter(lambda x: x.strip("()") != "1", it)]
+            if all(x.isdigit() for x in filtered_it):
+                return str(prod(int(x) for x in filtered_it))
+            return " * ".join(filtered_it) if filtered_it else "1"
+
+        def s_round_bits_to_nearest_byte(bits_str):
+            if bits_str in ("", "0"):
+                return ""
+            elif bits_str.isdigit():
+                return str(divide_round_up(int(bits_str), 8) * 8)
+            else:
+                return f"ZCBOR_ROUND_UP({bits_str}, 8)"
+
+        total_this = ""  # Number of flags needed for the current map
+        total_nested = ""  # Number of flags needed for nested maps
+        total_multi_decode = 0  # Number of times multi_decode is used in the map
+        total_unions = 0  # Number of nested unions within the map
+
+        if self.multi_decode_w_backup_condition():
+            total_multi_decode += 1
+        if self.key:
+            flags, nested_flags, _, __ = self.key._num_map_search_flags(is_in_map=is_in_map)
+            assert flags == "", "keys cannot have keys"
+            total_nested = s_sum((total_nested, nested_flags))
+            total_this = s_sum((total_this, "1"))
+        if self.cbor_var_condition():
+            flags, nested_flags, _, __ = self.cbor._num_map_search_flags(is_in_map=False)
+            assert flags == "", "Cannot have bare keys directly within .cbor."
+            total_nested = s_sum((total_nested, nested_flags))
+        if self.type in ["LIST", "MAP", "GROUP", "UNION"]:
+            c_is_in_map = {"LIST": False, "MAP": True, "GROUP": is_in_map, "UNION": is_in_map}[self.type]
+            c_flags, c_nested_flags, c_total_multi_decode, c_total_unions = zip(
+                *(child._num_map_search_flags(is_in_map=c_is_in_map) for child in self.value)
+            )
+            total_nested = s_max([total_nested] + list(c_nested_flags))
+            if self.type == "MAP":
+                # Round up to the nearest byte because only whole bytes worth of flags can be
+                # reserved per map.
+                # Also, this is where the flag count is moved from "this" map to a "nested" map.
+                c_flags_rounded = s_round_bits_to_nearest_byte(s_sum(c_flags))
+                if c_flags_rounded not in ("", "0"):
+                    if self.unordered_maps:
+                        multiplier = 1 + max(c_total_multi_decode) + max(c_total_unions)
+                        mult_flags = s_mult((c_flags_rounded, str(multiplier)))
+                        total_nested = s_sum((total_nested, mult_flags))
+                    else:
+                        total_nested = s_sum((total_nested, c_flags_rounded))
+            elif self.type == "LIST":
+                assert not any(c_flags), "Cannot have keys in LIST"
+            elif self.type == "GROUP":
+                total_this = s_sum([total_this] + list(c_flags))
+                total_multi_decode += max(c_total_multi_decode)
+                total_unions += max(c_total_unions)
+            elif self.type == "UNION":
+                # Take the max since only one member of a union will be found at one time.
+                total_this = s_sum((total_this, s_max(c_flags)))
+                total_multi_decode += max(c_total_multi_decode)
+                total_unions += max(c_total_unions)
+                if not self.implicit_union_condition():
+                    total_unions += 1
+
+        if self.type == "OTHER":
+            search_flags_out = self.my_types[self.value]._num_map_search_flags(is_in_map=is_in_map)
+            flags, nested_flags, multi_decode, unions = search_flags_out
+            total_this = s_sum((total_this, flags))
+            total_nested = s_sum((total_nested, nested_flags))
+            total_multi_decode += multi_decode
+            total_unions += unions
+
+        total_this_out = ""
+        equal = self.min_qty == self.max_qty and self.min_qty is not None
+        qty_expr = self.val_define_name_or_lit("MAX_QTY" if not equal else "QTY")
+        max_qty = "1" if self.max_qty == 1 else str(qty_expr)
+        if total_this not in ("", "0"):
+            total_this_out = s_mult((total_this, max_qty))
+        else:
+            total_this_out = ""
+
+        if total_nested not in ("", "0"):
+            if total_nested.isdigit():
+                total_nested_out = total_nested
+            else:
+                total_nested_out = f"({total_nested})"
+        else:
+            total_nested_out = ""
+
+        # Only the total_this is affected by repetitions, because the nested flags are freed and
+        # allocated for each repetition.
+        return total_this_out, total_nested_out, total_multi_decode, total_unions
+
+    def num_map_search_flags(self):
+        """Calculate the number of map search flags needed with this element as root.
+
+        Discard all but the nested flags, assuming there are no flags used before we are in a map.
+        """
+
+        return self._num_map_search_flags()[1]
 
     def depends_on(self):
         """Return a number indicating how many other elements this element depends on.
@@ -3073,22 +3217,71 @@ class CodeGenerator(CddlXcoder):
         }[self.type]()
         return retval
 
+    def is_multiple_elem_group(self):
+        """Recursively determine whether the current element is a GROUP with multiple elements."""
+        if self.type == "UNION":
+            return any(child.is_multiple_elem_group() for child in self.value)
+        elif self.type == "GROUP":
+            if (len(self.value) > 1) and (self.max_qty != self.min_qty):
+                return True
+        elif self.type == "OTHER":
+            if self.my_types[self.value].list_counts() != (1, 1) and (self.max_qty != self.min_qty):
+                return True
+            return self.my_types[self.value].is_multiple_elem_group()
+        return False
+
+    def elem_needs_map_smart_search(self, is_in_map):
+        """Recursively determine whether the current element needs ZCBOR_MAP_SMART_SEARCH defined"""
+        if (
+            is_in_map
+            and self.unordered_maps
+            and (
+                (self.max_qty is None)
+                or (self.max_qty > 1)
+                or (self.key and not self.key.is_unambiguous_repeated())
+            )
+        ):
+            return True
+
+        if (
+            self.type == "OTHER"
+            and (self.value not in self.entry_type_names or is_in_map)
+            and self.my_types[self.value].elem_needs_map_smart_search(is_in_map)
+        ):
+            return True
+
+        # Validation of child elements.
+        if self.type in ["MAP", "LIST", "UNION", "GROUP"]:
+            for child in self.value:
+                if child.elem_needs_map_smart_search(
+                    self.type != "LIST" and (is_in_map or self.type == "MAP")
+                ):
+                    return True
+        if self.cbor:
+            if self.cbor.elem_needs_map_smart_search(False):
+                return True
+
     def xcode_list(self):
         """Return the full code needed to encode/decode a "LIST" or "MAP" element with children."""
         start_func = f"zcbor_{self.type.lower()}_start_{self.mode}"
         end_func = f"zcbor_{self.type.lower()}_end_{self.mode}"
         end_func_force = f"zcbor_list_map_end_force_{self.mode}"
+        if self.type == "MAP" and self.mode == "decode" and self.unordered_maps:
+            start_func = "zcbor_unordered_map_start_decode"
+            end_func = "zcbor_unordered_map_end_decode"
         assert start_func in [
             "zcbor_list_start_decode",
             "zcbor_list_start_encode",
             "zcbor_map_start_decode",
             "zcbor_map_start_encode",
+            "zcbor_unordered_map_start_decode",
         ]
         assert end_func in [
             "zcbor_list_end_decode",
             "zcbor_list_end_encode",
             "zcbor_map_end_decode",
             "zcbor_map_end_encode",
+            "zcbor_unordered_map_end_decode",
         ]
         assert self.type in ["LIST", "MAP"], "Expected LIST or MAP type, was %s." % self.type
         _, max_counts = (
@@ -3114,11 +3307,34 @@ class CodeGenerator(CddlXcoder):
             [self.value[0].full_xcode(union_int)] + [child.full_xcode() for child in self.value[1:]]
         )
 
+    def is_in_map(self):
+        """Return whether this element is in a map (i.e. elements need keys)."""
+        if self.key:
+            return True
+        if self.type in ["LIST", "MAP"]:
+            return False
+        if self.type in ["GROUP", "UNION"]:
+            return any(child.is_in_map() for child in self.value)
+        if self.type == "OTHER":
+            return self.my_types[self.value].is_in_map()
+
+    def expect_union_condition(self):
+        """Whether this UNION element can be decoded without union_start/union_end functions.
+
+        Union optimization is disabled in unordered maps because unpredictable key ordering
+        means we cannot know that any current element is part of the union.
+        """
+        return self.is_int_disambiguated() and not (self.unordered_maps and self.is_in_map())
+
+    def implicit_union_condition(self):
+        """Whether this element is a UNION that can be encoded/decoded without union_start/union_end functions."""
+        return self.all_children_int_disambiguated() and not (self.unordered_maps and self.is_in_map())
+
     def xcode_union(self):
         """Return the full code needed to encode/decode a "UNION" element's children."""
         assert self.type in ["UNION"], "Expected UNION type."
         if self.mode == "decode":
-            if self.all_children_int_disambiguated():
+            if self.implicit_union_condition():
                 lines = []
                 lines.extend(
                     [
@@ -3131,7 +3347,6 @@ class CodeGenerator(CddlXcoder):
                         for child in self.value
                     ]
                 )
-                bit_size = self.value[0].bit_size()
                 func = (
                     f"zcbor_uint_{self.mode}"
                     if self.all_children_uint_disambiguated()
@@ -3148,7 +3363,7 @@ class CodeGenerator(CddlXcoder):
             child_values = [
                 "(%s && ((%s = %s), true))"
                 % (
-                    child.full_xcode(union_int="EXPECT" if child.is_int_disambiguated() else None),
+                    child.full_xcode(union_int="EXPECT" if child.expect_union_condition() else None),
                     self.choice_var_access(),
                     child.enum_var_name(),
                 )
@@ -3157,16 +3372,20 @@ class CodeGenerator(CddlXcoder):
 
             # Reset state for all but the first child.
             for i in range(1, len(child_values)):
-                if (not self.value[i].is_int_disambiguated()) and self.value[
-                    i - 1
-                ].simple_func_condition():
+                if (
+                    not self.value[i].expect_union_condition()
+                    and self.value[i - 1].simple_func_condition()
+                ):
                     child_values[i] = f"(zcbor_union_elem_code(state) && {child_values[i]})"
 
             child_code = f"{newl_ind}|| ".join(child_values)
-            return (
-                f"(zcbor_union_start_code(state) "
-                + f"&& (int_res = ({child_code}), zcbor_union_end_code(state), int_res))"
-            )
+            if len(self.value) > 0:
+                return (
+                    f"(zcbor_union_start_code(state) "
+                    + f"&& (int_res = ({child_code}), zcbor_union_end_code(state), int_res))"
+                )
+            else:
+                return f"({child_code})"
         else:
             return ternary_if_chain(
                 self.choice_var_access(),
@@ -3372,6 +3591,17 @@ class CodeGenerator(CddlXcoder):
 
         return range_checks
 
+    def xcode_key(self, union_int):
+        if self.mode == "decode" and self.unordered_maps and union_int != "DROP":
+            func, *arguments = self.key.single_func(
+                self.key.val_access(), union_int=union_int, ptr_result=True
+            )
+            assert func is not None, "Function missing (union_int issue?)."
+            x_args = xcode_args(*arguments)
+            return [f"zcbor_unordered_map_search(ZCBOR_CUSTOM_CAST_FP({func}), {x_args})"]
+        else:
+            return [self.key.full_xcode(union_int=union_int)]
+
     def repeated_xcode(self, union_int=None, top_level=False):
         """Return the full code needed to encode/decode this element.
 
@@ -3402,12 +3632,14 @@ class CodeGenerator(CddlXcoder):
         }[self.type]
         xcoders = []
         if self.key:
-            xcoders.append(self.key.full_xcode(union_int))
+            xcoders.extend(self.xcode_key(union_int))
         if self.tags:
             xcoders.extend(self.xcode_tags())
         if self.mode == "decode":
             xcoders.append(xcoder())
             xcoders.extend(range_checks)
+            if self.key and self.unordered_maps:
+                xcoders.append("zcbor_elem_processed(state)")
         elif self.type == "BSTR" and self.cbor:
             xcoders.append(xcoder())
             xcoders.extend(self.range_checks("tmp_str"))
@@ -3423,6 +3655,11 @@ class CodeGenerator(CddlXcoder):
             return "0"
         else:
             return "sizeof(%s)" % self.repeated_type_name()
+
+    def multi_decode_w_backup_condition(self):
+        return (
+            self.count_var_condition() or self.present_var_condition()
+        ) and self.repeated_single_func_impl_condition()
 
     def full_xcode(self, union_int=None, top_level=False):
         """Return the full code needed to encode/decode this element.
@@ -3467,23 +3704,24 @@ class CodeGenerator(CddlXcoder):
                         default_assignment, f"{self.present_var_access()} = {decode_str}", "true"
                     )
                 func, *arguments = self.repeated_single_func(ptr_result=True)
+                present_func = (
+                    "zcbor_present_decode"
+                    if not self.multi_decode_w_backup_condition()
+                    else "zcbor_present_decode_w_backup"
+                )
                 return comma_operator(
                     default_assignment,
-                    f"(zcbor_present_decode(&(%s), ZCBOR_CUSTOM_CAST_FP(%s), %s))"
-                    % (
-                        self.present_var_access(),
-                        func,
-                        xcode_args(*arguments),
-                    ),
+                    f"({present_func}(&({self.present_var_access()}), ZCBOR_CUSTOM_CAST_FP({func}), {xcode_args(*arguments)}))",
                 )
 
         elif self.count_var_condition():
             func, arg = self.repeated_single_func(ptr_result=True)
 
-            minmax = "_minmax" if self.mode == "encode" else ""
-            mode = self.mode
+            multi_func = "zcbor_multi_decode" if self.mode == "decode" else "zcbor_multi_encode_minmax"
+            if self.mode == "decode" and self.multi_decode_w_backup_condition():
+                multi_func = "zcbor_multi_decode_w_backup"
             equal = self.min_qty == self.max_qty and self.min_qty is not None
-            return f"zcbor_multi_{mode}{minmax}(%s, %s, &%s, ZCBOR_CUSTOM_CAST_FP(%s), %s, %s)" % (
+            return f"{multi_func}(%s, %s, &%s, ZCBOR_CUSTOM_CAST_FP(%s), %s, %s)" % (
                 self.val_define_name_or_lit("MIN_QTY" if not equal else "QTY"),
                 self.val_define_name_or_lit("MAX_QTY" if not equal else "QTY"),
                 self.count_var_access(),
@@ -3561,6 +3799,8 @@ class CodeRenderer:
             modes = [modes]
         assert isinstance(modes, list), "modes must be a list of strings."
 
+        self.needs_map_smart_search = {"encode": False, "decode": False}
+
         # Sort type definitions so the typedefs will come in the correct order in the header file
         # and the function in the correct order in the c file.
         for mode in modes:
@@ -3572,6 +3812,11 @@ class CodeRenderer:
             self.functions[mode] = self.used_funcs(mode)
             self.type_defs[mode] = self.unique_types(mode)
             self.defines[mode] = self.used_defines(mode)
+
+            if mode == "decode":
+                self.needs_map_smart_search[mode] = any(
+                    t.elem_needs_map_smart_search(False) for t in self.sorted_types[mode]
+                )
 
         self.version = __version__
 
@@ -3677,8 +3922,10 @@ static bool {xcoder.func_name}(zcbor_state_t *state, {"" if mode == "decode" els
         func_re = rf"ZCBOR_CUSTOM_CAST_FP\((?P<func>{arg_re})\)"
         # Match a triplet of function pointer, state arg, and result arg.
         call_re = rf"{func_re}, (?P<state>{arg_re}), (?P<arg>{arg_re})"
-        multi_re = rf"{paren_re}zcbor_multi_(en|de)code(_minmax)?\(({arg_re},){{3}} {call_re}"
-        present_re = rf"{paren_re}zcbor_present_(en|de)code\({arg_re}, {call_re}\)"
+        multi_re = (
+            rf"{paren_re}zcbor_multi_(en|de)code(_minmax)?(_w_backup)?\(({arg_re},){{3}} {call_re}"
+        )
+        present_re = rf"{paren_re}zcbor_present_(en|de)code(_w_backup)?\({arg_re}, {call_re}\)"
         map_re = rf"{paren_re}zcbor_unordered_map_search\({call_re}\)"
         all_funcs = chain(
             getrp(multi_re).finditer(body),
@@ -3724,22 +3971,65 @@ static bool {xcoder.func_name}(
 	return res;
 }}""".replace("	\n", "")  # call replace() to remove empty lines.
 
+    def _calculate_elem_state_requirements(self, xcoder, mode):
+        """Calculate state and flag requirements for unordered maps."""
+        base_states = f"{xcoder.val_define_name_or_lit('NUM_BACKUPS')} + ZCBOR_EXTRA_STATES"
+        if not (
+            xcoder.unordered_maps
+            and mode == "decode"
+            and (num_flags := xcoder.num_map_search_flags()) not in ("", "0")
+        ):
+            # No flags needed.
+            return "", base_states, "zcbor_entry_function", []
+
+        # Calculate total_states at compile time (because it depends on sizeof(zcbor_state_t))
+        num_flags_var = f"const size_t num_flags = {num_flags};"
+        total_states = base_states + f" + ZCBOR_FLAG_STATES(num_flags)"
+        entry_func = "zcbor_entry_function_with_elem_states"
+        extra_args = ["num_flags"]
+
+        return num_flags_var, total_states, entry_func, extra_args
+
     def render_entry_function(self, xcoder, mode):
         """Render a single entry function (API function) with signature and body."""
         func_name, func_arg = (xcoder.xcode_func_name(), struct_ptr_name(mode))
         elem_count = "ZCBOR_LARGE_ELEM_COUNT" if mode == "decode" else "0"
+
+        arg_list = [
+            "payload",
+            "payload_len",
+            f"(void *){func_arg}",
+            "payload_len_out",
+            "states",
+            f"(zcbor_decoder_t *)ZCBOR_CUSTOM_CAST_FP({func_name})",
+            "sizeof(states) / sizeof(zcbor_state_t)",
+            f"{elem_count}",
+        ]
+
+        num_flags_var, num_states, entry_func, extra_args = self._calculate_elem_state_requirements(
+            xcoder, mode
+        )
+        arg_list += extra_args
+
         return f"""
 {xcoder.public_xcode_func_sig()}
 {{
-	zcbor_state_t states[{xcoder.val_define_name_or_lit("NUM_BACKUPS")} + ZCBOR_EXTRA_STATES];
+	{num_flags_var}
+	zcbor_state_t states[{num_states}];
 {self.render_arg_check(((func_name, "states", func_arg),))}
-	return zcbor_entry_function(payload, payload_len, (void *){func_arg}, payload_len_out, states,
-		(zcbor_decoder_t *)ZCBOR_CUSTOM_CAST_FP({func_name}), sizeof(states) / sizeof(zcbor_state_t), {elem_count});
-}}"""
+	return {entry_func}({', '.join(arg_list)});
+}}""".replace("	\n", "")  # call replace() to remove empty lines.
 
     def render_file_header(self, line_prefix):
         lp = line_prefix
         return (f"\n{lp} " + self.file_header.replace("\n", f"\n{lp} ")).replace(" \n", "\n")
+
+    def render_smart_search_check(self):
+        return """
+#ifndef ZCBOR_MAP_SMART_SEARCH
+#error "This file needs ZCBOR_MAP_SMART_SEARCH to function"
+#endif
+"""
 
     def render_c_file(self, header_file_name, mode):
         """Render the entire generated C file contents."""
@@ -3765,6 +4055,7 @@ do { \\
 
 {self.render_cast_macro(mode)}
 
+{self.render_smart_search_check() if self.needs_map_smart_search[mode] else ''}
 {log_result_define}
 
 {linesep.join([self.render_forward_declaration(xcoder, mode) for xcoder in self.functions[mode]])}
@@ -3866,6 +4157,8 @@ extern "C" {{
                 )
             )
         )
+        add_smart_search = any(self.needs_map_smart_search[mode] for mode in ("decode", "encode"))
+        smart_search = f"\ntarget_compile_definitions({target_name} PUBLIC ZCBOR_MAP_SMART_SEARCH)\n"
 
         def relativify(p):
             try:
@@ -3891,7 +4184,7 @@ target_sources({target_name} PRIVATE
 target_include_directories({target_name} PUBLIC
     {(linesep + "    ").join(((str(relativify(f)) for f in include_dirs)))}
     )
-"""
+{f'{smart_search}' if add_smart_search else ''}"""
 
     def render(
         self,
@@ -4165,6 +4458,21 @@ the file's contents will be used.""",
 generated header file. This is off by default because it may create naming conflicts that don't
 show up otherwise.""",
     )
+    code_parser.add_argument(
+        "--unordered-maps",
+        required=False,
+        action="store_true",
+        default=False,
+        help="""[EXPERIMENTAL] Generate code in such a way that it can decode maps with unknown
+element order.
+When enabled, the generated code will use the zcbor_unordered_map_*() API to decode data
+whenever inside a map.
+zcbor detects from the CDDL whether ZCBOR_MAP_SMART_SEARCH is needed and enables it in the generated
+cmake file if so.
+Enabling --unordered-maps places some restrictions on the level of ambiguity allowed between map
+keys in a map.
+This option only affects decoding (--decode/-d).""",
+    )
     code_parser.set_defaults(process=process_code)
 
     validate_parent_parser = ArgumentParser(add_help=False)
@@ -4333,6 +4641,7 @@ def process_code(args):
                 entry_type_names=args.entry_types,
                 add_defines=args.defines,
                 default_bit_size=args.default_bit_size,
+                unordered_maps=args.unordered_maps,
                 short_names=args.short_names,
                 default_max_qty_define=default_max_qty_define,
             )

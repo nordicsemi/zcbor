@@ -1,0 +1,12 @@
+tests:
+  zcbor.decode.testA_unordered_map:
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+      - mps2/an521/cpu0
+      - qemu_malta/qemu_malta/be
+    tags:
+      - zcbor
+      - decode
+      - unordered_map
+      - testA
