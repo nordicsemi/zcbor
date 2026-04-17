@@ -413,7 +413,9 @@ bool zcbor_tstr_expect_term(zcbor_state_t *state, char const *str, size_t maxlen
 /** Decode and consume a bstr header.
  *
  * The rest of the string can be decoded as CBOR.
- * A state backup is created to keep track of the element count.
+ * A state backup is created to keep track of the element count and original payload_end.
+ * payload_end is set to the end of the string, so when the payload is exhausted,
+ * the string is considered fully decoded.
  * Call @ref zcbor_bstr_end_decode when done decoding the contents of the bstr.
  *
  * @param[inout] state   The current state of the decoding.
@@ -435,49 +437,65 @@ bool zcbor_bstr_start_decode(zcbor_state_t *state, struct zcbor_string *result);
 bool zcbor_bstr_end_decode(zcbor_state_t *state);
 
 
-/** Supplementary string (bstr/tstr) decoding functions for fragmented payloads: */
+#ifdef ZCBOR_FRAGMENTS
 
-/** Start decoding a bstr/tstr, even if the payload contains only part of it.
+/** Start decoding a fragmented string.
  *
- * This must be followed by a call to @ref zcbor_update_state, which can be
- * followed by a call to @ref zcbor_next_fragment. Do not call this function
- * again on subsequent fragments of the same string.
+ * I.e. a string spread over multiple non-contiguous payload sections.
  *
- * This consumes the remaining payload as long as it belongs to the string.
+ * NOTE: The fragmented string API is experimental.
+ *
+ * After calling this, you can retrieve a fragment with @ref zcbor_str_fragment_decode,
+ * then update the payload with @ref zcbor_update_state.
+ * Repeat until the string is fully decoded, then call @ref zcbor_bstr_fragments_end_decode.
  */
-bool zcbor_bstr_decode_fragment(zcbor_state_t *state, struct zcbor_string_fragment *result);
-bool zcbor_tstr_decode_fragment(zcbor_state_t *state, struct zcbor_string_fragment *result);
+bool zcbor_bstr_fragments_start_decode(zcbor_state_t *state);
+bool zcbor_tstr_fragments_start_decode(zcbor_state_t *state);
 
-/** Extract the next fragment of a string.
+/** Start decoding a fragmented CBOR-encoded bytestring.
  *
- * Use this function to extract all but the first fragment.
- */
-void zcbor_next_fragment(zcbor_state_t *state,
-	struct zcbor_string_fragment *prev_fragment,
-	struct zcbor_string_fragment *result);
-
-/** Decode and consume a bstr header, assuming the payload does not contain the whole bstr.
+ * I.e. a string spread over multiple non-contiguous payload sections.
  *
- * The rest of the string can be decoded as CBOR.
- * A state backup is created to keep track of the element count.
- * Call @ref zcbor_update_state followed by @ref zcbor_bstr_next_fragment when
- * the current payload has been exhausted.
- * Call @ref zcbor_bstr_end_decode when done decoding the contents of the bstr.
- */
-bool zcbor_bstr_start_decode_fragment(zcbor_state_t *state,
-	struct zcbor_string_fragment *result);
-
-/** Start decoding the next fragment of a string.
+ * NOTE: The fragmented string API is experimental.
  *
- * Use this function to extract all but the first fragment of a CBOR-encoded
- * bstr.
+ * This is an alternative to zcbor_*str_fragments_start_decode() to be used if the payload
+ * contains CBOR data that will be decoded directly with other zcbor_*() functions.
+ *
+ * A state backup is created to keep track of the element count and original payload_end.
+ * After calling this, you can decode elements using other zcbor functions,
+ * then update the payload with @ref zcbor_update_state.
+ * Repeat until the string is fully decoded, then call @ref zcbor_bstr_fragments_end_decode.
+ * When the current payload section contains the end of the string,
+ * payload_end is set to the end of the string, so there is no risk of decoding past the end.
+ * Then, when @ref zcbor_bstr_fragments_end_decode has been called, payload_end is restored to the
+ * end of the payload section.
+ * (This is analogous to how @ref zcbor_bstr_start_decode works)
  */
-void zcbor_bstr_next_fragment(zcbor_state_t *state,
-	struct zcbor_string_fragment *prev_fragment,
-	struct zcbor_string_fragment *result);
+bool zcbor_cbor_bstr_fragments_start_decode(zcbor_state_t *state);
 
-/** Can be used on any fragment to tell if it is the final fragment of the string. */
-bool zcbor_is_last_fragment(const struct zcbor_string_fragment *fragment);
+/** Retrieve a string fragment.
+ *
+ * NOTE: The fragmented string API is experimental.
+ *
+ * For non-cbor-encoded strings (started with @ref zcbor_bstr_fragments_start_decode
+ * or @ref zcbor_tstr_fragments_start_decode): Consumes bytes from the payload until
+ * either the end of the payload or the end of the string.
+ *
+ * For cbor-encoded strings (started with @ref zcbor_cbor_bstr_fragments_start_decode):
+ * No bytes are consumed from the payload. Instead, this function reports the part of
+ * the current payload section that has already been decoded via other zcbor functions.
+ * Any such call to this function will have no memory of previous calls to this function,
+ * so the returned fragment always starts at the same point until the payload is updated.
+ *
+ * @param[inout] state     The current state of the decoding.
+ * @param[out]   fragment  The resulting string fragment.
+ */
+bool zcbor_str_fragment_decode(zcbor_state_t *state, struct zcbor_string_fragment *fragment);
+
+/** Finish decoding a fragmented string. */
+bool zcbor_str_fragments_end_decode(zcbor_state_t *state);
+
+#endif /* ZCBOR_FRAGMENTS */
 
 #ifdef __cplusplus
 }

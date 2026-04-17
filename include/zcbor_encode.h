@@ -243,6 +243,53 @@ bool zcbor_bstr_start_encode(zcbor_state_t *state);
  */
 bool zcbor_bstr_end_encode(zcbor_state_t *state, struct zcbor_string *result);
 
+
+#ifdef ZCBOR_FRAGMENTS
+
+/** Start encoding a fragmented string. I.e. a string spread over non-consecutive payload sections.
+ *
+ * NOTE: The fragmented string API is experimental.
+ *
+ * After calling this, you can write a fragment with @ref zcbor_str_fragment_encode,
+ * then update the payload with @ref zcbor_update_state.
+ * Repeat until the string is fully decoded, then call @ref zcbor_bstr_fragments_end_encode.
+ */
+bool zcbor_bstr_fragments_start_encode(zcbor_state_t *state, size_t total_len);
+bool zcbor_tstr_fragments_start_encode(zcbor_state_t *state, size_t total_len);
+
+/** Start encoding a fragmented CBOR-encoded bytestring.
+ *
+ * I.e. a string spread over non-consecutive payload sections.
+ *
+ * NOTE: The fragmented string API is experimental.
+ *
+ * This is an alternative to zcbor_*str_fragments_start_encode() to be used if the payload
+ * contains CBOR data that will be encoded directly with other zcbor_*() functions.
+ *
+ * A state backup is created to keep track of the element count and original payload_end.
+ * After calling this, you can encode elements using other zcbor functions,
+ * then update the payload with @ref zcbor_update_state.
+ * Repeat until the string is fully decoded, then call @ref zcbor_bstr_fragments_end_encode.
+ * When the current payload section contains the end of the string,
+ * payload_end is set to the end of the string, so there is no risk of encoding past the end.
+ */
+bool zcbor_cbor_bstr_fragments_start_encode(zcbor_state_t *state, size_t total_len);
+
+/** Encode a string fragment.
+ *
+ * NOTE: The fragmented string API is experimental.
+ *
+ * Write bytes to the payload until either the end of the payload or the end of the fragment.
+ * The number of bytes written is returned in @p enc_len.
+ * Do not use this function with @ref zcbor_cbor_bstr_fragments_start_encode.
+ */
+bool zcbor_str_fragment_encode(zcbor_state_t *state, struct zcbor_string *fragment, size_t *enc_len);
+
+/** Finish encoding a fragmented string. */
+bool zcbor_str_fragments_end_encode(zcbor_state_t *state);
+
+#endif /* ZCBOR_FRAGMENTS */
+
 #ifdef __cplusplus
 }
 #endif

@@ -20,7 +20,7 @@ static uint8_t tmp_buffer[AFL_MAX_SIZE];
 
 static size_t afl_read(uint8_t **data) {
 
-	ssize_t size = read(0, tmp_buffer, AFL_MAX_SIZE);
+	ptrdiff_t size = read(0, tmp_buffer, AFL_MAX_SIZE);
 	if (size <= 0) {
 		return 0;
 	}
