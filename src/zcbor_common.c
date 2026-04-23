@@ -582,6 +582,11 @@ int zcbor_entry_function_with_elem_states(const uint8_t *payload, size_t payload
 
 	bool ret = func(&states[0], result);
 
+	if (states[0].constant_state->current_backup != 0) {
+		zcbor_log("Not all backups consumed.\r\n");
+		return ZCBOR_ERR_BACKUP_MISMATCH;
+	}
+
 	if (!ret) {
 		int err = zcbor_pop_error(&states[0]);
 
