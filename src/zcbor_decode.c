@@ -661,18 +661,25 @@ bool zcbor_bstr_start_decode(zcbor_state_t *state, struct zcbor_string *result)
 }
 
 
-bool zcbor_bstr_end_decode(zcbor_state_t *state)
+static bool exit_backup(zcbor_state_t *state)
 {
 	ZCBOR_CHECK_NULL(state);
-	ZCBOR_ERR_IF(state->payload != state->payload_end, ZCBOR_ERR_PAYLOAD_NOT_CONSUMED);
 
 	if (!zcbor_process_backup(state,
 			ZCBOR_FLAG_RESTORE | ZCBOR_FLAG_CONSUME | ZCBOR_FLAG_KEEP_PAYLOAD,
 			ZCBOR_MAX_ELEM_COUNT)) {
 		ZCBOR_FAIL();
 	}
-
 	return true;
+}
+
+
+bool zcbor_bstr_end_decode(zcbor_state_t *state)
+{
+	ZCBOR_PRINT_FUNC_NAME();
+	ZCBOR_CHECK_NULL(state);
+	ZCBOR_ERR_IF(state->payload != state->payload_end, ZCBOR_ERR_PAYLOAD_NOT_CONSUMED);
+	return exit_backup(state);
 }
 
 
@@ -1231,11 +1238,7 @@ static bool list_map_end_decode(zcbor_state_t *state)
 
 	zcbor_state_t state_copy = *state;
 
-	if (!zcbor_process_backup(state,
-			ZCBOR_FLAG_RESTORE | ZCBOR_FLAG_CONSUME | ZCBOR_FLAG_KEEP_PAYLOAD,
-			ZCBOR_MAX_ELEM_COUNT)) {
-		ZCBOR_FAIL();
-	}
+	ZCBOR_FAIL_IF(!exit_backup(state));
 
 	if (state_copy.decode_state.indefinite_length_array) {
 		if (!array_end_expect(state)) {
@@ -1270,9 +1273,10 @@ bool zcbor_map_end_decode(zcbor_state_t *state)
 bool zcbor_unordered_map_end_decode(zcbor_state_t *state)
 {
 	ZCBOR_PRINT_FUNC_NAME();
-	/* Checking zcbor_array_at_end() ensures that check is valid.
-	 * In case the map is at the end, but state->decode_state.counting_map_elems isn't updated.*/
+
 	if (!zcbor_array_at_end(state) && state->decode_state.counting_map_elems) {
+		/* The first traversal of the map is not complete,
+		 * i.e. some elements are not processed. */
 		zcbor_log("unprocessed element(s) in map after index %zu\n",
 				state->decode_state.map_elem_count);
 		ZCBOR_ERR(ZCBOR_ERR_ELEMS_NOT_PROCESSED);
@@ -1294,21 +1298,35 @@ bool zcbor_unordered_map_end_decode(zcbor_state_t *state)
 #endif
 	}
 	while (!zcbor_array_at_end(state)) {
-		zcbor_any_skip(state, NULL);
+		if (!zcbor_any_skip(state, NULL)) {
+			/* Shouldn't really come here, because all map elements should have been
+			 * successfully decoded earlier using zcbor_unordered_map_search().
+			 * If the first pass of the map was not finished, the current function
+			 * should have errored earlier.
+			 * If we got here, an element was successfully decoded earlier using some
+			 * function, but then failed now in zcbor_any_skip().
+			 */
+			zcbor_log("Could not move to end of map. zcbor_any_skip() returned %d\n", zcbor_peek_error(state));
+			ZCBOR_FAIL_IF(!exit_backup(state));
+			ZCBOR_ERR(ZCBOR_ERR_BAD_STATE);
+		}
 	}
+
 	return zcbor_map_end_decode(state);
 }
 
 
 bool zcbor_list_map_end_force_decode(zcbor_state_t *state)
 {
-	if (!zcbor_process_backup(state,
-			ZCBOR_FLAG_RESTORE | ZCBOR_FLAG_CONSUME | ZCBOR_FLAG_KEEP_PAYLOAD,
-			ZCBOR_MAX_ELEM_COUNT)) {
-		ZCBOR_FAIL();
-	}
+	ZCBOR_PRINT_FUNC_NAME();
+	return exit_backup(state);
+}
 
-	return true;
+
+bool zcbor_bstr_end_force_decode(zcbor_state_t *state)
+{
+	ZCBOR_PRINT_FUNC_NAME();
+	return exit_backup(state);
 }
 
 

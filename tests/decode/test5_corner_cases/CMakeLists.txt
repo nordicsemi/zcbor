@@ -85,6 +85,7 @@ set(py_command
     OptCbor
     OptFloatUnion
     OptFloatThenInt
+    CborBstrList
   --decode
   --git-sha-header
   --short-names

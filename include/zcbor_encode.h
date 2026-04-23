@@ -139,6 +139,7 @@ bool zcbor_list_end_encode(zcbor_state_t *state, size_t size_hint);
 bool zcbor_map_end_encode(zcbor_state_t *state, size_t size_hint);
 bool zcbor_list_map_end_force_encode(zcbor_state_t *state);
 
+
 /** Encode 0 or more elements with the same type and constraints.
  *
  * The encoded values are taken from the @p input array.
@@ -242,6 +243,7 @@ bool zcbor_bstr_start_encode(zcbor_state_t *state);
  * Restore element count from backup.
  */
 bool zcbor_bstr_end_encode(zcbor_state_t *state, struct zcbor_string *result);
+bool zcbor_bstr_end_force_encode(zcbor_state_t *state);
 
 
 #ifdef ZCBOR_FRAGMENTS
