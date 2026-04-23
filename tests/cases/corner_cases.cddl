@@ -476,3 +476,5 @@ UnionDefault = [
 ]
 
 OptUnion = [foo: ?((FooA: 1) / (FooB: 2) / (FooC: Three))]
+
+CborBstrList = [?bstr .cbor [int, tstr]]

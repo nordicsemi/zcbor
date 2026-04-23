@@ -63,6 +63,7 @@ set(py_command
   Choice5
   OptList
   UnionDefault
+  CborBstrList
   -e
   ${bit_arg}
   --short-names

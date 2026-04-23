@@ -435,6 +435,7 @@ bool zcbor_bstr_start_decode(zcbor_state_t *state, struct zcbor_string *result);
  * Restore element count from backup.
  */
 bool zcbor_bstr_end_decode(zcbor_state_t *state);
+bool zcbor_bstr_end_force_decode(zcbor_state_t *state);
 
 
 #ifdef ZCBOR_FRAGMENTS

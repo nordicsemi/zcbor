@@ -1013,8 +1013,8 @@ ZTEST(cbor_encode_test3, test_value_range)
 	zassert_equal(sizeof(exp_payload_value_range2), out_len, NULL);
 	zassert_mem_equal(exp_payload_value_range2, output, sizeof(exp_payload_value_range2), NULL);
 
-	zassert_equal(ZCBOR_ERR_WRONG_RANGE, cbor_encode_ValueRange(output, sizeof(output), &input3_inval,
-				&out_len), NULL);
+	int ret = cbor_encode_ValueRange(output, sizeof(output), &input3_inval, &out_len);
+	zassert_equal(ZCBOR_ERR_WRONG_RANGE, ret, "%s\n", zcbor_error_str(ret));
 	zassert_equal(ZCBOR_ERR_WRONG_RANGE, cbor_encode_ValueRange(output, sizeof(output), &input4_inval,
 				&out_len), NULL);
 	zassert_equal(ZCBOR_ERR_WRONG_RANGE, cbor_encode_ValueRange(output, sizeof(output), &input5_inval,
@@ -1974,6 +1974,34 @@ ZTEST(cbor_encode_test3, test_union_default)
 	zassert_mem_equal(payload, union_default_exp_payload2, sizeof(union_default_exp_payload2));
 }
 
+
+ZTEST(cbor_encode_test3, test_cbor_bstr_list)
+{
+	uint8_t cbor_bstr_list_exp_payload1[] = {LIST(1),
+		STR_LEN(0x49, 1), LIST(2), 0x18, 42, 0x65, 'h', 'e', 'l', 'l', 'o', END
+		END
+	};
+	uint8_t cbor_bstr_list_exp_payload2[] = {LIST(0), END};
+
+	struct CborBstrList input1 = {
+		.bstr_present = true,
+		.bstr.Int = 42,
+		.bstr.tstr.value = "hello",
+		.bstr.tstr.len = 5
+	};
+	struct CborBstrList input2 = {
+		.bstr_present = false,
+	};
+	uint8_t payload[20];
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_CborBstrList(payload,
+		sizeof(payload), &input1, &num_decode));
+	zassert_mem_equal(cbor_bstr_list_exp_payload1, payload, sizeof(cbor_bstr_list_exp_payload1));
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_CborBstrList(payload,
+		sizeof(payload), &input2, &num_decode));
+	zassert_mem_equal(cbor_bstr_list_exp_payload2, payload, sizeof(cbor_bstr_list_exp_payload2));
+}
 
 
 ZTEST_SUITE(cbor_encode_test3, NULL, NULL, NULL, NULL, NULL);
