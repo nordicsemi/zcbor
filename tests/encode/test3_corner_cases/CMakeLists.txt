@@ -72,6 +72,7 @@ set(py_command
   OptCbor
   OptFloatUnion
   OptFloatThenInt
+  CborBstrList
   -e
   ${bit_arg}
   --short-names
