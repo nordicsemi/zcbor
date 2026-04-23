@@ -7,6 +7,7 @@
 One = 1
 Two = 2
 Three = 3
+Hundred = 100
 
 Numbers = [
 	one: One,
@@ -117,6 +118,14 @@ ValueRange = [
 	defaulthello: ?bstr .default ((('hello'))),
 	defaulte: ?float .size 4 .default euler,
 	defaultfalse: ?bool .default false,
+]
+
+le100ge100le = Hundred
+le100ge100ge = Hundred
+
+ValueRange2 = [
+	le100ge100: uint .le le100ge100le .ge le100ge100ge,
+	gt49lt51: uint .gt 49 .lt 51,
 ]
 
 FloatOne = 1.0

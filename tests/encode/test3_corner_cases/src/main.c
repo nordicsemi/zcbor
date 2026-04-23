@@ -11,6 +11,7 @@
 #define TEST_INDEFINITE_LENGTH_ARRAYS
 #endif
 #include <common_test.h>
+#include <zcbor_print.h>
 
 
 ZTEST(cbor_encode_test3, test_numbers)
@@ -1028,6 +1029,58 @@ ZTEST(cbor_encode_test3, test_value_range)
 				&out_len), NULL);
 	zassert_equal(ZCBOR_ERR_WRONG_RANGE, cbor_encode_ValueRange(output, sizeof(output), &input10_inval,
 				&out_len), NULL);
+}
+
+
+
+
+ZTEST(cbor_encode_test3, test_value_range2)
+{
+	const uint8_t exp_payload_value_range2_1[] = {LIST(2),
+		0x18, 100, // 100
+		0x18, 50, // 50
+		END
+	};
+
+	struct ValueRange2 input1 = {
+		.le100ge100 = 100,
+		.gt49lt51 = 50,
+	};
+	struct ValueRange2 input2_inv = {
+		.le100ge100 = 99,
+		.gt49lt51 = 50,
+	};
+	struct ValueRange2 input3_inv = {
+		.le100ge100 = 101,
+		.gt49lt51 = 50,
+	};
+	struct ValueRange2 input4_inv = {
+		.le100ge100 = 100,
+		.gt49lt51 = 49,
+	};
+	struct ValueRange2 input5_inv = {
+		.le100ge100 = 100,
+		.gt49lt51 = 51,
+	};
+
+	size_t out_len;
+	uint8_t output[10];
+
+	int ret = cbor_encode_ValueRange2(output, sizeof(output), &input1, &out_len);
+	zassert_equal(ZCBOR_SUCCESS, ret, "%s\n", zcbor_error_str(ret));
+	zassert_mem_equal(exp_payload_value_range2_1, output, sizeof(exp_payload_value_range2_1), NULL);
+
+	ret = cbor_encode_ValueRange2(output, sizeof(output), &input2_inv, &out_len);
+	zassert_equal(ZCBOR_ERR_WRONG_RANGE, ret, "%s\n", zcbor_error_str(ret));
+
+	ret = cbor_encode_ValueRange2(output, sizeof(output), &input3_inv, &out_len);
+	zassert_equal(ZCBOR_ERR_WRONG_RANGE, ret, "%s\n", zcbor_error_str(ret));
+
+	ret = cbor_encode_ValueRange2(output, sizeof(output), &input4_inv, &out_len);
+	zassert_equal(ZCBOR_ERR_WRONG_RANGE, ret, "%s\n", zcbor_error_str(ret));
+
+	ret = cbor_encode_ValueRange2(output, sizeof(output), &input5_inv, &out_len);
+	zassert_equal(ZCBOR_ERR_WRONG_RANGE, ret, "%s\n", zcbor_error_str(ret));
 }
 
 

@@ -3560,7 +3560,7 @@ class CodeGenerator(CddlXcoder):
         max_val = self.max_value if self.max_value not in exc_vals else None
 
         if self.type in ["INT", "UINT", "NINT", "FLOAT", "BOOL"]:
-            if min_val is not None and min_val == max_val:
+            if self.value is not None:
                 range_checks.append(f"({access} == {self.val_define_name_or_lit('VAL')})")
             else:
                 if min_val is not None:

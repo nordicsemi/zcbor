@@ -1361,6 +1361,61 @@ ZTEST(cbor_decode_test5, test_value_range)
 }
 
 
+ZTEST(cbor_decode_test5, test_value_range2)
+{
+	const uint8_t payload_value_range2_1[] = {LIST(2),
+		0x18, 100, // 100
+		0x18, 50, // 50
+		END
+	};
+	const uint8_t payload_value_range2_2_inv[] = {LIST(2),
+		0x18, 99, // 99 - should fail
+		0x18, 50, // 50
+		END
+	};
+	const uint8_t payload_value_range2_3_inv[] = {LIST(2),
+		0x18, 101, // 101 - should fail
+		0x18, 50, // 50
+		END
+	};
+	const uint8_t payload_value_range2_4_inv[] = {LIST(2),
+		0x18, 100, // 100
+		0x18, 49, // 49 - should fail
+		END
+	};
+	const uint8_t payload_value_range2_5_inv[] = {LIST(2),
+		0x18, 100, // 100
+		0x18, 51, // 51 - should fail
+		END
+	};
+
+	struct ValueRange2 output;
+	size_t out_len;
+
+	int ret = cbor_decode_ValueRange2(payload_value_range2_1, sizeof(payload_value_range2_1),
+					&output, &out_len);
+	zassert_equal(ZCBOR_SUCCESS, ret, "%s\n", zcbor_error_str(ret));
+	zassert_equal(100, output.le100ge100, NULL);
+	zassert_equal(50, output.gt49lt51, NULL);
+
+	ret = cbor_decode_ValueRange2(payload_value_range2_2_inv, sizeof(payload_value_range2_2_inv),
+					&output, &out_len);
+	zassert_equal(ZCBOR_ERR_WRONG_RANGE, ret, "%s\n", zcbor_error_str(ret));
+
+	ret = cbor_decode_ValueRange2(payload_value_range2_3_inv, sizeof(payload_value_range2_3_inv),
+					&output, &out_len);
+	zassert_equal(ZCBOR_ERR_WRONG_RANGE, ret, "%s\n", zcbor_error_str(ret));
+
+	ret = cbor_decode_ValueRange2(payload_value_range2_4_inv, sizeof(payload_value_range2_4_inv),
+					&output, &out_len);
+	zassert_equal(ZCBOR_ERR_WRONG_RANGE, ret, "%s\n", zcbor_error_str(ret));
+
+	ret = cbor_decode_ValueRange2(payload_value_range2_5_inv, sizeof(payload_value_range2_5_inv),
+					&output, &out_len);
+	zassert_equal(ZCBOR_ERR_WRONG_RANGE, ret, "%s\n", zcbor_error_str(ret));
+}
+
+
 ZTEST(cbor_decode_test5, test_float_range)
 {
 	const uint8_t payload_range1[] = {LIST(3),
