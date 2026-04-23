@@ -762,11 +762,16 @@ bool zcbor_multi_encode(const size_t num_encode, zcbor_encoder_t encoder,
 	ZCBOR_CHECK_NULL(state);
 	ZCBOR_CHECK_ERROR();
 
+	size_t current_backup = state->constant_state->current_backup;
+
 	for (size_t i = 0; i < num_encode; i++) {
 		if (!encoder(state, (const uint8_t *)input + i*result_len)) {
 			ZCBOR_FAIL();
 		}
 	}
+
+	ZCBOR_ERR_IF(state->constant_state->current_backup != current_backup, ZCBOR_ERR_BACKUP_MISMATCH);
+
 	zcbor_log("Encoded %zu elements.\n", num_encode);
 	return true;
 }
