@@ -15,7 +15,7 @@ from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormat
 from datetime import datetime
 from copy import copy
 from itertools import tee, chain
-from cbor2 import (loads, dumps, CBORTag, CBORDecoder, CBORDecodeValueError, CBORDecodeEOF, undefined,
+from cbor2 import (loads, dumps, CBORTag, CBORDecoder, CBORDecodeError, CBORDecodeEOF, undefined,
                    CBORSimpleValue)
 from yaml import safe_load as yaml_load, dump as yaml_dump
 from json import loads as json_load, dumps as json_dump
@@ -109,13 +109,13 @@ def counter(reset=False):
 def strict_load(f):
     """Strict variety of cbor2.load that ensures all data is consumed by a single CBOR element."""
     dec = CBORDecoder(f)
-    obj = dec.decode()  # Raises CBORDecodeEOF or CBORDecodeValueError on failure.
+    obj = dec.decode()  # Raises CBORDecodeEOF or CBORDecodeError on failure.
     try:
         dec.read(1)
     except CBORDecodeEOF:
         return obj
     else:
-        raise CBORDecodeValueError("Data not fully decoded.")
+        raise CBORDecodeError("Data not fully decoded.")
 
 
 def strict_loads(b):
@@ -1809,7 +1809,7 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
         elif isinstance(obj, bytes):
             try:
                 bstr_obj = self._to_yaml_obj(strict_loads(obj))
-            except (CBORDecodeValueError, CBORDecodeEOF):
+            except CBORDecodeError:
                 bstr_obj = obj.hex()
             return {"zcbor_bstr": bstr_obj}
         elif isinstance(obj, CBORTag):
