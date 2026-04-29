@@ -15,5 +15,6 @@ from .zcbor.zcbor import (
     CodeGenerator,
     CodeRenderer,
     format_parsing_error,
+    zfrozendict,
     main,
 )

@@ -275,6 +275,26 @@ def loads(string):
     return cbor2.loads(string)
 
 
+def make_mutable(obj):
+    """Convert cbor2 6.x immutable types to mutable equivalents.
+
+    cbor2 6.x returns frozendict and tuple for maps and arrays inside tagged
+    structures. This wrapper converts them back to dict and list so the decoded
+    objects can be mutated (needed by tests that modify and re-encode CBOR).
+    """
+    if isinstance(obj, cbor2.CBORTag):
+        return cbor2.CBORTag(obj.tag, make_mutable(obj.value))
+    elif isinstance(obj, (dict, zcbor.zfrozendict)):
+        return {k: make_mutable(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [make_mutable(v) for v in obj]
+    return obj
+
+
+def mutable_loads(string):
+    return make_mutable(loads(string))
+
+
 class TestEx0Manifest14(TestManifest):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -457,7 +477,7 @@ class TestEx1Manifest14(TestManifest):
 
     def test_cbor_pen(self):
         data = bytes.fromhex(p_test_vectors14[1].read_text(encoding="utf-8").replace("\n", ""))
-        struct = loads(data)
+        struct = mutable_loads(data)
         struct2 = loads(struct.value[3])  # manifest
         struct3 = loads(struct2[3])  # common sequence
         struct4 = loads(struct3[4])  # override params
@@ -474,10 +494,9 @@ class TestEx1Manifest14(TestManifest):
 class TestEx1InvManifest14(TestManifest):
     def test_inv0(self):
         data = bytes.fromhex(p_test_vectors14[1].read_text(encoding="utf-8").replace("\n", ""))
-        struct = loads(data)
+        struct = mutable_loads(data)
         struct2 = loads(struct.value[2])  # authentication
-        struct3 = loads(struct2[1])
-        struct3.tag = 99999  # invalid tag for COSE_Sign1
+        struct3 = cbor2.CBORTag(99999, loads(struct2[1]).value)  # invalid tag for COSE_Sign1
         struct2[1] = dumps(struct3)
         struct.value[2] = dumps(struct2)
         data = dumps(struct)
@@ -490,7 +509,7 @@ class TestEx1InvManifest14(TestManifest):
 
     def test_inv1(self):
         data = bytes.fromhex(p_test_vectors14[1].read_text(encoding="utf-8").replace("\n", ""))
-        struct = loads(data)
+        struct = mutable_loads(data)
         struct2 = loads(struct.value[3])  # manifest
         struct2[1] += 1  # invalid manifest version
         struct.value[3] = dumps(struct2)
@@ -504,7 +523,7 @@ class TestEx1InvManifest14(TestManifest):
 
     def test_inv2(self):
         data = bytes.fromhex(p_test_vectors14[1].read_text(encoding="utf-8").replace("\n", ""))
-        struct = loads(data)
+        struct = mutable_loads(data)
         struct.value[23] = b""  # Invalid integrated payload key
         data = dumps(struct)
         try:
@@ -518,7 +537,7 @@ class TestEx1InvManifest14(TestManifest):
 
     def test_inv3(self):
         data = bytes.fromhex(p_test_vectors14[1].read_text(encoding="utf-8").replace("\n", ""))
-        struct = loads(data)
+        struct = mutable_loads(data)
         struct2 = loads(struct.value[3])  # manifest
         struct3 = loads(struct2[3])  # common sequence
         struct4 = loads(struct3[4])  # override params
@@ -664,7 +683,7 @@ class TestEx5Manifest14(TestManifest):
 class TestEx5InvManifest14(TestManifest):
     def test_invalid_rep_policy(self):
         data = bytes.fromhex(p_test_vectors14[5].read_text(encoding="utf-8").replace("\n", ""))
-        struct = loads(data)
+        struct = mutable_loads(data)
         struct2 = loads(struct.value[3])  # manifest
         struct3 = loads(struct2[10])  # suit_validate
         struct3[3] += 16  # invalid Rep_Policy
