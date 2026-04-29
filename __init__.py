@@ -10,5 +10,6 @@ from pathlib import Path
 from .zcbor.zcbor import (
     CddlValidationError,
     DataTranslator,
+    zfrozendict,
     main
 )

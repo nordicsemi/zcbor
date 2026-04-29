@@ -9,7 +9,7 @@ from regex import compile, S, M
 from pprint import pformat, pprint
 from os import path, linesep, makedirs
 from collections import defaultdict, namedtuple
-from collections.abc import Hashable
+from collections.abc import Hashable, Mapping
 from typing import NamedTuple
 from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter, FileType
 from datetime import datetime
@@ -17,6 +17,18 @@ from copy import copy
 from itertools import tee, chain
 from cbor2 import (loads, dumps, CBORTag, CBORDecoder, CBORDecodeError, CBORDecodeEOF, undefined,
                    CBORSimpleValue)
+import cbor2
+import builtins
+
+if hasattr(cbor2, "frozendict"):
+    from cbor2 import frozendict as zfrozendict
+elif hasattr(cbor2, "FrozenDict"):
+    from cbor2 import FrozenDict as zfrozendict
+elif hasattr(builtins, "frozendict"):
+    from builtins import frozendict as zfrozendict
+else:
+    assert False, "Couldn't find a frozendict implementation."
+
 from yaml import safe_load as yaml_load, dump as yaml_dump
 from json import loads as json_load, dumps as json_dump
 from io import BytesIO
@@ -1467,10 +1479,11 @@ class DataTranslator(CddlXcoder):
             "BSTR": lambda: (bytes,),
             "NIL": lambda: (type(None),),
             "UNDEF": lambda: (type(undefined),),
-            "ANY": lambda: (int, float, str, bytes, type(None), type(undefined), bool, list, dict),
+            "ANY": lambda: (int, float, str, bytes, type(None), type(undefined), bool, list, tuple,
+                            dict, zfrozendict),
             "BOOL": lambda: (bool,),
             "LIST": lambda: (tuple, list),
-            "MAP": lambda: (dict,),
+            "MAP": lambda: (dict, zfrozendict),
         }[self.type]()
 
     def _check_type(self, obj):
@@ -1478,7 +1491,7 @@ class DataTranslator(CddlXcoder):
         if self.type not in ["OTHER", "GROUP", "UNION"]:
             exp_type = self._expected_type()
             self._decode_assert(
-                type(obj) in exp_type,
+                isinstance(obj, exp_type),
                 f"{str(self)}: Wrong type ({type(obj)}) of {str(obj)}, expected {str(exp_type)}")
 
     def _check_value(self, obj):
@@ -1795,7 +1808,7 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
         """inverse of _from_yaml_obj"""
         if isinstance(obj, list) or isinstance(obj, tuple):
             return [self._to_yaml_obj(elem) for elem in obj]
-        elif isinstance(obj, dict):
+        elif isinstance(obj, (dict, zfrozendict)):
             retval = dict()
             i = 0
             for key, val in obj.items():
@@ -1847,7 +1860,13 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
         """CBOR object => JSON str"""
         self.validate_obj(obj)
         json_obj = self._to_yaml_obj(obj) if yaml_compat else obj
-        return json_dump(json_obj)
+
+        def zfrozendict_to_dict(obj):
+            if isinstance(obj, zfrozendict):
+                return dict(obj)
+            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+        return json_dump(json_obj, default=zfrozendict_to_dict)
 
     def str_to_json(self, cbor_str, yaml_compat=False):
         """CBOR bytestring => JSON str"""
