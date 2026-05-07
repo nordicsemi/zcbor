@@ -50,6 +50,8 @@ p_map_bstr_cddl = Path(p_cases, "map_bstr.cddl")
 p_map_bstr_yaml = Path(p_cases, "map_bstr.yaml")
 p_yaml_compat_cddl = Path(p_cases, "yaml_compatibility.cddl")
 p_yaml_compat_yaml = Path(p_cases, "yaml_compatibility.yaml")
+p_yaml_float_compat_cddl = Path(p_cases, "yaml_float_compatibility.cddl")
+p_yaml_float_compat_yaml = Path(p_cases, "yaml_float_compatibility.yaml")
 p_pet_cddl = Path(p_cases, "pet.cddl")
 p_README = Path(p_root, "README.md")
 p_prelude = Path(p_root, "zcbor", "prelude.cddl")
@@ -1231,6 +1233,122 @@ class TestYamlCompatibility(PopenTest):
             stdout1,
         )
         self.assertEqual(safe_load(stdout2), safe_load(p_yaml_compat_yaml.read_text(encoding="utf-8")))
+
+
+class TestYamlFloatCompatibility(PopenTest):
+    def test_yaml_float_compatibility(self):
+        # Validate without --yaml-compatibility must fail.
+        self.popen_test(
+            [
+                "zcbor",
+                "validate",
+                "-c",
+                p_yaml_float_compat_cddl,
+                "-i",
+                p_yaml_float_compat_yaml,
+                "-t",
+                "float_types_t",
+            ],
+            exp_retcode=1,
+        )
+        # Validate with --yaml-compatibility must succeed.
+        self.popen_test(
+            [
+                "zcbor",
+                "validate",
+                "-c",
+                p_yaml_float_compat_cddl,
+                "-i",
+                p_yaml_float_compat_yaml,
+                "-t",
+                "float_types_t",
+                "--yaml-compatibility",
+            ]
+        )
+        # Convert YAML->CBOR->YAML roundtrip.
+        stdout1, _ = self.popen_test(
+            [
+                "zcbor",
+                "convert",
+                "-c",
+                p_yaml_float_compat_cddl,
+                "-i",
+                p_yaml_float_compat_yaml,
+                "-o",
+                "-",
+                "-t",
+                "float_types_t",
+                "--yaml-compatibility",
+            ]
+        )
+        stdout2, _ = self.popen_test(
+            [
+                "zcbor",
+                "convert",
+                "-c",
+                p_yaml_float_compat_cddl,
+                "-i",
+                "-",
+                "-o",
+                "-",
+                "--output-as",
+                "yaml",
+                "-t",
+                "float_types_t",
+                "--yaml-compatibility",
+            ],
+            stdout1,
+        )
+        # cbor2.loads() converts each float value in CBOR to a Python float value, which is a double-precision float.
+        # The precision specified in the CDDL and contained in the CBOR hex string
+        # as float16 (0xf9), float32 (0xfa), or float64 (0xfb) is not preserved during conversion.
+        result = safe_load(stdout2)
+        original = safe_load(p_yaml_float_compat_yaml.read_text(encoding="utf-8"))
+        # Extract the float values from the original YAML for comparison.
+        expected_values = []
+        for d in original:
+            if isinstance(d, dict):
+                value = next(iter(d.values()))  # {zcbor_float16: 1.0} -> 1.0
+            else:
+                value = d  # plain floats
+            expected_values.append(value)
+        # check if the number of floats is the same
+        self.assertEqual(len(expected_values), len(result))
+        # check if the float values are approximately equal (considering precision loss)
+        for expected_val, result_val in zip(expected_values, result):
+            self.assertAlmostEqual(expected_val, result_val, places=2)
+
+
+class TestFloatYamlCompat(TestCase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            self.cddl_res = zcbor.DataTranslator.from_cddl(
+                cddl_string=p_prelude.read_text(encoding="utf-8")
+                + "\n"
+                + p_yaml_float_compat_cddl.read_text(encoding="utf-8"),
+                default_max_qty=16,
+            )
+        except zcbor.CddlParsingError as e:
+            print(zcbor.format_parsing_error(e))
+            raise
+
+    # CBOR bytes must contain correct precision markers (0xf9, 0xfa, 0xfb).
+    def test_float_conversion(self):
+        cddl = self.cddl_res.my_types["float_types_t"]
+        test_yaml = (
+            "[{zcbor_float16: 1.0}, {zcbor_float32: 1.0}, {zcbor_float64: 1.0}, {zcbor_float32: 1.0}]"
+        )
+
+        cbor_bytes = cddl.from_yaml(test_yaml, yaml_compat=True)
+        # float16 marker
+        self.assertIn(b"\xf9", cbor_bytes)
+        # float32 marker
+        self.assertIn(b"\xfa", cbor_bytes)
+        # float64 marker
+        self.assertIn(b"\xfb", cbor_bytes)
+        # undefined float in cddl, should be encoded as float32 ad defined in YAML
+        self.assertIn(b"\xfa", cbor_bytes)
 
 
 class TestIntmax(CornerCaseTest):
