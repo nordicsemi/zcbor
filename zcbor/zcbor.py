@@ -46,6 +46,7 @@ import sys
 from textwrap import wrap, indent
 from codecs import decode as codec_decode
 from math import prod
+import struct
 
 regex_cache = {}
 indentation = "\t"
@@ -85,6 +86,68 @@ defaults = {
 UINT_MAX = {8: UINT8_MAX, 16: UINT16_MAX, 32: UINT32_MAX, 64: UINT64_MAX}
 INT_MIN = {8: INT8_MIN, 16: INT16_MIN, 32: INT32_MIN, 64: INT64_MIN}
 INT_MAX = {8: INT8_MAX, 16: INT16_MAX, 32: INT32_MAX, 64: INT64_MAX}
+
+
+# ============================================================================
+# Custom Float Precision Support for YAML Conversion
+# ============================================================================
+# These classes allow YAML files to specify float16/float32 precision using
+# zcbor_float16 and zcbor_float32 tags, overriding cbor2's default float64.
+class Float16:
+    """Wrapper for float16 (half precision) CBOR encoding (0xf9 + 2 bytes)"""
+
+    def __init__(self, value):
+        self.value = float(value)
+
+    def __repr__(self):
+        return f"Float16({self.value})"
+
+
+class Float32:
+    """Wrapper for float32 (single precision) CBOR encoding (0xfa + 4 bytes)"""
+
+    def __init__(self, value):
+        self.value = float(value)
+
+    def __repr__(self):
+        return f"Float32({self.value})"
+
+
+class Float64:
+    """Wrapper for float64 (double precision) CBOR encoding (0xfb + 8 bytes)"""
+
+    def __init__(self, value):
+        self.value = float(value)
+
+    def __repr__(self):
+        return f"Float64({self.value})"
+
+
+def _custom_float_encoder(encoder, value):
+    """
+    Custom CBOR encoder for Float16/Float32/Float64 wrappers.
+
+    Without this, cbor2.dumps() auto-optimizes floats (e.g., 0.5 becomes float16).
+    This encoder intercepts Float16/Float32/Float64 objects and encodes them
+    with the correct CBOR type markers (0xf9/0xfa/0xfb).
+    """
+    if isinstance(value, Float16):
+        # Encode as float16: 0xf9 + 2 bytes
+        f16_bytes = struct.pack(">e", value.value)
+        encoder.write(b"\xf9" + f16_bytes)
+    elif isinstance(value, Float32):
+        # Encode as float32: 0xfa + 4 bytes
+        f32_bytes = struct.pack(">f", value.value)
+        encoder.write(b"\xfa" + f32_bytes)
+    elif isinstance(value, Float64):
+        # Encode as float64: 0xfb + 8 bytes
+        f64_bytes = struct.pack(">d", value.value)
+        encoder.write(b"\xfb" + f64_bytes)
+    else:
+        raise TypeError(f"Cannot encode type {type(value)}: {value}")
+
+
+# ============================================================================
 
 
 class CddlParsingError(Exception):
@@ -2082,7 +2145,7 @@ class DataTranslator(CddlXcoder):
         "UINT": (int,),
         "INT": (int,),
         "NINT": (int,),
-        "FLOAT": (float,),
+        "FLOAT": (float, Float16, Float32, Float64),
         "TSTR": (str,),
         "BSTR": (bytes,),
         "NIL": (type(None),),
@@ -2113,6 +2176,7 @@ class DataTranslator(CddlXcoder):
         """Check that the decoded object has the correct type."""
         if self.type not in ["OTHER", "GROUP", "UNION"]:
             exp_type = self._expected_type()
+
             self._decode_assert(
                 isinstance(obj, exp_type),
                 lambda: f"{str(self)}: Wrong type ({type(obj)}) of {str(obj)}, expected {str(exp_type)}",
@@ -2442,6 +2506,14 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
                 return bstr
             elif ["zcbor_tag", "zcbor_tag_val"] == list(obj.keys()):
                 return CBORTag(obj["zcbor_tag"], self._from_yaml_obj(obj["zcbor_tag_val"], can))
+            # ============ Float Precision Support ============
+            elif ["zcbor_float16"] == list(obj.keys()):
+                return Float16(float(obj["zcbor_float16"]))
+            elif ["zcbor_float32"] == list(obj.keys()):
+                return Float32(float(obj["zcbor_float32"]))
+            elif ["zcbor_float64"] == list(obj.keys()):
+                return Float64(float(obj["zcbor_float64"]))
+            # =================================================
             retval = dict()
             for key, val in obj.items():
                 if isinstance(key, str) and getrp(r"zcbor_keyval\d+").fullmatch(key) is not None:
@@ -2490,7 +2562,7 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
         yaml_obj = yaml_load(yaml_str)
         obj = self._from_yaml_obj(yaml_obj, canonical) if yaml_compat else yaml_obj
         self.validate_obj(obj)
-        return dumps(obj, canonical=canonical)
+        return dumps(obj, canonical=canonical, default=_custom_float_encoder)
 
     def obj_to_yaml(self, obj, yaml_compat=False):
         """CBOR object => YAML str"""
@@ -2507,7 +2579,7 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
         json_obj = json_load(json_str)
         obj = self._from_yaml_obj(json_obj, canonical) if yaml_compat else json_obj
         self.validate_obj(obj)
-        return dumps(obj, canonical=canonical)
+        return dumps(obj, canonical=canonical, default=_custom_float_encoder)
 
     def obj_to_json(self, obj, yaml_compat=False):
         """CBOR object => JSON str"""

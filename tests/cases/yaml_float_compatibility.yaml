@@ -1,0 +1,5 @@
+# float_types_t = [small_float: float16, medium_float: float32, large_float: float64]
+- zcbor_float16: 3.14                # small_float (π approximation)
+- zcbor_float32: 2.71828             # medium_float (e approximation)
+- zcbor_float64: 3.141592653589793   # large_float (π full precision)
+- 2.71                               # undef_float (e approximation, YAML native)

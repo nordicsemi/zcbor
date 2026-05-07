@@ -1,0 +1,7 @@
+; Test 2: Floating point types
+float_types_t = [
+    small_float: float16,        ; 16-bit float -> 3 bytes CBOR (0xf9 + 2)
+    mediun_float: float32,       ; 32-bit float -> 5 bytes CBOR (0xfa + 4)
+    large_float: float64,        ; 64-bit float -> 9 bytes CBOR (0xfb + 8)
+    undef_float: float,          
+]   

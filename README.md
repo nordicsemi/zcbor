@@ -213,6 +213,7 @@ The following data types are supported by CBOR, but not by YAML (or JSON which i
  2. map keys other than text string: In YAML, such key value pairs are represented as `{"zcbor_keyval<unique int>": {"key": <key, not text>, "val": <value>}}`.
  3. tags: In cbor2, tags are represented by a special type, `cbor2.CBORTag`. In YAML, these are represented as `{"zcbor_tag": <tag number>, "zcbor_tag_val": <tagged data>}`.
  4. undefined: In cbor2, undefined has its own value `cbor2.types.undefined`. In YAML, undefined is represented as: `["zcbor_undefined"]`.
+ 5. floats: In cbor2, floats are always encoded as float64, unless the value can be losslessly represented as float16 or float32. In YAML, a specific float precision can be forced by using `{"zcbor_float16": <value>}`, `{"zcbor_float32": <value>}`, or `{"zcbor_float64": <value>}`.
 
 You can see an example of the conversions in [tests/cases/yaml_compatibility.yaml](tests/cases/yaml_compatibility.yaml) and its CDDL file [tests/cases/yaml_compatibility.cddl](tests/cases/yaml_compatibility.cddl).
 
