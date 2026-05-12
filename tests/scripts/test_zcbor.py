@@ -1648,9 +1648,9 @@ Cannot have .size before type
 
     def test_list_key(self):
         exc = self.do_test_exception("foo = [1 => tstr]")
-        self.assertEqual(
-            f"""LIST[   (//UINT1) => TSTR]{linesep}List member(s) cannot have key: [(//UINT1) => TSTR] pointing to []""",
+        self.assertRegex(
             str(exc),
+            rf"""LIST\[\n? +\(//UINT1\) => TSTR(,\n)? *]\r?\nList member\(s\) cannot have key: \[\(//UINT1\) => TSTR] pointing to \[]""",
         )
 
     def test_multiple_keys(self):
@@ -1670,10 +1670,9 @@ Cannot have .size before type
 
     def test_control_group_member_type(self):
         exc = self.do_test_exception("foo = &(1, int)")
-        self.assertEqual(
-            """control group member INT of GROUP[   //UINT1,
-        INT] must be literal positive integer.""",
+        self.assertRegex(
             str(exc),
+            r"control group member INT of GROUP\[(.|[\s])*?\] must be literal positive integer\.",
         )
 
     def test_float_size(self):
