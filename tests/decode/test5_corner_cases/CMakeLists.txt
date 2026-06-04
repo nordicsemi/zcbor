@@ -75,6 +75,7 @@ set(py_command
     AmbigList
     UnionDefault
     OptUnion
+    CborBstrList
   --decode
   --git-sha-header
   --short-names

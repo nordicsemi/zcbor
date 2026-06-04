@@ -3499,15 +3499,11 @@ class CodeGenerator(CddlXcoder):
         if self.cbor and not self.cbor.is_entry_type():
             access_arg = f", {deref_if_not_null(self.val_access())}" if self.mode == "decode" else ""
             res_arg = f", &tmp_str" if self.mode == "encode" else ""
-            xcode_cbor = "(%s)" % (
-                (newl_ind + "&& ").join(
-                    [
-                        f"zcbor_bstr_start_{self.mode}(state{access_arg})",
-                        f"(int_res = ({self.cbor.full_xcode()}), "
-                        f"zcbor_bstr_end_{self.mode}(state{res_arg}), int_res)",
-                    ]
-                )
-            )
+            start = f"(zcbor_bstr_start_{self.mode}(state{access_arg}))"
+            end = f"(zcbor_bstr_end_{self.mode}(state{res_arg}))"
+            end_func_force = f"zcbor_bstr_end_force_{self.mode}(state)"
+            body = f"({self.cbor.full_xcode()})"
+            xcode_cbor = "(%s && ((%s) || (%s, false)) && %s)" % (start, body, end_func_force, end)
             if self.mode == "decode" or self.is_unambiguous():
                 return xcode_cbor
             else:

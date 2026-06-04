@@ -346,6 +346,7 @@ do { \
 #define ZCBOR_ERR_TOO_LARGE_FOR_STRING 26 ///! Trying to start a nested string that is too large to fit in the container string.
 #define ZCBOR_ERR_NOT_IN_FRAGMENT 27 ///! The action requires being inside a fragmented string, but we are currently not inside one.
 #define ZCBOR_ERR_INSIDE_STRING 28 ///! Currently encoding/decoding a non-CBOR-encoded string, so cannot use most zcbor encoding/decoding functions
+#define ZCBOR_ERR_BACKUP_MISMATCH 29 ///! Trying to restore or discard a backup that is not the same as was created at the start of the current action.
 #define ZCBOR_ERR_UNKNOWN 31
 
 /** The largest possible elem_count. */
