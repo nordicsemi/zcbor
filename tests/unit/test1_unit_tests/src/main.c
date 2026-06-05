@@ -1572,6 +1572,17 @@ ZTEST(zcbor_unit_tests, test_any_skip)
 }
 
 
+ZTEST(zcbor_unit_tests, test_any_skip_str_overflow)
+{
+	uint8_t payload[] = {0xd9, 0x12, 0x34, 0x45, 'h', 'e', 'l', 'l'}; // Indicates a string of length 5, but only 4 bytes of data.
+	ZCBOR_STATE_D(state_d, 0, payload, sizeof(payload), 1, 0);
+
+	bool ret = zcbor_any_skip(state_d, NULL);
+	zassert_false(ret, "err: %d\n", zcbor_peek_error(state_d));
+	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, zcbor_peek_error(state_d), NULL);
+}
+
+
 ZTEST(zcbor_unit_tests, test_pexpect)
 {
 	uint8_t payload[100];

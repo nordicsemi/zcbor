@@ -1703,7 +1703,7 @@ bool zcbor_any_skip(zcbor_state_t *state, void *result)
 		case ZCBOR_MAJOR_TYPE_BSTR:
 		case ZCBOR_MAJOR_TYPE_TSTR:
 			/* 'value' is the length of the BSTR or TSTR. */
-			ZCBOR_FAIL_IF(!str_overflow_check(state, (size_t)value));
+			ZCBOR_FAIL_IF(!str_overflow_check(&state_copy, (size_t)value));
 			(state_copy.payload) += value;
 			break;
 		case ZCBOR_MAJOR_TYPE_MAP:
