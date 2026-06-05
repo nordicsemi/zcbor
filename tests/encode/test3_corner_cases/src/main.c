@@ -1996,4 +1996,67 @@ ZTEST(cbor_encode_test3, test_count_union)
 }
 
 
+ZTEST(cbor_encode_test3, test_tags)
+{
+	uint8_t tags_exp_payload1[] = {LIST(2),
+		0xD9, 0x04, 0xd2, 0x01, /* #6.1234(1) */
+		0xD9, 0x0d, 0x80, 0xf5, /* #6.3456(true) */
+		END
+	};
+	uint8_t tags_exp_payload2[] = {LIST(2),
+		0xD9, 0x09, 0x29, 0x10, /* #6.2345(16) */
+		0xD9, 0x0d, 0x80, 0xf4, /* #6.3456(false) */
+		END
+	};
+	uint8_t tags_exp_payload3[] = {LIST(3),
+		0xD9, 0x04, 0xd2, 0x01, /* #6.1234(1) */
+		0xD9, 0x0d, 0x80, 0xf5, /* #6.3456(true) */
+		0xD9, 0x04, 0xd2, 0x18, 0x63, /* #6.1234(99) */
+		END
+	};
+	uint8_t tags_exp_payload4[] = {LIST(3),
+		0xD9, 0x09, 0x29, 0x24, /* #6.2345(-5) */
+		0xD9, 0x0d, 0x80, 0xf4, /* #6.3456(false) */
+		0xD9, 0x04, 0xd2, 0x07, /* #6.1234(7) */
+		END
+	};
+	struct Tags input;
+	uint8_t payload[30];
+
+	input.tag1_choice = Tags_tag1_tag1_alt1_c;
+	input.tag1_alt1 = 1;
+	input.tag2_choice = Tags_tag2_tag2_alt2_c;
+	input.tag2_alt2 = true;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_Tags(payload,
+		sizeof(payload), &input, NULL));
+	zassert_mem_equal(payload, tags_exp_payload1, sizeof(tags_exp_payload1));
+
+	input.tag1_choice = Tags_tag1_tag1_alt2_c;
+	input.tag1_alt2 = 16;
+	input.tag2_choice = Tags_tag2_tag2_alt2_c;
+	input.tag2_alt2 = false;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_Tags(payload,
+		sizeof(payload), &input, NULL));
+	zassert_mem_equal(payload, tags_exp_payload2, sizeof(tags_exp_payload2));
+
+	input.tag1_choice = Tags_tag1_tag1_alt1_c;
+	input.tag1_alt1 = 1;
+	input.tag2_choice = tag2_t3456bool_l_c;
+	input.t3456bool = true;
+	input.t1234int = 99;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_Tags(payload,
+		sizeof(payload), &input, NULL));
+	zassert_mem_equal(payload, tags_exp_payload3, sizeof(tags_exp_payload3));
+
+	input.tag1_choice = Tags_tag1_tag1_alt2_c;
+	input.tag1_alt2 = -5;
+	input.tag2_choice = tag2_t3456bool_l_c;
+	input.t3456bool = false;
+	input.t1234int = 7;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_Tags(payload,
+		sizeof(payload), &input, NULL));
+	zassert_mem_equal(payload, tags_exp_payload4, sizeof(tags_exp_payload4));
+}
+
+
 ZTEST_SUITE(cbor_encode_test3, NULL, NULL, NULL, NULL, NULL);

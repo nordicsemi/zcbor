@@ -76,6 +76,7 @@ set(py_command
     UnionDefault
     OptUnion
     CountUnion
+    Tags
   --decode
   --git-sha-header
   --short-names

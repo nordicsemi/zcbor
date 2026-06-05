@@ -2817,4 +2817,76 @@ ZTEST(cbor_decode_test5, test_count_union)
 }
 
 
+ZTEST(cbor_decode_test5, test_tags)
+{
+	uint8_t tags_payload1[] = {LIST(2),
+		0xD9, 0x04, 0xd2, 0x01, /* #6.1234(1) */
+		0xD9, 0x0d, 0x80, 0xf5, /* #6.3456(true) */
+		END
+	};
+	uint8_t tags_payload2[] = {LIST(2),
+		0xD9, 0x09, 0x29, 0x10, /* #6.2345(16) */
+		0xD9, 0x0d, 0x80, 0xf4, /* #6.3456(false) */
+		END
+	};
+	uint8_t tags_payload3[] = {LIST(3),
+		0xD9, 0x04, 0xd2, 0x01, /* #6.1234(1) */
+		0xD9, 0x0d, 0x80, 0xf5, /* #6.3456(true) */
+		0xD9, 0x04, 0xd2, 0x18, 0x63, /* #6.1234(99) */
+		END
+	};
+	uint8_t tags_payload4[] = {LIST(3),
+		0xD9, 0x09, 0x29, 0x24, /* #6.2345(-5) */
+		0xD9, 0x0d, 0x80, 0xf4, /* #6.3456(false) */
+		0xD9, 0x04, 0xd2, 0x07, /* #6.1234(7) */
+		END
+	};
+	uint8_t tags_payload5_inv[] = {LIST(2),
+		0xD9, 0x04, 0xd3, 0x01, /* #6.1235(1) - here */
+		0xD9, 0x0d, 0x80, 0xf5, /* #6.3456(true) */
+		END
+	};
+
+	struct Tags result;
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_Tags(tags_payload1,
+		sizeof(tags_payload1), &result, &num_decode), NULL);
+	zassert_equal(sizeof(tags_payload1), num_decode, NULL);
+	zassert_equal(Tags_tag1_tag1_alt1_c, result.tag1_choice, NULL);
+	zassert_equal(1, result.tag1_alt1, NULL);
+	zassert_equal(Tags_tag2_tag2_alt2_c, result.tag2_choice, NULL);
+	zassert_equal(true, result.tag2_alt2, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_Tags(tags_payload2,
+		sizeof(tags_payload2), &result, &num_decode), NULL);
+	zassert_equal(sizeof(tags_payload2), num_decode, NULL);
+	zassert_equal(Tags_tag1_tag1_alt2_c, result.tag1_choice, NULL);
+	zassert_equal(16, result.tag1_alt2, NULL);
+	zassert_equal(Tags_tag2_tag2_alt2_c, result.tag2_choice, NULL);
+	zassert_equal(false, result.tag2_alt2, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_Tags(tags_payload3,
+		sizeof(tags_payload3), &result, &num_decode), NULL);
+	zassert_equal(sizeof(tags_payload3), num_decode, NULL);
+	zassert_equal(Tags_tag1_tag1_alt1_c, result.tag1_choice, NULL);
+	zassert_equal(1, result.tag1_alt1, NULL);
+	zassert_equal(tag2_t3456bool_l_c, result.tag2_choice, NULL);
+	zassert_equal(true, result.t3456bool, NULL);
+	zassert_equal(99, result.t1234int, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_Tags(tags_payload4,
+		sizeof(tags_payload4), &result, &num_decode), NULL);
+	zassert_equal(sizeof(tags_payload4), num_decode, NULL);
+	zassert_equal(Tags_tag1_tag1_alt2_c, result.tag1_choice, NULL);
+	zassert_equal(-5, result.tag1_alt2, NULL);
+	zassert_equal(tag2_t3456bool_l_c, result.tag2_choice, NULL);
+	zassert_equal(false, result.t3456bool, NULL);
+	zassert_equal(7, result.t1234int, NULL);
+
+	zassert_equal(ZCBOR_ERR_WRONG_VALUE, cbor_decode_Tags(tags_payload5_inv,
+		sizeof(tags_payload5_inv), &result, &num_decode), NULL);
+}
+
+
 ZTEST_SUITE(cbor_decode_test5, NULL, NULL, NULL, NULL, NULL);

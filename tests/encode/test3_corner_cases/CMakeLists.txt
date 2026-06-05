@@ -64,6 +64,7 @@ set(py_command
   OptList
   UnionDefault
   CountUnion
+  Tags
   -e
   ${bit_arg}
   --short-names

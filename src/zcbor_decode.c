@@ -1759,7 +1759,8 @@ bool zcbor_tag_expect(zcbor_state_t *state, uint32_t expected)
 		ZCBOR_FAIL();
 	}
 	if (actual != expected) {
-		ERR_RESTORE(ZCBOR_ERR_WRONG_VALUE);
+		state->payload = state->payload_bak;
+		ZCBOR_ERR(ZCBOR_ERR_WRONG_VALUE);
 	}
 	return true;
 }

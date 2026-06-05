@@ -1583,6 +1583,42 @@ ZTEST(zcbor_unit_tests, test_any_skip_str_overflow)
 }
 
 
+ZTEST(zcbor_unit_tests, test_tag_expect_wrong_value)
+{
+	/* LIST(2): #6.1234(1), #6.3456(false) */
+	uint8_t payload[] = {0x82, 0xD9, 0x04, 0xD2, 0x01, 0xD9, 0x0D, 0x80, 0xF4};
+	ZCBOR_STATE_D(state_d, 3, payload, sizeof(payload), 2, 0);
+
+	zassert_true(zcbor_list_start_decode(state_d), NULL);
+	zassert_equal(2, state_d->elem_count, NULL);
+
+	/* Wrong tag should fail without changing elem_count. */
+	zassert_false(zcbor_tag_expect(state_d, 2345), NULL);
+	zassert_equal(ZCBOR_ERR_WRONG_VALUE, zcbor_peek_error(state_d), NULL);
+	zassert_equal(2, state_d->elem_count, NULL);
+	zassert_equal(payload + 1, state_d->payload, NULL);
+
+	/* Correct tag should succeed and allow decoding the value. */
+	zassert_true(zcbor_tag_expect(state_d, 1234), NULL);
+	zassert_equal(2, state_d->elem_count, NULL);
+	zassert_true(zcbor_int32_expect(state_d, 1), NULL);
+	zassert_equal(1, state_d->elem_count, NULL);
+
+	/* Wrong tag should fail without changing elem_count. */
+	zassert_false(zcbor_tag_expect(state_d, 1234), NULL);
+	zassert_equal(ZCBOR_ERR_WRONG_VALUE, zcbor_peek_error(state_d), NULL);
+	zassert_equal(1, state_d->elem_count, NULL);
+	zassert_equal(payload + 5, state_d->payload, NULL);
+
+	/* Correct tag should succeed and allow decoding the rest of the list. */
+	zassert_true(zcbor_tag_expect(state_d, 3456), NULL);
+	zassert_equal(1, state_d->elem_count, NULL);
+	zassert_true(zcbor_bool_expect(state_d, false), NULL);
+	zassert_equal(0, state_d->elem_count, NULL);
+	zassert_true(zcbor_list_end_decode(state_d), NULL);
+}
+
+
 ZTEST(zcbor_unit_tests, test_pexpect)
 {
 	uint8_t payload[100];
