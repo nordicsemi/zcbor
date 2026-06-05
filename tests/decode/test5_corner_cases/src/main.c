@@ -249,14 +249,14 @@ ZTEST(cbor_decode_test5, test_tagged_union)
 		sizeof(payload_tagged_union1), &result, &decode_len));
 
 	zassert_equal(sizeof(payload_tagged_union1), decode_len, NULL);
-	zassert_equal(TaggedUnion_bool_c, result.TaggedUnion_choice, NULL);
-	zassert_true(result.Bool, NULL);
+	zassert_equal(TaggedUnion_t4321bool_c, result.TaggedUnion_choice, NULL);
+	zassert_true(result.t4321bool, NULL);
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_TaggedUnion(payload_tagged_union2,
 		sizeof(payload_tagged_union2), &result, &decode_len), NULL);
 
-	zassert_equal(TaggedUnion_uint_c, result.TaggedUnion_choice, NULL);
-	zassert_equal(0x10, result.uint, NULL);
+	zassert_equal(TaggedUnion_t2345uint_c, result.TaggedUnion_choice, NULL);
+	zassert_equal(0x10, result.t2345uint, NULL);
 
 	zassert_equal(ZCBOR_ERR_WRONG_TYPE, cbor_decode_TaggedUnion(payload_tagged_union3_inv,
 		sizeof(payload_tagged_union3_inv), &result, &decode_len), NULL);

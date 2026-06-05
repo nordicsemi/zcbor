@@ -118,8 +118,8 @@ ZTEST(cbor_encode_test3, test_tagged_union)
 	uint8_t output[5];
 
 	struct TaggedUnion_r input;
-	input.TaggedUnion_choice = TaggedUnion_bool_c;
-	input.Bool = true;
+	input.TaggedUnion_choice = TaggedUnion_t4321bool_c;
+	input.t4321bool = true;
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_encode_TaggedUnion(output,
 		sizeof(output), &input, &encode_len));
@@ -127,8 +127,8 @@ ZTEST(cbor_encode_test3, test_tagged_union)
 	zassert_equal(sizeof(exp_payload_tagged_union1), encode_len, NULL);
 	zassert_mem_equal(exp_payload_tagged_union1, output, sizeof(exp_payload_tagged_union1), NULL);
 
-	input.TaggedUnion_choice = TaggedUnion_uint_c;
-	input.uint = 0x10;
+	input.TaggedUnion_choice = TaggedUnion_t2345uint_c;
+	input.t2345uint = 0x10;
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_encode_TaggedUnion(output,
 		sizeof(output), &input, &encode_len), NULL);

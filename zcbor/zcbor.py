@@ -673,8 +673,8 @@ class CddlParser:
                 if (self.min_size is not None) and (self.max_size is not None)
                 else None
             )
-            # Name an element by its type.
-            or self.type.lower()
+            # Name an element by its type. If it has tags, include them in the name:
+            or ("".join(f"t{t}" for t in self.tags) + self.type.lower())
         ).replace("-", "_")
 
         # Make the name compatible with C variable names
