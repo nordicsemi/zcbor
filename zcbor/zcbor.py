@@ -3463,11 +3463,10 @@ class CodeGenerator(CddlXcoder):
                 )
 
             child_values = [
-                "(%s && ((%s = %s), true))"
+                "(%s && %s)"
                 % (
                     child.full_xcode(union_int="EXPECT" if child.expect_union_condition() else None),
-                    self.choice_var_access(),
-                    child.enum_var_name(),
+                    comma_operator(f"({self.choice_var_access()} = {child.enum_var_name()})", "true"),
                 )
                 for child in self.value
             ]
