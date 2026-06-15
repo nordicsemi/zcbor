@@ -2842,7 +2842,7 @@ class CodeGenerator(CddlXcoder):
             name = self.repeated_type_name()
         return name
 
-    def add_var_name(self, var_type, full=False, anonymous=False):
+    def construct_declaration(self, var_type, full=False, anonymous=False):
         """Take a multi member type name and create a variable declaration.
 
         Make it an array if the element is repeated.
@@ -2877,7 +2877,7 @@ class CodeGenerator(CddlXcoder):
         return declaration
 
     def single_declaration(self):
-        return self.add_var_name(self.single_var_type(), anonymous=True)
+        return self.construct_declaration(self.single_var_type(), anonymous=True)
 
     def repeated_declaration(self):
         """Declaration of the repeated part of this element."""
@@ -2889,7 +2889,7 @@ class CodeGenerator(CddlXcoder):
         decl = []
 
         if not self.skip_condition():
-            decl += self.add_var_name(var_type, anonymous=(self.type == "UNION"))
+            decl += self.construct_declaration(var_type, anonymous=(self.type == "UNION"))
 
         if self.type in ["LIST", "MAP", "GROUP"]:
             decl += self.child_declarations()
@@ -2918,7 +2918,7 @@ class CodeGenerator(CddlXcoder):
             if self.is_unambiguous_repeated():
                 decl = []
             else:
-                decl = self.add_var_name(
+                decl = self.construct_declaration(
                     [self.repeated_type_name()] if self.repeated_type_name() is not None else [],
                     full=True,
                 )
