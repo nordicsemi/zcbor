@@ -77,6 +77,7 @@ set(py_command
     OptUnion
     CountUnion
     Tags
+    TwoMaps
   --decode
   --git-sha-header
   --short-names

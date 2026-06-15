@@ -2889,4 +2889,32 @@ ZTEST(cbor_decode_test5, test_tags)
 }
 
 
+ZTEST(cbor_decode_test5, test_maps_optional_elem)
+{
+	uint8_t two_maps_payload1[] = {LIST(2),
+		MAP(1), 0x61, '1', 0, END
+		MAP(1), 0x61, '2', 1, END
+		END
+	};
+	uint8_t two_maps_payload2[] = {LIST(1),
+		MAP(1), 0x61, '2', 1, END
+		END
+	};
+
+	struct TwoMaps result;
+	size_t num_decode;
+	int ret;
+
+	ret = cbor_decode_TwoMaps(two_maps_payload1,
+		sizeof(two_maps_payload1), &result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, ret, "%s\n", zcbor_error_str(ret));
+	zassert_equal(sizeof(two_maps_payload1), num_decode, NULL);
+
+	ret = cbor_decode_TwoMaps(two_maps_payload2,
+		sizeof(two_maps_payload2), &result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, ret, "%s\n", zcbor_error_str(ret));
+	zassert_equal(sizeof(two_maps_payload2), num_decode, NULL);
+}
+
+
 ZTEST_SUITE(cbor_decode_test5, NULL, NULL, NULL, NULL, NULL);

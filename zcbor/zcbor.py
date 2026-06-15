@@ -1948,6 +1948,24 @@ class CddlXcoder(CddlParser):
             )
         )
 
+    def safe_failable(self):
+        """Whether this can safely fail and return to its starting point. If not, it needs a backup"""
+        if self.count_var_condition():
+            return False
+        if self.key is not None or self.cbor is not None or self.tags or self.range_check_condition():
+            return False
+        if self.type in ["LIST", "MAP"]:
+            return False
+        if self.type == "GROUP":
+            return len(self.value) == 0 or (len(self.value) == 1 and self.value[0].safe_failable())
+        if self.type == "UNION":
+            if self.implicit_union_condition():
+                return False
+            return len(self.value) == 0 or all(child.safe_failable() for child in self.value)
+        if self.type == "OTHER":
+            return self.my_types[self.value].safe_failable()
+        return True
+
     def int_val(self):
         """If this element is an integer, or starts with an integer, return the integer value."""
         if self.key:
@@ -3756,7 +3774,7 @@ class CodeGenerator(CddlXcoder):
                     self.mode == "decode"
                 ), f"This code needs self.mode to be 'decode', not {self.mode}."
 
-                assign = not self.repeated_single_func_impl_condition()
+                assign = self.safe_failable()
                 default_assignment = None
                 if self.default is not None:
                     default_value = (
@@ -3782,7 +3800,7 @@ class CodeGenerator(CddlXcoder):
                 if assign:
                     decode_str = self.repeated_xcode(union_int)
                     return comma_operator(
-                        default_assignment, f"{self.present_var_access()} = {decode_str}", "true"
+                        default_assignment, f"({self.present_var_access()} = {decode_str})", "true"
                     )
                 func, *arguments = self.repeated_single_func(ptr_result=True)
                 present_func = (

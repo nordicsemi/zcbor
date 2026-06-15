@@ -482,3 +482,8 @@ Tags = [
 	tag1: ((tag1_alt1: #6.1234(int)) / (tag1_alt2: #6.2345(int))),
 	tag2: ((tag2_alt1: (#6.3456(bool), #6.1234(int))) / (tag2_alt2: #6.3456(bool))),
 ]
+
+map1 = {"1": int}
+map2 = {"2": int}
+
+TwoMaps = [ ?map1, map2 ]
