@@ -2884,12 +2884,10 @@ class CodeGenerator(CddlXcoder):
         if self.is_unambiguous_repeated():
             return []
 
-        var_type = self.var_type()
-
         decl = []
 
-        if not self.skip_condition():
-            decl += self.construct_declaration(var_type, anonymous=(self.type == "UNION"))
+        if self.type not in ["LIST", "MAP", "GROUP"] and not self.skip_condition():
+            decl += self.construct_declaration(self.var_type(), anonymous=(self.type == "UNION"))
 
         if self.type in ["LIST", "MAP", "GROUP"]:
             decl += self.child_declarations()

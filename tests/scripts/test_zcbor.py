@@ -1840,6 +1840,28 @@ Cannot have .size before type
         self.assertEqual(".default cannot have: range.", str(exc))
 
 
+class TestCodeGeneration(TestCase):
+    def do_test_code_generation(self, cddl_string):
+        return zcbor.CodeGenerator.from_cddl(
+            cddl_string=cddl_string,
+            mode="decode",
+            entry_type_names=["test"],
+            default_bit_size=32,
+        )
+
+    def test_duplicate_declarations(self):
+        cddl_string = "test = {int=>[tstr]}"
+        res = self.do_test_code_generation(cddl_string).my_types["test"].type_def()
+        self.assertEqual(1, len(res))
+        self.assertEqual(2, len(res[0]))
+        self.assertEqual("struct test", res[0][1])
+        self.assertEqual(4, len(res[0][0]))
+        self.assertEqual("struct {", res[0][0][0])
+        self.assertEqual("\tint32_t test_tstr_l_key;", res[0][0][1])
+        self.assertEqual("\tstruct zcbor_string test_tstr_l_tstr;", res[0][0][2])
+        self.assertEqual("}", res[0][0][3])
+
+
 class TestUnicodeEscape(TestCase):
     def test_unicode_escape0(self):
         expected = "Domino's 🁳 + ⌘"
