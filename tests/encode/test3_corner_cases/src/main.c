@@ -1975,5 +1975,25 @@ ZTEST(cbor_encode_test3, test_union_default)
 }
 
 
+ZTEST(cbor_encode_test3, test_count_union)
+{
+	uint8_t count_union_exp_payload1[] = {0xf6};
+	uint8_t count_union_exp_payload2[] = {1, 1};
+
+	struct CountUnion_r input;
+	uint8_t payload[6];
+
+	input.CountUnion_choice = CountUnion_nil_c;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_CountUnion(payload,
+		sizeof(payload), &input, NULL));
+	zassert_mem_equal(payload, count_union_exp_payload1, sizeof(count_union_exp_payload1));
+
+	input.CountUnion_choice = CountUnion_uint1_c;
+	input.uint1_count = 2;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_CountUnion(payload,
+		sizeof(payload), &input, NULL));
+	zassert_mem_equal(payload, count_union_exp_payload2, sizeof(count_union_exp_payload2));
+}
+
 
 ZTEST_SUITE(cbor_encode_test3, NULL, NULL, NULL, NULL, NULL);

@@ -2867,7 +2867,7 @@ class CodeGenerator(CddlXcoder):
         """Type declaration for unions."""
         cdecl = list()
         for child in self.value:
-            if not child.is_unambiguous_repeated():
+            if not child.is_unambiguous():
                 cdecl.extend(child.construct_declaration(child.single_var_type(), anonymous=True))
         return self.enclose("union", cdecl)
 

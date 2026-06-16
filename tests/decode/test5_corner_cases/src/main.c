@@ -2796,4 +2796,25 @@ ZTEST(cbor_decode_test5, test_opt_union)
 }
 
 
+ZTEST(cbor_decode_test5, test_count_union)
+{
+	uint8_t count_union_payload1[] = {0xf6};
+	uint8_t count_union_payload2[] = {1, 1};
+
+	struct CountUnion_r result;
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_CountUnion(count_union_payload1,
+		sizeof(count_union_payload1), &result, &num_decode), NULL);
+	zassert_equal(sizeof(count_union_payload1), num_decode, NULL);
+	zassert_equal(CountUnion_nil_c, result.CountUnion_choice, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_CountUnion(count_union_payload2,
+		sizeof(count_union_payload2), &result, &num_decode), NULL);
+	zassert_equal(sizeof(count_union_payload2), num_decode, NULL);
+	zassert_equal(CountUnion_uint1_c, result.CountUnion_choice, NULL);
+	zassert_equal(2, result.uint1_count, NULL);
+}
+
+
 ZTEST_SUITE(cbor_decode_test5, NULL, NULL, NULL, NULL, NULL);
