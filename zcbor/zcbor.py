@@ -2885,7 +2885,6 @@ class CodeGenerator(CddlXcoder):
             return []
 
         var_type = self.var_type()
-        multi_var = False
 
         decl = []
 
@@ -2894,28 +2893,23 @@ class CodeGenerator(CddlXcoder):
 
         if self.type in ["LIST", "MAP", "GROUP"]:
             decl += self.child_declarations()
-            multi_var = len(decl) > 1
 
         if self.reduced_key_var_condition():
             key_var = self.key.full_declaration()
             decl = key_var + decl
-            multi_var = key_var != []
 
         if self.choice_var_condition():
             choice_var = self.choice_var()
             decl += choice_var
-            multi_var = choice_var != []
 
         if self.cbor_var_condition():
             cbor_var = self.cbor.full_declaration()
             decl += cbor_var
-            multi_var = cbor_var != []
 
         return decl
 
     def full_declaration(self):
         """Declaration of the full type for this element."""
-        multi_var = False
 
         if self.is_unambiguous():
             return []
@@ -2934,14 +2928,10 @@ class CodeGenerator(CddlXcoder):
         if self.count_var_condition():
             count_var = self.count_var()
             decl += count_var
-            multi_var = count_var != []
 
         if self.present_var_condition():
             present_var = self.present_var()
             decl += present_var
-            multi_var = present_var != []
-
-        assert multi_var == self.multi_var_condition()
 
         return decl
 
