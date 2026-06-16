@@ -1671,7 +1671,7 @@ class CddlXcoder(CddlParser):
         self.accessPrefix = None
         self.is_delegated = False
         # Used as a guard against endless recursion in self.dependsOn()
-        self.dependsOnCall = False
+        self.depends_on_call = False
         self.skipped = False
         self.stored_id = None
         self.unordered_maps = False
@@ -3268,8 +3268,8 @@ class CodeGenerator(CddlXcoder):
         """
         ret_vals = [1]
 
-        if not self.dependsOnCall:
-            self.dependsOnCall = True
+        if not self.depends_on_call:
+            self.depends_on_call = True
             if self.cbor_var_condition():
                 ret_vals.append(self.cbor.depends_on())
             if self.key:
@@ -3278,7 +3278,7 @@ class CodeGenerator(CddlXcoder):
                 ret_vals.append(1 + self.my_types[self.value].depends_on())
             if self.type in ["LIST", "MAP", "GROUP", "UNION"]:
                 ret_vals.extend(child.depends_on() for child in self.value)
-            self.dependsOnCall = False
+            self.depends_on_call = False
 
         return max(ret_vals)
 
