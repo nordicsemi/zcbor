@@ -75,6 +75,7 @@ set(py_command
     AmbigList
     UnionDefault
     OptUnion
+    CountUnion
   --decode
   --git-sha-header
   --short-names

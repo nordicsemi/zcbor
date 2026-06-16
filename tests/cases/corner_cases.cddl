@@ -476,3 +476,4 @@ UnionDefault = [
 ]
 
 OptUnion = [foo: ?((FooA: 1) / (FooB: 2) / (FooC: Three))]
+CountUnion = (+1) / nil
