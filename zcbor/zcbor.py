@@ -2716,14 +2716,6 @@ class CodeGenerator(CddlXcoder):
         decl = [line for child in self.value for line in child.full_declaration()]
         return decl
 
-    def child_single_declarations(self):
-        """Declaration of the variables of all children."""
-        decl = list()
-        for child in self.value:
-            if not child.is_unambiguous_repeated():
-                decl.extend(child.single_declaration())
-        return decl
-
     def simple_func_condition(self):
         if self.range_check_condition():
             return True
@@ -2873,11 +2865,11 @@ class CodeGenerator(CddlXcoder):
 
     def union_type(self):
         """Type declaration for unions."""
-        declaration = self.enclose("union", self.child_single_declarations())
-        return declaration
-
-    def single_declaration(self):
-        return self.construct_declaration(self.single_var_type(), anonymous=True)
+        cdecl = list()
+        for child in self.value:
+            if not child.is_unambiguous_repeated():
+                cdecl.extend(child.construct_declaration(child.single_var_type(), anonymous=True))
+        return self.enclose("union", cdecl)
 
     def repeated_declaration(self):
         """Declaration of the repeated part of this element."""
