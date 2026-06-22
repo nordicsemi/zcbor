@@ -1666,10 +1666,6 @@ class CddlXcoder(CddlParser):
     def __init__(self, **kwargs):
         super(CddlXcoder, self).__init__(**kwargs)
 
-        # The prefix used for C code accessing this element, i.e. the struct
-        # hierarchy leading up to this element.
-        self.accessPrefix = None
-        self.is_delegated = False
         # Used as a guard against endless recursion in self.dependsOn()
         self.depends_on_call = False
         self.skipped = False
@@ -1700,47 +1696,6 @@ class CddlXcoder(CddlParser):
         if self.type in ["LIST", "MAP", "GROUP"]:
             return not self.repeated_multi_var_condition()
         return False
-
-    def set_skipped(self, skipped):
-        if self.range_check_condition() and self.repeated_single_func_impl_condition() and not self.key:
-            self.skipped = True
-        else:
-            self.skipped = skipped
-        return
-
-    def delegate_type_condition(self):
-        """Whether to use the C type of the first child as this type's C type"""
-        ret = self.type in ["LIST", "MAP", "GROUP"]
-        return ret
-
-    def is_delegated_type(self):
-        return self.is_delegated
-
-    def set_access_prefix(self, prefix, is_delegated=False):
-        """Recursively set the access prefix for this element and all its children."""
-        self.accessPrefix = prefix
-        if self.type in ["LIST", "MAP", "GROUP", "UNION"]:
-            self.set_skipped(self.skip_condition())
-            list(map(lambda child: child.set_skipped(child.skip_condition()), self.value))
-            list(
-                map(
-                    lambda child: child.set_access_prefix(
-                        self.var_access(),
-                        is_delegated=(
-                            self.delegate_type_condition() or (is_delegated and self.skip_condition())
-                        ),
-                    ),
-                    self.value,
-                )
-            )
-        elif self in self.my_types.values():
-            self.set_skipped(not self.multi_member())
-        if self.key is not None:
-            self.key.set_access_prefix(self.var_access())
-        if self.cbor_var_condition():
-            self.cbor.set_access_prefix(self.var_access())
-        self.is_delegated = is_delegated and not self.skip_condition()
-        return
 
     def set_id_prefix(self, id_prefix=""):
         self.id_prefix = id_prefix
@@ -1791,30 +1746,13 @@ class CddlXcoder(CddlParser):
         provided suffix.
         """
         suffix = list(suffix)
-        return self.access_append_delimiter(self.accessPrefix, ".", *suffix)
+        return self.access_append_delimiter(f"(*{struct_ptr_name(self.mode)})", ".", *suffix)
 
     def var_access(self):
         """ "Path" to this element's variable."""
         if self.is_unambiguous():
             return "NULL"
         return self.access_append()
-
-    def val_access(self, top_level=False):
-        """ "Path" to access this element's actual value variable."""
-        if self.is_unambiguous_repeated():
-            ret = "NULL"
-        elif self.skip_condition() or self.is_delegated_type():
-            ret = self.var_access()
-        elif top_level and not (self.type_def_condition() or self.repeated_type_def_condition()):
-            ret = self.var_access()
-        else:
-            ret = self.access_append(self.var_name())
-        return ret
-
-    def repeated_val_access(self):
-        if self.is_unambiguous_repeated():
-            return "NULL"
-        return self.access_append(self.var_name())
 
     def optional_quantifier(self):
         """Whether the element has the "optional" quantifier ('?')."""
@@ -2665,11 +2603,6 @@ class CodeGenerator(CddlXcoder):
     @classmethod
     def from_cddl(cddl_class, *, mode, **kwargs):
         cddl_res = super(CodeGenerator, cddl_class).from_cddl(mode=mode, **kwargs)
-
-        # set access prefix (struct access paths) for all the definitions.
-        for my_type in cddl_res.my_types:
-            cddl_res.my_types[my_type].set_access_prefix(f"(*{struct_ptr_name(mode)})")
-
         return cddl_res
 
     def is_entry_type(self):
@@ -2679,7 +2612,7 @@ class CodeGenerator(CddlXcoder):
     def is_cbor(self):
         """Whether to include a "cbor" variable for this element."""
         res = (
-            (self.type_name() is not None)
+            (self.full_type_name() is not None)
             and not self.is_entry_type()
             and ((self.type != "OTHER") or self.my_types[self.value].is_cbor())
         )
@@ -2696,19 +2629,6 @@ class CodeGenerator(CddlXcoder):
             "default_max_qty_define": self.default_max_qty_define,
             "unordered_maps": self.unordered_maps,
         }
-
-    def delegate_type_condition(self):
-        """Whether to use the C type of the first child as this type's C type"""
-        ret = self.skip_condition() and (
-            self.multi_var_condition()
-            or self.self_repeated_multi_var_condition()
-            or self.range_check_condition()
-            or (self in self.my_types.values())
-        )
-        return ret
-
-    def is_delegated_type(self):
-        return self.is_delegated
 
     def present_var(self):
         """Declaration of the "present" variable for this element."""
@@ -2821,11 +2741,10 @@ class CodeGenerator(CddlXcoder):
             "NIL": lambda: None,
             "UNDEF": lambda: None,
             "ANY": lambda: None,
-            "LIST": lambda: self.value[0].type_name() if len(self.value) >= 1 else None,
-            "MAP": lambda: self.value[0].type_name() if len(self.value) >= 1 else None,
-            "GROUP": lambda: self.value[0].type_name() if len(self.value) >= 1 else None,
-            "UNION": lambda: self.union_type(),
-            "OTHER": lambda: self.my_types[self.value].type_name(),
+            "LIST": lambda: self.value[0].full_type_name() if len(self.value) >= 1 else None,
+            "MAP": lambda: self.value[0].full_type_name() if len(self.value) >= 1 else None,
+            "GROUP": lambda: self.value[0].full_type_name() if len(self.value) >= 1 else None,
+            "OTHER": lambda: self.my_types[self.value].full_type_name(),
         }[self.type]()
 
         return name
@@ -2844,7 +2763,7 @@ class CodeGenerator(CddlXcoder):
             name = self.val_type_name()
         return name
 
-    def type_name(self):
+    def full_type_name(self):
         """Name of the type for this element."""
         if self.multi_var_condition():
             name = self.raw_type_name()
@@ -2894,13 +2813,10 @@ class CodeGenerator(CddlXcoder):
         if self.is_unambiguous_repeated():
             return []
 
-        decl = []
-
-        if self.type not in ["LIST", "MAP", "GROUP"] and not self.skip_condition():
-            decl += self.construct_declaration(self.var_type(), anonymous=(self.type == "UNION"))
-
         if self.type in ["LIST", "MAP", "GROUP"]:
-            decl += self.child_declarations()
+            decl = self.child_declarations()
+        else:
+            decl = self.construct_declaration(self.var_type(), anonymous=(self.type == "UNION"))
 
         if self.reduced_key_var_condition():
             key_var = self.key.full_declaration()
@@ -2926,8 +2842,9 @@ class CodeGenerator(CddlXcoder):
             if self.is_unambiguous_repeated():
                 decl = []
             else:
+                type_name = self.repeated_type_name()
                 decl = self.construct_declaration(
-                    [self.repeated_type_name()] if self.repeated_type_name() is not None else [],
+                    [type_name] if type_name is not None else [],
                     full=True,
                 )
         else:
@@ -2979,7 +2896,7 @@ class CodeGenerator(CddlXcoder):
         if self.type_def_condition():
             type_def_list = self.single_var_type()
             if type_def_list:
-                ret_val.extend([(type_def_list, self.type_name())])
+                ret_val.extend([(type_def_list, self.full_type_name())])
         return ret_val
 
     def type_def_bits(self):
@@ -3057,7 +2974,7 @@ class CodeGenerator(CddlXcoder):
                 func = f"{func_prefix}_put"
         return func
 
-    def single_func_prim(self, access, union_int=None, ptr_result=False):
+    def single_func_prim(self, *, res_var, access, union_int=None, ptr_result=False):
         """Return the function name and arguments to call to encode/decode this element.
 
         Only used when this element DOESN'T define its own encoder/decoder function (when it's a
@@ -3071,7 +2988,12 @@ class CodeGenerator(CddlXcoder):
             return (None, None)
 
         if self.type == "OTHER":
-            return self.my_types[self.value].single_func(access, union_int, ptr_result=ptr_result)
+            return self.my_types[self.value].single_func(
+                res_var=res_var,
+                access=access,
+                union_int=union_int,
+                ptr_result=ptr_result,
+            )
 
         func_name = self.single_func_prim_name(union_int, ptr_result=ptr_result)
         if func_name is None:
@@ -3091,21 +3013,27 @@ class CodeGenerator(CddlXcoder):
 
         return (func_name, arg)
 
-    def single_func(self, access=None, union_int=None, ptr_result=False):
+    def single_func(self, *, res_var, access=None, union_int=None, ptr_result=False):
         """Return the function name and arguments to call to encode/decode this element."""
         if self.single_func_impl_condition():
             return (self.xcode_func_name(), deref_if_not_null(access or self.var_access()))
         else:
-            return self.single_func_prim(access or self.val_access(), union_int, ptr_result=ptr_result)
+            return self.single_func_prim(
+                res_var=res_var,
+                access=access or self.full_val_access(res_var=res_var),
+                union_int=union_int,
+                ptr_result=ptr_result,
+            )
 
-    def repeated_single_func(self, ptr_result=False):
+    def repeated_single_func(self, *, res_var, ptr_result=False):
         """Return the function name and arguments to call to encode/decode the repeated
         part of this element.
         """
+        val_access = self.repeated_val_access(res_var=res_var)
         if self.repeated_single_func_impl_condition():
-            return (self.repeated_xcode_func_name(), deref_if_not_null(self.repeated_val_access()))
+            return (self.repeated_xcode_func_name(), deref_if_not_null(val_access))
         else:
-            return self.single_func_prim(self.repeated_val_access(), ptr_result=ptr_result)
+            return self.single_func_prim(res_var=res_var, access=val_access, ptr_result=ptr_result)
 
     def num_backups_self(self):
         return (
@@ -3280,9 +3208,12 @@ class CodeGenerator(CddlXcoder):
 
         return max(ret_vals)
 
-    def xcode_single_func_prim(self, union_int=None, top_level=False):
+    def xcode_single_func_prim(self, *, res_var, union_int=None):
         """Make a string from the list returned by single_func_prim()"""
-        return xcode_statement(*self.single_func_prim(self.val_access(top_level), union_int))
+        val_access = self.val_access(res_var=res_var)
+        return xcode_statement(
+            *self.single_func_prim(res_var=res_var, access=val_access, union_int=union_int)
+        )
 
     def list_counts(self):
         """Recursively sum the total minimum and maximum element count for this element."""
@@ -3361,7 +3292,7 @@ class CodeGenerator(CddlXcoder):
             if self.cbor.elem_needs_map_smart_search(False):
                 return True
 
-    def xcode_list(self):
+    def xcode_list(self, *, res_var):
         """Return the full code needed to encode/decode a "LIST" or "MAP" element with children."""
         start_func = f"zcbor_{self.type.lower()}_start_{self.mode}"
         end_func = f"zcbor_{self.type.lower()}_end_{self.mode}"
@@ -3390,7 +3321,7 @@ class CodeGenerator(CddlXcoder):
         count_arg = f", {sum_or_none(max_counts, default=0)}" if self.mode == "encode" else ""
         with_children = "(%s && ((%s) || (%s, false)) && %s)" % (
             f"{start_func}(state{count_arg})",
-            f"{newl_ind}&& ".join(child.full_xcode() for child in self.value),
+            f"{newl_ind}&& ".join(child.full_xcode(res_var=res_var) for child in self.value),
             f"{end_func_force}(state)",
             f"{end_func}(state{count_arg})",
         )
@@ -3400,11 +3331,12 @@ class CodeGenerator(CddlXcoder):
         )
         return with_children if len(self.value) > 0 else without_children
 
-    def xcode_group(self, union_int=None):
+    def xcode_group(self, *, res_var, union_int=None):
         """Return the full code needed to encode/decode a "GROUP" element's children."""
         assert self.type in ["GROUP"], "Expected GROUP type."
         return "(%s)" % (newl_ind + "&& ").join(
-            [self.value[0].full_xcode(union_int)] + [child.full_xcode() for child in self.value[1:]]
+            [self.value[0].full_xcode(res_var=res_var, union_int=union_int)]
+            + [child.full_xcode(res_var=res_var) for child in self.value[1:]]
         )
 
     def is_in_map(self):
@@ -3430,7 +3362,7 @@ class CodeGenerator(CddlXcoder):
         """Whether this element is a UNION that can be encoded/decoded without union_start/union_end functions."""
         return self.all_children_int_disambiguated() and not (self.unordered_maps and self.is_in_map())
 
-    def xcode_union(self):
+    def xcode_union(self, *, res_var):
         """Return the full code needed to encode/decode a "UNION" element's children."""
         assert self.type in ["UNION"], "Expected UNION type."
         if self.mode == "decode":
@@ -3442,7 +3374,7 @@ class CodeGenerator(CddlXcoder):
                         % (
                             self.choice_var_access(),
                             child.enum_var_name(),
-                            child.full_xcode(union_int="DROP"),
+                            child.full_xcode(res_var=res_var, union_int="DROP"),
                         )
                         for child in self.value
                     ]
@@ -3460,14 +3392,12 @@ class CodeGenerator(CddlXcoder):
                     + ") || (zcbor_error(state, ZCBOR_ERR_WRONG_VALUE), false))",
                 )
 
-            child_values = [
-                "(%s && %s)"
-                % (
-                    child.full_xcode(union_int="EXPECT" if child.expect_union_condition() else None),
-                    comma_operator(f"({self.choice_var_access()} = {child.enum_var_name()})", "true"),
-                )
-                for child in self.value
-            ]
+            child_values = []
+            for child in self.value:
+                union_int = "EXPECT" if child.expect_union_condition() else None
+                xcode = child.full_xcode(res_var=res_var, union_int=union_int)
+                op = comma_operator(f"({self.choice_var_access()} = {child.enum_var_name()})", "true")
+                child_values.append(f"({xcode} && {op})")
 
             # Reset state for all but the first child.
             for i in range(1, len(child_values)):
@@ -3489,18 +3419,19 @@ class CodeGenerator(CddlXcoder):
             return ternary_if_chain(
                 self.choice_var_access(),
                 [child.enum_var_name() for child in self.value],
-                [child.full_xcode() for child in self.value],
+                [child.full_xcode(res_var=res_var) for child in self.value],
             )
 
-    def xcode_bstr(self):
+    def xcode_bstr(self, *, res_var):
         if self.cbor and not self.cbor.is_entry_type():
-            access_arg = f", {deref_if_not_null(self.val_access())}" if self.mode == "decode" else ""
+            val_access = self.val_access(res_var=res_var)
+            access_arg = f", {deref_if_not_null(val_access)}" if self.mode == "decode" else ""
             res_arg = f", &tmp_str" if self.mode == "encode" else ""
             xcode_cbor = "(%s)" % (
                 (newl_ind + "&& ").join(
                     [
                         f"zcbor_bstr_start_{self.mode}(state{access_arg})",
-                        f"(int_res = ({self.cbor.full_xcode()}), "
+                        f"(int_res = ({self.cbor.full_xcode(res_var=res_var)}), "
                         f"zcbor_bstr_end_{self.mode}(state{res_arg}), int_res)",
                     ]
                 )
@@ -3509,13 +3440,12 @@ class CodeGenerator(CddlXcoder):
                 return xcode_cbor
             else:
                 return (
-                    f"({self.val_access()}.value "
-                    f"? (memcpy(&tmp_str, &{self.val_access()}, sizeof(tmp_str)), "
-                    f"{self.xcode_single_func_prim()}) : ({xcode_cbor}))"
+                    f"({val_access}.value ? (memcpy(&tmp_str, &{val_access}, sizeof(tmp_str)), "
+                    f"{self.xcode_single_func_prim(res_var=res_var)}) : ({xcode_cbor}))"
                 )
-        return self.xcode_single_func_prim()
+        return self.xcode_single_func_prim(res_var=res_var)
 
-    def xcode_tags(self):
+    def xcode_tags(self, *, res_var):
         fn = f"zcbor_tag_{'put' if (self.mode == 'encode') else 'expect'}"
         return [f"{fn}(state, {self.val_define_name_or_lit('TAG', i)})" for i in range(len(self.tags))]
 
@@ -3690,50 +3620,53 @@ class CodeGenerator(CddlXcoder):
 
         return range_checks
 
-    def xcode_key(self, union_int):
+    def xcode_key(self, *, res_var, union_int):
         if self.mode == "decode" and self.unordered_maps and union_int != "DROP":
             func, *arguments = self.key.single_func(
-                self.key.val_access(), union_int=union_int, ptr_result=True
+                res_var=res_var,
+                access=self.key.val_access(res_var=res_var),
+                union_int=union_int,
+                ptr_result=True,
             )
             assert func is not None, "Function missing (union_int issue?)."
             x_args = xcode_args(*arguments)
             return [f"zcbor_unordered_map_search(ZCBOR_CUSTOM_CAST_FP({func}), {x_args})"]
         else:
-            return [self.key.full_xcode(union_int=union_int)]
+            return [self.key.full_xcode(res_var=res_var, union_int=union_int)]
 
-    def repeated_xcode(self, union_int=None, top_level=False):
+    def repeated_xcode(self, *, res_var, union_int=None):
         """Return the full code needed to encode/decode this element.
 
         Including children, key and cbor, excluding repetitions.
         """
         val_union_int = union_int if not self.key else None  # In maps, only pass union_int to key.
-        range_checks = self.range_checks(self.val_access(top_level))
+        range_checks = self.range_checks(self.val_access(res_var=res_var))
 
         def do_xcode_single_func_prim(inner_union_int=None):
-            return self.xcode_single_func_prim(union_int=inner_union_int, top_level=top_level)
+            return self.xcode_single_func_prim(res_var=res_var, union_int=inner_union_int)
 
         xcoder = {
             "INT": do_xcode_single_func_prim,
             "UINT": lambda: do_xcode_single_func_prim(val_union_int),
             "NINT": lambda: do_xcode_single_func_prim(val_union_int),
             "FLOAT": do_xcode_single_func_prim,
-            "BSTR": self.xcode_bstr,
+            "BSTR": lambda: self.xcode_bstr(res_var=res_var),
             "TSTR": do_xcode_single_func_prim,
             "BOOL": do_xcode_single_func_prim,
             "NIL": do_xcode_single_func_prim,
             "UNDEF": do_xcode_single_func_prim,
             "ANY": do_xcode_single_func_prim,
-            "LIST": self.xcode_list,
-            "MAP": self.xcode_list,
-            "GROUP": lambda: self.xcode_group(val_union_int),
-            "UNION": self.xcode_union,
+            "LIST": lambda: self.xcode_list(res_var=res_var),
+            "MAP": lambda: self.xcode_list(res_var=res_var),
+            "GROUP": lambda: self.xcode_group(res_var=res_var, union_int=val_union_int),
+            "UNION": lambda: self.xcode_union(res_var=res_var),
             "OTHER": lambda: do_xcode_single_func_prim(val_union_int),
         }[self.type]
         xcoders = []
         if self.key:
-            xcoders.extend(self.xcode_key(union_int))
+            xcoders.extend(self.xcode_key(res_var=res_var, union_int=union_int))
         if self.tags:
-            xcoders.extend(self.xcode_tags())
+            xcoders.extend(self.xcode_tags(res_var=res_var))
         if self.mode == "decode":
             xcoders.append(xcoder())
             xcoders.extend(range_checks)
@@ -3755,19 +3688,62 @@ class CodeGenerator(CddlXcoder):
         else:
             return "sizeof(%s)" % self.repeated_type_name()
 
+    def val_result_var(self):
+        type_name = self.val_type_name()
+        if self.type == "OTHER" and type_name == self.my_types[self.value].full_type_name():
+            return self.my_types[self.value].full_result_var()
+        elif self.type in ["LIST", "MAP", "GROUP", "UNION"] and len(self.value) == 1:
+            if type_name == self.value[0].full_type_name():
+                return self.value[0].full_result_var()
+        return (self, "value")
+
+    def repeated_result_var(self):
+        if self.repeated_type_name() == self.val_type_name():
+            return self.val_result_var()
+        return (self, "repeated")
+
+    def full_result_var(self):
+        if self.full_type_name() == self.repeated_type_name():
+            return self.repeated_result_var()
+        return (self, "full")
+
+    def _val_access(self, is_res_var):
+        """
+        C code "Path" to access this element's value variable, e.g. for assignment.
+        If self is unambiguous, there is no variable, so return NULL.
+        If the current result variable is ours, return the bare var_access() which is just
+        struct_ptr_name.
+        Otherwise, assume this elem is a direct member of the result struct, and add the
+        member name to the access path.
+        """
+        if self.is_unambiguous_repeated():
+            return "NULL"
+        elif is_res_var:
+            return self.var_access()
+        return self.access_append(self.var_name())
+
+    def val_access(self, *, res_var):
+        return self._val_access(res_var == self.val_result_var())
+
+    def repeated_val_access(self, *, res_var):
+        return self._val_access(res_var == self.repeated_result_var())
+
+    def full_val_access(self, *, res_var):
+        return self._val_access(res_var == self.full_result_var())
+
     def multi_decode_w_backup_condition(self):
         return (
             self.count_var_condition() or self.present_var_condition()
         ) and self.repeated_single_func_impl_condition()
 
-    def full_xcode(self, union_int=None, top_level=False):
+    def full_xcode(self, *, res_var, union_int=None):
         """Return the full code needed to encode/decode this element.
 
         Including children, key, cbor, and repetitions.
         """
         if self.present_var_condition():
             if self.mode == "encode":
-                func, *arguments = self.repeated_single_func(ptr_result=False)
+                func, *arguments = self.repeated_single_func(res_var=res_var, ptr_result=False)
                 return f"(!{self.present_var_access()} || {func}({xcode_args(*arguments)}))"
             else:
                 assert (
@@ -3786,23 +3762,25 @@ class CodeGenerator(CddlXcoder):
                             else val_to_str(self.val_define_name_or_lit("DEFAULT_VAL"))
                         )
                     )
+                    rep_val_access = self.repeated_val_access(res_var=res_var)
                     access = (
                         # The following is needed instead of choice_var_access() because we are
                         # outside repeated_val_access() which is where repeated_single_func() is
                         # usually added.
-                        self.access_append_delimiter(
-                            self.repeated_val_access(), ".", self.choice_var_name()
-                        )
+                        self.access_append_delimiter(rep_val_access, ".", self.choice_var_name())
                         if self.type == "UNION"
-                        else self.val_access() if assign else self.repeated_val_access()
+                        else self.val_access(res_var=res_var) if assign else rep_val_access
                     )
                     default_assignment = f"({access} = {default_value})"
                 if assign:
-                    decode_str = self.repeated_xcode(union_int)
+                    assert (
+                        not self.repeated_single_func_impl_condition()
+                    ), "The 'assign' path should not be safe with repeated_single_func_impl_condition()."
+                    decode_str = self.repeated_xcode(res_var=res_var, union_int=union_int)
                     return comma_operator(
                         default_assignment, f"({self.present_var_access()} = {decode_str})", "true"
                     )
-                func, *arguments = self.repeated_single_func(ptr_result=True)
+                func, arg = self.repeated_single_func(res_var=res_var, ptr_result=True)
                 present_func = (
                     "zcbor_present_decode"
                     if not self.multi_decode_w_backup_condition()
@@ -3810,11 +3788,11 @@ class CodeGenerator(CddlXcoder):
                 )
                 return comma_operator(
                     default_assignment,
-                    f"({present_func}(&({self.present_var_access()}), ZCBOR_CUSTOM_CAST_FP({func}), {xcode_args(*arguments)}))",
+                    f"({present_func}(&({self.present_var_access()}), ZCBOR_CUSTOM_CAST_FP({func}), {xcode_args(arg)}))",
                 )
 
         elif self.count_var_condition():
-            func, arg = self.repeated_single_func(ptr_result=True)
+            func, arg = self.repeated_single_func(res_var=res_var, ptr_result=True)
 
             multi_func = "zcbor_multi_decode" if self.mode == "decode" else "zcbor_multi_encode_minmax"
             if self.mode == "decode" and self.multi_decode_w_backup_condition():
@@ -3829,11 +3807,11 @@ class CodeGenerator(CddlXcoder):
                 self.result_len(),
             )
         else:
-            return self.repeated_xcode(union_int=union_int, top_level=top_level)
+            return self.repeated_xcode(res_var=res_var, union_int=union_int)
 
-    def xcode(self):
+    def xcode(self, *, res_var):
         """Return the body of the encoder/decoder function for this element."""
-        return self.full_xcode(top_level=True)
+        return self.full_xcode(res_var=res_var)
 
     def xcoders(self):
         """Recursively return a list of the bodies of the encoder/decoder functions for
@@ -3853,17 +3831,20 @@ class CodeGenerator(CddlXcoder):
             for xcoder in self.my_types[self.value].xcoders():
                 yield xcoder
         if self.repeated_single_func_impl_condition():
+            func_name = self.repeated_xcode_func_name()
             yield XcoderTuple(
-                self.repeated_xcode(top_level=True),
-                self.repeated_xcode_func_name(),
+                self.repeated_xcode(res_var=self.repeated_result_var()),
+                func_name,
                 self.repeated_type_name(),
             )
         if self.single_func_impl_condition():
-            xcode_body = self.xcode()
-            yield XcoderTuple(xcode_body, self.xcode_func_name(), self.type_name())
+            func_name = self.xcode_func_name()
+            xcode_body = self.xcode(res_var=self.full_result_var())
+            yield XcoderTuple(xcode_body, func_name, self.full_type_name())
 
     def public_xcode_func_sig(self):
-        type_name = self.type_name() if struct_ptr_name(self.mode) in self.full_xcode() else "void"
+        body = self.full_xcode(res_var=self.full_result_var())
+        type_name = self.full_type_name() if struct_ptr_name(self.mode) in body else "void"
         return f"""
 int cbor_{self.xcode_func_name()}(
 		{"const " if self.mode == "decode" else ""}uint8_t *payload, size_t payload_len,
@@ -3978,7 +3959,11 @@ and
         functions removed.
         """
         mod_entry_types = [
-            XcoderTuple(func_type.xcode(), func_type.xcode_func_name(), func_type.type_name())
+            XcoderTuple(
+                func_type.xcode(res_var=func_type.full_result_var()),
+                func_type.xcode_func_name(),
+                func_type.full_type_name(),
+            )
             for func_type in self.entry_types[mode]
         ]
         out_types = [func_type for func_type in mod_entry_types]

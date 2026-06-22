@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from unittest import TestCase, main
+from unittest.mock import patch
 from subprocess import Popen, PIPE
 from regex import sub, search, escape, compile
 from pathlib import Path
@@ -43,6 +44,7 @@ p_test_vectors16 = tuple(
 p_test_vectors20 = tuple(Path(p_cases, f"manifest20_example{i}.cborhex") for i in range(6))
 p_optional = Path(p_cases, "optional.cddl")
 p_corner_cases = Path(p_cases, "corner_cases.cddl")
+p_unordered_map = Path(p_cases, "unordered_map.cddl")
 p_cose = Path(p_cases, "cose.cddl")
 p_manifest14_priv = Path(p_cases, "manifest14.priv")
 p_manifest14_pub = Path(p_cases, "manifest14.pub")
@@ -1841,12 +1843,13 @@ Cannot have .size before type
 
 
 class TestCodeGeneration(TestCase):
-    def do_test_code_generation(self, cddl_string):
+    def do_test_code_generation(self, cddl_string, entry_type_names=["test"], **kwargs):
         return zcbor.CodeGenerator.from_cddl(
             cddl_string=cddl_string,
             mode="decode",
-            entry_type_names=["test"],
+            entry_type_names=entry_type_names,
             default_bit_size=32,
+            **kwargs,
         )
 
     def test_duplicate_declarations(self):
@@ -1881,7 +1884,7 @@ class TestCodeGeneration(TestCase):
     def test_float_range_optional_uses_present_decode_w_backup(self):
         cddl_string = "test = ? float .ge 1.0"
         res = self.do_test_code_generation(cddl_string)
-        code = res.my_types["test"].full_xcode()
+        code = res.my_types["test"].full_xcode(res_var=res.my_types["test"].full_result_var())
         self.assertIn("zcbor_present_decode_w_backup", code)
         self.assertNotIn("zcbor_float_decode(state", code)
 
@@ -1889,6 +1892,54 @@ class TestCodeGeneration(TestCase):
         cddl_string = "test = ? (1.0..5.0 / 6.0..10.0)"
         res = self.do_test_code_generation(cddl_string)
         self.assertFalse(res.my_types["test"].safe_failable())
+
+    def test_transparent_list_decodes_into_result_directly(self):
+        """Transparent LIST wrappers should decode into (*result), not a named field."""
+        test = self.do_test_code_generation("test = [val: int]").my_types["test"]
+        code = test.xcode(res_var=test.full_result_var())
+        self.assertIn("zcbor_int32_decode(state, (&(*result)))", code)
+        self.assertNotIn("(*result).test", code)
+
+    def test_opaque_list_calls_child_decode_function(self):
+        """A LIST wrapping a multi-member GROUP should call the child decoder on (*result)."""
+        cddl_string = "Inner = (a: int, b: int)\ntest = [Inner]"
+        test = self.do_test_code_generation(cddl_string).my_types["test"]
+        code = test.xcode(res_var=test.full_result_var())
+        self.assertIn("decode_Inner(state, (&(*result)))", code)
+
+    def test_unordered_map_codegen_uses_map_search(self):
+        """Unordered map decode must generate zcbor_unordered_map_search without error."""
+        cddl_string = p_unordered_map.read_text(encoding="utf-8")
+        res = self.do_test_code_generation(
+            cddl_string, entry_type_names=["UnorderedMap1"], unordered_maps=True
+        )
+        unordered_map1 = res.my_types["UnorderedMap1"]
+        code = unordered_map1.xcode(res_var=unordered_map1.full_result_var())
+        self.assertIn("zcbor_unordered_map_search", code)
+
+    def test_optional_safe_assign_inlines_decode(self):
+        """Simple safe optionals should assign present from an inlined primitive decode."""
+        test = self.do_test_code_generation("test = ?opt: bool").my_types["test"]
+        code = test.full_xcode(res_var=test.full_result_var())
+        self.assertTrue(test.safe_failable())
+        self.assertIn("test_opt_present = ((zcbor_bool_decode(state", code)
+        self.assertNotIn("zcbor_present_decode", code)
+
+    def test_optional_group_present_decode_uses_repeated_function(self):
+        """Optionals with a repeated decoder must not inline decode in full_xcode()."""
+        test = self.do_test_code_generation("test = ? (a: int, b: int)").my_types["test"]
+        self.assertTrue(test.repeated_single_func_impl_condition())
+        code = test.full_xcode(res_var=test.full_result_var())
+        self.assertIn("ZCBOR_CUSTOM_CAST_FP(decode_repeated_test)", code)
+        self.assertNotIn("zcbor_list_start_decode(state)", code)
+
+    def test_optional_assign_calls_repeated_function_when_safe_failable(self):
+        """The assign path is not valid when repeated_single_func_impl_condition() is True"""
+        test = self.do_test_code_generation("test = ? (a: int, b: int)").my_types["test"]
+        self.assertTrue(test.repeated_single_func_impl_condition())
+        with patch.object(type(test), "safe_failable", return_value=True):
+            with self.assertRaises(AssertionError):
+                test.full_xcode(res_var=test.full_result_var())
 
 
 class TestUnicodeEscape(TestCase):
