@@ -487,3 +487,12 @@ map1 = {"1": int}
 map2 = {"2": int}
 
 TwoMaps = [ ?map1, map2 ]
+
+; Optional float with range: decode must restore state when range check fails.
+OptFloatThenInt = [
+	?optfloat: float .ge 1.0 .le 10.0,
+	mandint: int,
+]
+
+; Optional float union with ranged branches: second branch must be tried after first fails.
+OptFloatUnion = [foo: ?((oneToFive: 1.0..5.0) / (sixToTen: 6.0..10.0))]

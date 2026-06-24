@@ -1861,6 +1861,35 @@ class TestCodeGeneration(TestCase):
         self.assertEqual("\tstruct zcbor_string test_tstr_l_tstr;", res[0][0][2])
         self.assertEqual("}", res[0][0][3])
 
+    def test_float_range_check_condition1(self):
+        cddl_string = "test = ? 1.0..10.0"
+        res = self.do_test_code_generation(cddl_string)
+        self.assertTrue(res.my_types["test"].range_check_condition())
+        self.assertFalse(res.my_types["test"].safe_failable())
+
+    def test_float_range_check_condition2(self):
+        cddl_string = "test = ? float .ge 1.0"
+        res = self.do_test_code_generation(cddl_string)
+        self.assertFalse(res.my_types["test"].safe_failable())
+
+    def test_float_range_check_condition3(self):
+        cddl_string = "Foo = float .ge 1.0\ntest = ? Foo"
+        res = self.do_test_code_generation(cddl_string)
+        self.assertTrue(res.my_types["Foo"].range_check_condition())
+        self.assertFalse(res.my_types["test"].safe_failable())
+
+    def test_float_range_optional_uses_present_decode_w_backup(self):
+        cddl_string = "test = ? float .ge 1.0"
+        res = self.do_test_code_generation(cddl_string)
+        code = res.my_types["test"].full_xcode()
+        self.assertIn("zcbor_present_decode_w_backup", code)
+        self.assertNotIn("zcbor_float_decode(state", code)
+
+    def test_float_range_union_not_safe_failable(self):
+        cddl_string = "test = ? (1.0..5.0 / 6.0..10.0)"
+        res = self.do_test_code_generation(cddl_string)
+        self.assertFalse(res.my_types["test"].safe_failable())
+
 
 class TestUnicodeEscape(TestCase):
     def test_unicode_escape0(self):

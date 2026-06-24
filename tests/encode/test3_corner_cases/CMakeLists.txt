@@ -65,6 +65,8 @@ set(py_command
   UnionDefault
   CountUnion
   Tags
+  OptFloatUnion
+  OptFloatThenInt
   -e
   ${bit_arg}
   --short-names

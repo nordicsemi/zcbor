@@ -2917,4 +2917,85 @@ ZTEST(cbor_decode_test5, test_maps_optional_elem)
 }
 
 
+/** Regression test for FLOATs not being included in range_check_condition() */
+ZTEST(cbor_decode_test5, test_opt_float_then_int)
+{
+	uint8_t mandint_only[] = {LIST(1), 0x07, END};
+	uint8_t valid_payload[] = {LIST(2),
+		0xFB, 0x40, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 3.0 */
+		0x07,
+		END
+	};
+	uint8_t invalid_float_payload[] = {LIST(2),
+		0xFB, 0x40, 0x2E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 15.0 */
+		0x07,
+		END
+	};
+	struct OptFloatThenInt result;
+	int ret;
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_OptFloatThenInt(mandint_only,
+		sizeof(mandint_only), &result, &num_decode));
+	zassert_equal(sizeof(mandint_only), num_decode, NULL);
+	zassert_false(result.optfloat_present);
+	zassert_equal(7, result.mandint);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_OptFloatThenInt(valid_payload,
+		sizeof(valid_payload), &result, &num_decode));
+	zassert_equal(sizeof(valid_payload), num_decode, NULL);
+	zassert_true(result.optfloat_present);
+	zassert_equal(3.0, result.optfloat);
+	zassert_equal(7, result.mandint);
+
+	ret = cbor_decode_OptFloatThenInt(invalid_float_payload,
+		sizeof(invalid_float_payload), &result, &num_decode);
+	zassert_equal(ZCBOR_ERR_WRONG_TYPE, ret, "%s\n", zcbor_error_str(ret));
+}
+
+
+/** Regression test for FLOATs not being included in range_check_condition() */
+ZTEST(cbor_decode_test5, test_opt_float_union)
+{
+	uint8_t absent_payload[] = {LIST(0), END};
+	uint8_t branch1_payload[] = {LIST(1),
+		0xFB, 0x40, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 3.0 */
+		END
+	};
+	uint8_t branch2_payload[] = {LIST(1),
+		0xFB, 0x40, 0x1A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 6.5 */
+		END
+	};
+	uint8_t invalid_float_payload[] = {LIST(1),
+		0xFB, 0x40, 0x2E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 15.0 */
+		END
+	};
+	struct OptFloatUnion result;
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_OptFloatUnion(absent_payload,
+		sizeof(absent_payload), &result, &num_decode));
+	zassert_equal(sizeof(absent_payload), num_decode, NULL);
+	zassert_false(result.foo_present);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_OptFloatUnion(branch1_payload,
+		sizeof(branch1_payload), &result, &num_decode));
+	zassert_equal(sizeof(branch1_payload), num_decode, NULL);
+	zassert_true(result.foo_present);
+	zassert_equal(OptFloatUnion_foo_oneToFive_c, result.foo.foo_choice);
+	zassert_equal(3.0, result.foo.oneToFive);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_OptFloatUnion(branch2_payload,
+		sizeof(branch2_payload), &result, &num_decode));
+	zassert_equal(sizeof(branch2_payload), num_decode, NULL);
+	zassert_true(result.foo_present);
+	zassert_equal(OptFloatUnion_foo_sixToTen_c, result.foo.foo_choice);
+	zassert_equal(6.5, result.foo.sixToTen);
+
+	int res = cbor_decode_OptFloatUnion(invalid_float_payload,
+		sizeof(invalid_float_payload), &result, &num_decode);
+	zassert_equal(ARR_ERR1, res, "%s\n", zcbor_error_str(res));
+}
+
+
 ZTEST_SUITE(cbor_decode_test5, NULL, NULL, NULL, NULL, NULL);

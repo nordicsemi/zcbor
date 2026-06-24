@@ -78,6 +78,8 @@ set(py_command
     CountUnion
     Tags
     TwoMaps
+    OptFloatUnion
+    OptFloatThenInt
   --decode
   --git-sha-header
   --short-names

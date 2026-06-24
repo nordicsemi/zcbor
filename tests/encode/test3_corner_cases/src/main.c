@@ -2059,4 +2059,68 @@ ZTEST(cbor_encode_test3, test_tags)
 }
 
 
+ZTEST(cbor_encode_test3, test_opt_float_then_int)
+{
+	struct OptFloatThenInt input_invalid = {
+		.optfloat_present = true,
+		.optfloat = 15.0,
+		.mandint = 7,
+	};
+	uint8_t output[20];
+	size_t out_len;
+
+	zassert_equal(ZCBOR_ERR_WRONG_RANGE, cbor_encode_OptFloatThenInt(output,
+		sizeof(output), &input_invalid, &out_len));
+}
+
+
+ZTEST(cbor_encode_test3, test_opt_float_union)
+{
+	uint8_t exp_payload_branch1[] = {LIST(1),
+		0xFB, 0x40, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 3.0 */
+		END
+	};
+	uint8_t exp_payload_branch2[] = {LIST(1),
+		0xFB, 0x40, 0x1A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 6.5 */
+		END
+	};
+	struct OptFloatUnion input1 = {
+		.foo_present = true,
+		.foo = {
+			.foo_choice = OptFloatUnion_foo_oneToFive_c,
+			.oneToFive = 3.0,
+		},
+	};
+	struct OptFloatUnion input2 = {
+		.foo_present = true,
+		.foo = {
+			.foo_choice = OptFloatUnion_foo_sixToTen_c,
+			.sixToTen = 6.5,
+		},
+	};
+	struct OptFloatUnion input3_inv = {
+		.foo_present = true,
+		.foo = {
+			.foo_choice = OptFloatUnion_foo_sixToTen_c,
+			.sixToTen = 3.0,
+		},
+	};
+	uint8_t output[20];
+	size_t out_len;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_OptFloatUnion(output,
+		sizeof(output), &input1, &out_len));
+	zassert_equal(sizeof(exp_payload_branch1), out_len);
+	zassert_mem_equal(exp_payload_branch1, output, out_len);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_OptFloatUnion(output,
+		sizeof(output), &input2, &out_len));
+	zassert_equal(sizeof(exp_payload_branch2), out_len);
+	zassert_mem_equal(exp_payload_branch2, output, out_len);
+
+	zassert_equal(ZCBOR_ERR_WRONG_RANGE, cbor_encode_OptFloatUnion(output,
+		sizeof(output), &input3_inv, &out_len));
+}
+
+
 ZTEST_SUITE(cbor_encode_test3, NULL, NULL, NULL, NULL, NULL);
