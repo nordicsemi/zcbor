@@ -1668,19 +1668,10 @@ class CddlXcoder(CddlParser):
 
         # Used as a guard against endless recursion in self.dependsOn()
         self.depends_on_call = False
-        self.skipped = False
         self.stored_id = None
         self.unordered_maps = False
 
-    def var_name(self, with_prefix=False, observe_skipped=True):
-        """Name of variables and enum members for this element."""
-        if (
-            observe_skipped
-            and self.skip_condition()
-            and self.type in ["LIST", "MAP", "GROUP"]
-            and self.value
-        ):
-            return self.value[0].var_name(with_prefix)
+    def var_func_name(self, with_prefix=False):
         name = self.id(with_prefix=with_prefix)
         if name in c_keywords:
             name = name.capitalize()
@@ -1689,13 +1680,15 @@ class CddlXcoder(CddlParser):
         assert name is not None and name != "None", "No name for %s" % self
         return name
 
-    def skip_condition(self):
-        """Whether this element should have its result variable omitted."""
-        if self.skipped:
-            return True
-        if self.type in ["LIST", "MAP", "GROUP"]:
-            return not self.repeated_multi_var_condition()
-        return False
+    def var_name(self, with_prefix=False):
+        """Name of variables and enum members for this element."""
+        if (
+            self.type in ["LIST", "MAP", "GROUP"]
+            and not self.repeated_multi_var_condition()
+            and self.value
+        ):
+            return self.value[0].var_name(with_prefix=with_prefix)
+        return self.var_func_name(with_prefix=with_prefix)
 
     def set_id_prefix(self, id_prefix=""):
         self.id_prefix = id_prefix
@@ -2943,11 +2936,11 @@ class CodeGenerator(CddlXcoder):
 
     def xcode_func_name(self):
         """Name of the encoder/decoder function for this element."""
-        return f"{self.mode}_{self.var_name(with_prefix=True, observe_skipped=False)}"
+        return f"{self.mode}_{self.var_func_name(with_prefix=True)}"
 
     def repeated_xcode_func_name(self):
         """Name of the encoder/decoder function for the repeated part of this element."""
-        return f"{self.mode}_repeated_{self.var_name(with_prefix=True, observe_skipped=False)}"
+        return f"{self.mode}_repeated_{self.var_func_name(with_prefix=True)}"
 
     def single_func_prim_name(self, union_int=None, ptr_result=False):
         """Function name for xcoding this type, when it is a primitive type"""
