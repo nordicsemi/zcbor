@@ -264,7 +264,7 @@ void test_command_sequence(struct zcbor_string *sequence_str,
 		NULL);
 
 	for (uint32_t i = 0; i < sequence1.SUIT_Command_Sequence_union_count; i++) {
-		struct SUIT_Directive_r *directive;
+		struct SUIT_Directive *directive;
 		bool directive_present;
 		directive = &sequence1
 			.SUIT_Command_Sequence_union[i]

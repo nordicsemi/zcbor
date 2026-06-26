@@ -38,6 +38,9 @@
     Example: `foo = +(+bar)`
     With default-max-qty of 3, the above would previously have a max count of 9, but is now 3.
 
+  * The naming logic has been somewhat refactored. Regenerate if needed.
+    E.g. the application of '_r' to type names has been changed.
+
 
 # zcbor v. 0.9.0
 

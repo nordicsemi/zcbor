@@ -488,6 +488,14 @@ map2 = {"2": int}
 
 TwoMaps = [ ?map1, map2 ]
 
+InnerPair = (left: int, right: int)
+InnerPairOpt = ?(left: int, right: int)
+WrapListGroup = [InnerPair]
+WrapListGroupOpt1 = [inner1: ?InnerPair]
+WrapListGroupOpt2 = [inner2: InnerPairOpt]
+WrapListGroupOptMult = ?[*(inner: InnerPair)]
+OptCbor = [?(cbor: bstr .cbor int)]
+
 ; Optional float with range: decode must restore state when range check fails.
 OptFloatThenInt = [
 	?optfloat: float .ge 1.0 .le 10.0,

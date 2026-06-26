@@ -78,6 +78,11 @@ set(py_command
     CountUnion
     Tags
     TwoMaps
+    WrapListGroup
+    WrapListGroupOpt1
+    WrapListGroupOpt2
+    WrapListGroupOptMult
+    OptCbor
     OptFloatUnion
     OptFloatThenInt
   --decode

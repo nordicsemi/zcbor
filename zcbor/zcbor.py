@@ -2658,10 +2658,10 @@ class CodeGenerator(CddlXcoder):
 
     def raw_type_name(self):
         """Base name if this element needs to declare a type."""
-        return "struct %s" % self.id()
+        return "struct %s" % self.var_func_name(with_prefix=True)
 
     def enum_type_name(self):
-        return "enum %s" % self.id()
+        return "enum %s" % self.var_func_name(with_prefix=True)
 
     def bit_size(self):
         """The bit width of the integers as represented in code."""
@@ -2748,13 +2748,11 @@ class CodeGenerator(CddlXcoder):
         I.e. the part that happens multiple times if the element has a quantifier.
         not including things like the "count" or "present" variable.
         """
+        if self.repeated_type_def_condition():
+            return self.raw_type_name() + "_r"
         if self.self_repeated_multi_var_condition():
-            name = self.raw_type_name()
-            if self.val_type_name() == name:
-                name = name + "_r"
-        else:
-            name = self.val_type_name()
-        return name
+            return self.raw_type_name()
+        return self.val_type_name()
 
     def full_type_name(self):
         """Name of the type for this element."""

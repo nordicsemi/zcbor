@@ -65,6 +65,11 @@ set(py_command
   UnionDefault
   CountUnion
   Tags
+  WrapListGroup
+  WrapListGroupOpt1
+  WrapListGroupOpt2
+  WrapListGroupOptMult
+  OptCbor
   OptFloatUnion
   OptFloatThenInt
   -e
