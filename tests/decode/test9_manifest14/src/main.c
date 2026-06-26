@@ -78,8 +78,8 @@ ZTEST(cbor_decode_test9, test_suit14_ex0_common_sequence)
 	struct SUIT_Manifest manifest;
 	struct SUIT_Common_Sequence common_sequence;
 	struct SUIT_Command_Sequence command_sequence;
-	struct SUIT_Parameters_r *parameter;
-	struct SUIT_Condition_r *condition;
+	struct SUIT_Parameters *parameter;
+	struct SUIT_Condition *condition;
 	size_t out_len;
 	uint8_t exp_vendor_id[] = {
 		0xfa, 0x6b, 0x4a, 0x53, 0xd5, 0xad, 0x5f, 0xdf,
@@ -194,8 +194,8 @@ ZTEST(cbor_decode_test9, test_suit14_ex0_common_sequence_as_command_sequence)
 	struct SUIT_Manifest manifest;
 	struct SUIT_Common_Sequence common_sequence;
 	struct SUIT_Command_Sequence command_sequence;
-	struct SUIT_Parameters_r *parameter;
-	struct SUIT_Condition_r *condition;
+	struct SUIT_Parameters *parameter;
+	struct SUIT_Condition *condition;
 	size_t out_len;
 	uint8_t exp_vendor_id[] = {
 		0xfa, 0x6b, 0x4a, 0x53, 0xd5, 0xad, 0x5f, 0xdf,
@@ -309,8 +309,8 @@ ZTEST(cbor_decode_test9, test_suit14_ex0_validate_run)
 	struct SUIT_Envelope envelope;
 	struct SUIT_Manifest manifest;
 	struct SUIT_Command_Sequence command_sequence;
-	struct SUIT_Condition_r *condition;
-	struct SUIT_Directive_r *directive;
+	struct SUIT_Condition *condition;
+	struct SUIT_Directive *directive;
 	size_t out_len;
 	uint32_t exp_rep_policy1 = (
 		(1 << suit_reporting_bits_suit_send_record_success_c)

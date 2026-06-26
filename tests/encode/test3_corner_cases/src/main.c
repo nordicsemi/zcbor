@@ -117,7 +117,7 @@ ZTEST(cbor_encode_test3, test_tagged_union)
 
 	uint8_t output[5];
 
-	struct TaggedUnion_r input;
+	struct TaggedUnion input;
 	input.TaggedUnion_choice = TaggedUnion_t4321bool_c;
 	input.t4321bool = true;
 
@@ -507,12 +507,12 @@ ZTEST(cbor_encode_test3, test_union)
 		0x03, 0x23, 0x03, 0x23, 0x03, 0x23
 	};
 
-	struct Union_r union1 = {.Union_choice = Union_Group_m_c};
-	struct Union_r union2 = {.Union_choice = Union_MultiGroup_m_c, .MultiGroup_m.MultiGroup_count = 1};
-	struct Union_r union3 = {.Union_choice = Union_uint3_l_c};
-	struct Union_r union4 = {.Union_choice = Union_hello_tstr_c};
-	struct Union_r union5 = {.Union_choice = Union_MultiGroup_m_c, .MultiGroup_m.MultiGroup_count = 6};
-	struct Union_r union6_inv = {.Union_choice = Union_MultiGroup_m_c, .MultiGroup_m.MultiGroup_count = 7};
+	struct Union union1 = {.Union_choice = Union_Group_m_c};
+	struct Union union2 = {.Union_choice = Union_MultiGroup_m_c, .MultiGroup_m.MultiGroup_count = 1};
+	struct Union union3 = {.Union_choice = Union_uint3_l_c};
+	struct Union union4 = {.Union_choice = Union_hello_tstr_c};
+	struct Union union5 = {.Union_choice = Union_MultiGroup_m_c, .MultiGroup_m.MultiGroup_count = 6};
+	struct Union union6_inv = {.Union_choice = Union_MultiGroup_m_c, .MultiGroup_m.MultiGroup_count = 7};
 
 	uint8_t output[15];
 	size_t out_len;
@@ -1803,11 +1803,11 @@ ZTEST(cbor_encode_test3, test_nested_choices)
 			0xf6,
 		END
 	};
-	struct Choice1_r input1 = {.Choice1_choice = Choice1_nil_c};
-	struct Choice2_r input2 = {.Choice2_choice = Choice2_nil_c};
-	struct Choice3_r input3 = {.Choice3_choice = Choice3_nil_c};
-	struct Choice4_r input4 = {.Choice4_choice = Choice4_nil_c};
-	struct Choice5_r input5 = {.Choice5_choice = Choice5_nil_c};
+	struct Choice1 input1 = {.Choice1_choice = Choice1_nil_c};
+	struct Choice2 input2 = {.Choice2_choice = Choice2_nil_c};
+	struct Choice3 input3 = {.Choice3_choice = Choice3_nil_c};
+	struct Choice4 input4 = {.Choice4_choice = Choice4_nil_c};
+	struct Choice5 input5 = {.Choice5_choice = Choice5_nil_c};
 
 	uint8_t payload[50];
 
@@ -1980,7 +1980,7 @@ ZTEST(cbor_encode_test3, test_count_union)
 	uint8_t count_union_exp_payload1[] = {0xf6};
 	uint8_t count_union_exp_payload2[] = {1, 1};
 
-	struct CountUnion_r input;
+	struct CountUnion input;
 	uint8_t payload[6];
 
 	input.CountUnion_choice = CountUnion_nil_c;
@@ -2120,6 +2120,110 @@ ZTEST(cbor_encode_test3, test_opt_float_union)
 
 	zassert_equal(ZCBOR_ERR_WRONG_RANGE, cbor_encode_OptFloatUnion(output,
 		sizeof(output), &input3_inv, &out_len));
+}
+
+
+ZTEST(cbor_encode_test3, test_wrap_list_group)
+{
+	const uint8_t exp_payload[] = {LIST(2), 0x01, 0x02, END};
+	struct InnerPair input = {.left = 1, .right = 2};
+	uint8_t output[10];
+	size_t out_len;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_WrapListGroup(output,
+		sizeof(output), &input, &out_len), NULL);
+	zassert_equal(sizeof(exp_payload), out_len, NULL);
+	zassert_mem_equal(exp_payload, output, out_len, NULL);
+}
+
+
+ZTEST(cbor_encode_test3, test_wrap_list_group_opt)
+{
+	const uint8_t exp_present[] = {LIST(2), 0x01, 0x02, END};
+	const uint8_t exp_absent[] = {LIST(0), END};
+	struct WrapListGroupOpt1 input1 = {
+		.inner1_present = true,
+		.inner1 = {.left = 1, .right = 2},
+	};
+	struct InnerPairOpt input2 = {
+		.InnerPairOpt_present = true,
+		.InnerPairOpt = {.left = 1, .right = 2},
+	};
+	uint8_t output[10];
+	size_t out_len;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_WrapListGroupOpt1(output,
+		sizeof(output), &input1, &out_len), NULL);
+	zassert_equal(sizeof(exp_present), out_len, NULL);
+	zassert_mem_equal(exp_present, output, out_len, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_WrapListGroupOpt2(output,
+		sizeof(output), &input2, &out_len), NULL);
+	zassert_equal(sizeof(exp_present), out_len, NULL);
+	zassert_mem_equal(exp_present, output, out_len, NULL);
+
+	input1.inner1_present = false;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_WrapListGroupOpt1(output,
+		sizeof(output), &input1, &out_len), NULL);
+	zassert_equal(sizeof(exp_absent), out_len, NULL);
+	zassert_mem_equal(exp_absent, output, out_len, NULL);
+
+	input2.InnerPairOpt_present = false;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_WrapListGroupOpt2(output,
+		sizeof(output), &input2, &out_len), NULL);
+	zassert_equal(sizeof(exp_absent), out_len, NULL);
+	zassert_mem_equal(exp_absent, output, out_len, NULL);
+}
+
+
+ZTEST(cbor_encode_test3, test_wrap_list_group_opt_mult)
+{
+	const uint8_t exp_present[] = {LIST(4), 0x01, 0x02, 0x03, 0x04, END};
+	struct WrapListGroupOptMult input = {
+		.WrapListGroupOptMult_present = true,
+		.WrapListGroupOptMult = {
+			.inner_count = 2,
+			.inner = {{.left = 1, .right = 2}, {.left = 3, .right = 4}},
+		},
+	};
+	uint8_t output[12];
+	size_t out_len;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_WrapListGroupOptMult(output,
+		sizeof(output), &input, &out_len), NULL);
+	zassert_equal(sizeof(exp_present), out_len, NULL);
+	zassert_mem_equal(exp_present, output, out_len, NULL);
+
+	input.WrapListGroupOptMult_present = false;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_WrapListGroupOptMult(output,
+		sizeof(output), &input, &out_len), NULL);
+	zassert_equal(0, out_len, NULL);
+}
+
+
+ZTEST(cbor_encode_test3, test_opt_cbor)
+{
+	const uint8_t exp_present[] = {LIST(1), 0x42, 0x18, 0x2A, END};
+	const uint8_t exp_absent[] = {LIST(0), END};
+	struct OptCbor input = {
+		.cbor_present = true,
+		.cbor = {
+			.cbor_cbor = 42,
+		},
+	};
+	uint8_t output[10];
+	size_t out_len;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_OptCbor(output,
+		sizeof(output), &input, &out_len), NULL);
+	zassert_equal(sizeof(exp_present), out_len, NULL);
+	zassert_mem_equal(exp_present, output, out_len, NULL);
+
+	input.cbor_present = false;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_OptCbor(output,
+		sizeof(output), &input, &out_len), NULL);
+	zassert_equal(sizeof(exp_absent), out_len, NULL);
+	zassert_mem_equal(exp_absent, output, out_len, NULL);
 }
 
 

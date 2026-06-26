@@ -243,7 +243,7 @@ ZTEST(cbor_decode_test5, test_tagged_union)
 	const uint8_t payload_tagged_union2[] = {0xD9, 0x09, 0x29, 0x10};
 	const uint8_t payload_tagged_union3_inv[] = {0xD9, 0x10, 0xE1, 0x10};
 
-	struct TaggedUnion_r result;
+	struct TaggedUnion result;
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_TaggedUnion(payload_tagged_union1,
 		sizeof(payload_tagged_union1), &result, &decode_len));
@@ -684,7 +684,7 @@ ZTEST(cbor_decode_test5, test_union)
 		0x03, 0x23, 0x03, 0x23, 0x03, 0x23}; /* Too many */
 	size_t decode_len;
 
-	struct Union_r union_r;
+	struct Union union_r;
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_Union(payload_union1, sizeof(payload_union1),
 				&union_r, NULL), NULL);
 	zassert_equal(Union_Group_m_c, union_r.Union_choice, NULL);
@@ -2512,11 +2512,11 @@ ZTEST(cbor_decode_test5, test_nested_choices)
 			0xf6,
 		END
 	};
-	struct Choice1_r result1;
-	struct Choice2_r result2;
-	struct Choice3_r result3;
-	struct Choice4_r result4;
-	struct Choice5_r result5;
+	struct Choice1 result1;
+	struct Choice2 result2;
+	struct Choice3 result3;
+	struct Choice4 result4;
+	struct Choice5 result5;
 
 	size_t num_decode;
 
@@ -2801,7 +2801,7 @@ ZTEST(cbor_decode_test5, test_count_union)
 	uint8_t count_union_payload1[] = {0xf6};
 	uint8_t count_union_payload2[] = {1, 1};
 
-	struct CountUnion_r result;
+	struct CountUnion result;
 	size_t num_decode;
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_CountUnion(count_union_payload1,
@@ -2995,6 +2995,83 @@ ZTEST(cbor_decode_test5, test_opt_float_union)
 	int res = cbor_decode_OptFloatUnion(invalid_float_payload,
 		sizeof(invalid_float_payload), &result, &num_decode);
 	zassert_equal(ARR_ERR1, res, "%s\n", zcbor_error_str(res));
+}
+
+
+ZTEST(cbor_decode_test5, test_wrap_list_group_opt)
+{
+	uint8_t present_payload[] = {LIST(2), 0x01, 0x02, END};
+	uint8_t absent_payload[] = {LIST(0), END};
+	struct WrapListGroupOpt1 result1;
+	struct InnerPairOpt result2;
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_WrapListGroupOpt1(present_payload,
+		sizeof(present_payload), &result1, &num_decode), NULL);
+	zassert_equal(sizeof(present_payload), num_decode, NULL);
+	zassert_true(result1.inner1_present);
+	zassert_equal(1, result1.inner1.left, NULL);
+	zassert_equal(2, result1.inner1.right, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_WrapListGroupOpt2(present_payload,
+		sizeof(present_payload), &result2, &num_decode), NULL);
+	zassert_equal(sizeof(present_payload), num_decode, NULL);
+	zassert_true(result2.InnerPairOpt_present);
+	zassert_equal(1, result2.InnerPairOpt.left, NULL);
+	zassert_equal(2, result2.InnerPairOpt.right, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_WrapListGroupOpt1(absent_payload,
+		sizeof(absent_payload), &result1, &num_decode), NULL);
+	zassert_equal(sizeof(absent_payload), num_decode, NULL);
+	zassert_false(result1.inner1_present);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_WrapListGroupOpt2(absent_payload,
+		sizeof(absent_payload), &result2, &num_decode), NULL);
+	zassert_equal(sizeof(absent_payload), num_decode, NULL);
+	zassert_false(result2.InnerPairOpt_present);
+}
+
+
+ZTEST(cbor_decode_test5, test_wrap_list_group_opt_mult)
+{
+	uint8_t present_payload[] = {LIST(4), 0x01, 0x02, 0x03, 0x04, END};
+	struct WrapListGroupOptMult result;
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_WrapListGroupOptMult(present_payload,
+		sizeof(present_payload), &result, &num_decode), NULL);
+	zassert_equal(sizeof(present_payload), num_decode, NULL);
+	zassert_true(result.WrapListGroupOptMult_present);
+	zassert_equal(2, result.WrapListGroupOptMult.inner_count, NULL);
+	zassert_equal(1, result.WrapListGroupOptMult.inner[0].left, NULL);
+	zassert_equal(2, result.WrapListGroupOptMult.inner[0].right, NULL);
+	zassert_equal(3, result.WrapListGroupOptMult.inner[1].left, NULL);
+	zassert_equal(4, result.WrapListGroupOptMult.inner[1].right, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_WrapListGroupOptMult(NULL,
+		0, &result, &num_decode), NULL);
+	zassert_equal(0, num_decode, NULL);
+	zassert_false(result.WrapListGroupOptMult_present);
+}
+
+
+ZTEST(cbor_decode_test5, test_opt_cbor)
+{
+	uint8_t present_payload[] = {LIST(1), 0x42, 0x18, 0x2A, END}; /* bstr containing int 42 */
+	uint8_t absent_payload[] = {LIST(0), END};
+	struct OptCbor result;
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_OptCbor(present_payload,
+		sizeof(present_payload), &result, &num_decode), NULL);
+	zassert_equal(sizeof(present_payload), num_decode, NULL);
+	zassert_true(result.cbor_present);
+	zassert_equal(42, result.cbor.cbor_cbor, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_OptCbor(absent_payload,
+		sizeof(absent_payload), &result, &num_decode), NULL);
+	zassert_equal(sizeof(absent_payload), num_decode, NULL);
+	zassert_false(result.cbor_present);
 }
 
 
