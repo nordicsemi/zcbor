@@ -502,7 +502,7 @@ ZTEST(cbor_decode_testA, test_unordered_map8)
 	zassert_equal(union1_uint1int_c, unordered_map8.UnorderedMap8_union1_choice);
 	zassert_equal(-1, unordered_map8.union1_uint1int);
 	zassert_equal(false, unordered_map8.UnorderedMap8_union3_present);
-	zassert_equal(UnorderedMap8_union3_uint42_c, unordered_map8.UnorderedMap8_union3.UnorderedMap8_union3_choice); // Default value reported
+	zassert_equal(union3_uint42_c, unordered_map8.UnorderedMap8_union3.UnorderedMap8_union3_choice); // Default value reported
 
 	err = cbor_decode_UnorderedMap8(payload_unordered_map8_2, sizeof(payload_unordered_map8_2), &unordered_map8, NULL);
 	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);

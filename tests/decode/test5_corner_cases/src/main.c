@@ -2748,7 +2748,7 @@ ZTEST(cbor_decode_test5, test_union_default)
 	zassert_equal(2, result.Int, NULL);
 	zassert_equal(UnionDefault_foo_FooA_c, result.foo.foo_choice, NULL);
 	zassert_equal(UnionDefault_bar_noBar_c, result.bar.bar_choice, NULL); /* Not present, default value is reported. */
-	zassert_equal(UnionDefault_baz_BazA_c, result.baz.baz_choice, NULL); /* Not present, default value is reported. */
+	zassert_equal(baz_BazA_c, result.baz.baz_choice, NULL); /* Not present, default value is reported. */
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_UnionDefault(union_default_payload3,
 		sizeof(union_default_payload3), &result, &num_decode));

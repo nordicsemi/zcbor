@@ -1968,7 +1968,7 @@ ZTEST(cbor_encode_test3, test_union_default)
 	input.baz_present = true;
 	input.foo.foo_choice = UnionDefault_foo_FooB_c;
 	input.bar.bar_choice = UnionDefault_bar_noBar_c;
-	input.baz.baz_choice = UnionDefault_baz_BazA_c;
+	input.baz.baz_choice = baz_BazA_c;
 	zassert_equal(ZCBOR_SUCCESS, cbor_encode_UnionDefault(payload,
 		sizeof(payload), &input, NULL));
 	zassert_mem_equal(payload, union_default_exp_payload2, sizeof(union_default_exp_payload2));
