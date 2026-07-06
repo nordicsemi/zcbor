@@ -2071,13 +2071,12 @@ class TestParsingErrors(TestCase):
         else:
             self.assertRaises(zcbor.CddlParsingError, cp_from_cddl, invalid_cddl)
 
-    def test_invalid_cddl(self):
-        """Check that certain CDDL formatting errors are caught."""
-
+    def test_invalid_op(self):
         self.cddl_parsing_error_test(
             "foo = int .bar 1234", "foo = int .lt 1234", r"Invalid control operator: '\.bar'"
         )
-        # Two values
+
+    def test_invalid_eq(self):
         self.cddl_parsing_error_test("foo = 1 .eq 2", "foo = int .eq 2", r".*Attempting to set value.*")
         self.cddl_parsing_error_test(
             f"foo = int .eq uint",
@@ -2089,7 +2088,18 @@ class TestParsingErrors(TestCase):
             "foo = float .eq 2.0",
             r"Type of \.eq value does not match type of element\. \(FLOAT != UINT\)",
         )
+        self.cddl_parsing_error_test(
+            "foo = uint .eq -1",
+            "foo = nint .eq -1",
+            r"Type of \.eq value does not match type of element\. \(UINT != NINT\)",
+        )
+        self.cddl_parsing_error_test(
+            "foo = nint .eq 0",
+            "foo = int .eq 0",
+            r"Type of \.eq value does not match type of element\. \(NINT != UINT\)",
+        )
 
+    def test_invalid_default(self):
         self.cddl_parsing_error_test(
             'foo = ?int .default "hello"',
             'foo = ?tstr .default "hello"',
@@ -2116,26 +2126,40 @@ class TestParsingErrors(TestCase):
             r"Circular reference detected when unpacking .default",
         )
 
+    def test_invalid_map_key(self):
         self.cddl_parsing_error_test("foo = {int}", "foo = {1 => int}", r"Missing map key")
         self.cddl_parsing_error_test(
             "bar = (int) foo = {bar}", "bar = (1 => int) foo = {bar}", r"Missing map key"
         )
 
+    def test_invalid_size(self):
         self.cddl_parsing_error_test(
             f"foo = int .size uint",
             f"foo = int .size 1",
             r".size operator must have a literal value or range\.",
         )
         self.cddl_parsing_error_test(
-            "foo = int .size -1 .. 2",
-            "foo = int .size 1 .. 2",
-            r"Size range must be non-negative and min <= max \(got: min -1, max 2\)",
+            f"foo = int .size -2",
+            f"foo = int .size 2",
+            r".size must be one of \('UINT',\), got NINT\.",
+        )
+        self.cddl_parsing_error_test(
+            "foo = float .size 2.0",
+            "foo = float .size 2",
+            r".size must be one of \('UINT',\), got FLOAT\.",
         )
         self.cddl_parsing_error_test(
             f"foo = bool .size 1", f"foo = int .size 1", r"\.size cannot be applied to BOOL"
         )
         self.cddl_parsing_error_test(
             f"foo = [] .size 1", f"foo = int .size 1", r"\.size cannot be applied to LIST"
+        )
+
+    def test_invalid_size_range(self):
+        self.cddl_parsing_error_test(
+            "foo = int .size -1 .. 2",
+            "foo = int .size 1 .. 2",
+            r"Size range must be non-negative and min <= max \(got: min -1, max 2\)",
         )
         self.cddl_parsing_error_test(
             f"foo = int .size 1 .. uint",
@@ -2153,16 +2177,6 @@ class TestParsingErrors(TestCase):
             r"Must have exactly one range specifier '..'/'...': 1....2",
         )
         self.cddl_parsing_error_test(
-            f"foo = int .size -2",
-            f"foo = int .size 2",
-            r".size must be one of \('UINT',\), got NINT\.",
-        )
-        self.cddl_parsing_error_test(
-            "foo = float .size 2.0",
-            "foo = float .size 2",
-            r".size must be one of \('UINT',\), got FLOAT\.",
-        )
-        self.cddl_parsing_error_test(
             "foo = ?bstr .size 0..10 .default '' .cborseq *int",
             "foo = ?bstr .size 0..10 .default ''",
             r"zcbor does not support \.default and \.cbor\(seq\) together",
@@ -2173,6 +2187,7 @@ class TestParsingErrors(TestCase):
             r"zcbor does not support \.default and \.cbor\(seq\) together",
         )
 
+    def test_invalid_inequality(self):
         for ctrl_op in (".lt", ".gt", ".ge", ".le"):
             self.cddl_parsing_error_test(
                 f"foo = bool {ctrl_op} 1",
@@ -2231,7 +2246,7 @@ class TestParsingErrors(TestCase):
                 r"Inequality value cannot have: range.",
             )
 
-    def test_num_range(self):
+    def test_invalid_num_range(self):
         """Check that invalid CDDL with a range of numbers raises an error."""
         self.cddl_parsing_error_test(
             "foo = 1..0", "foo = 0..1", r"Range has larger min \(1\) than max \(0\)"
@@ -2252,7 +2267,6 @@ class TestParsingErrors(TestCase):
         self.cddl_parsing_error_test(
             "foo = 1..2.0", "foo = 1..2", r"Range values must both be int or both float."
         )
-
         self.cddl_parsing_error_test(
             "foo = 2..1", "foo = 0..1", r"Range has larger min \(2\) than max \(1\)"
         )
