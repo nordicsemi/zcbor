@@ -1,33 +1,33 @@
 EverythingUnion = (
 	uint /
-	uint_single: 10 /
-	uint_range: 15..20 /
+	(uint_single: 10) /
+	(uint_range: 15..20) /
 	nint /
-	nint_single: -2 /
-	nint_range: -10..-5 /
+	(nint_single: -2) /
+	(nint_range: -10..-5) /
 	bstr /
-	bstr_single: 'foo' /
-	bstr_size: bstr .size 3 /
-	bstr_cbor: bstr .cbor uint /
+	(bstr_single: 'foo') /
+	(bstr_size: bstr .size 3) /
+	(bstr_cbor: bstr .cbor uint) /
 	tstr /
-	tstr_single: "bar" /
-	tstr_size: tstr .size 5 /
-	list: [
+	(tstr_single: "bar") /
+	(tstr_size: tstr .size 5) /
+	(list: [
 		+uint,
 		+nint
-	] /
-	map: {
+	]) /
+	(map: {
 		(1 => "one") / (2 => "two")
-	} /
-	repeated: *uint /
+	}) /
+	(repeated: *uint) /
 	bool /
-	bool_single: true /
+	(bool_single: true) /
 	nil /
 	undefined /
 	float16 /
-	float16_single: 3.140625 /
+	(float16_single: 3.140625) /
 	float32 /
-	float32_single: 1.10004723072052 /
+	(float32_single: 1.10004723072052) /
 	float64 /
-	float64_single: -6.28
+	(float64_single: -6.28)
 )
