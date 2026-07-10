@@ -613,7 +613,17 @@ class CddlParser:
     @staticmethod
     def strip_comments(instr):
         """Strip CDDL comments (';') from the string."""
-        return getrp(r"\;.*?(\n|$)").sub("", instr)
+        outstr = ""
+        mstr = instr[:]
+        while mstr:
+            m = getrp(delimited(rcomment, named="inside", only_quotes=True)).match(mstr)
+            if m is None:
+                outstr += mstr
+                mstr = ""
+            else:
+                outstr += m.group("item")
+                mstr = getrp(delimited(rcomment, only_quotes=True)).sub("", mstr, count=1)
+        return outstr
 
     @staticmethod
     def resolve_backslashes(instr):
