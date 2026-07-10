@@ -172,6 +172,31 @@ def getrp(pattern, flags=0):
     return regex_cache[pattern_key]
 
 
+rquotes = r"{startend}(?P<item>(\\{startend}|[^{startend}])*?)(?<!\\){startend}"  # Regex for string enclosed by quotes (start and end are the same)
+rparens = r"(?P<{name}>{start}(?P<item>(?>[^{start}{end}]+|(?&{name}))*){end})"  # Regex for string enclosed by parens/brackets (start and end are different)
+
+rquote = rquotes.format(startend=r"\'")
+rdquote = rquotes.format(startend=r"\"")
+rparen = rparens.format(name="paren", start=r"\(", end=r"\)")
+rbracket = rparens.format(name="bracket", start=r"\[", end=r"\]")
+rcurly = rparens.format(name="curly", start=r"{", end=r"}")
+rcomment = r";(([^\n]*))"  # Regex for comment starting with ';' and ending with newline or end of string
+
+def delimited(delimiter, named=None, only_quotes=False):
+    """Regex for delimited item, which ignores delimiters inside parens/quotes.
+
+    Matches everything up to the first instance of the delimiter that is not inside parens
+    or quotes. `named` must be eiter "inside", "outside", or None.
+    If `named` is "inside", the item will be in a group named 'item', excluding the delimiter.
+    If `named` is "outside", the item will be in a group named 'item', including the delimiter.
+    """
+    name = rf"(?P<item>" if named == "inside" else rf"?P<item>(" if named == "outside" else "("
+    e = rf"{rquote}|{rdquote}" if only_quotes else rf"{rquote}|{rdquote}|{rparen}|{rbracket}|{rcurly}"
+    s = "\"\'" if only_quotes else r"""\(\)\[\]{{}}"'"""
+    enclosed = e.replace(r"?P<item>", "")
+    return rf"""({name}(({enclosed})|[^{s}])+?){delimiter})"""
+
+
 def sizeof(num):
     """Size of "additional" field if num is encoded as int"""
     if num <= 23:
@@ -1319,27 +1344,6 @@ class CddlParser:
         match_uint = r"(0x[0-9a-fA-F]+|0o[0-7]+|0b[01]+|\d+)"  # Matches unsigned integers in decimal, hexadecimal, octal, or binary
         match_nint = r"(-" + match_uint + ")"
 
-        quotes = r"{startend}(?P<item>(\\{startend}|[^{startend}])*?)(?<!\\){startend}"  # Regex for string enclosed by quotes (start and end are the same)
-        parens = r"(?P<{name}>{start}(?P<item>(?>[^{start}{end}]+|(?&{name}))*){end})"  # Regex for string enclosed by parens/brackets (start and end are different)
-
-        quote = quotes.format(startend=r"\'")
-        dquote = quotes.format(startend=r"\"")
-        paren = parens.format(name="paren", start=r"\(", end=r"\)")
-        bracket = parens.format(name="bracket", start=r"\[", end=r"\]")
-        curly = parens.format(name="curly", start=r"{", end=r"}")
-
-        def delimited(delimiter, named=None):
-            """Regex for delimited item, which ignores delimiters inside parens/quotes.
-
-            Matches everything up to the first instance of the delimiter that is not inside parens
-            or quotes. `named` must be eiter "inside", "outside", or None.
-            If `named` is "inside", the item will be in a group named 'item', excluding the delimiter.
-            If `named` is "outside", the item will be in a group named 'item', including the delimiter.
-            """
-            name = rf"(?P<item>" if named == "inside" else rf"?P<item>(" if named == "outside" else "("
-            enclosed = rf"{quote}|{dquote}|{paren}|{bracket}|{curly}".replace(r"?P<item>", "")
-            return rf"""({name}(({enclosed})|[^\(\)\[\]{{}}"'])+?){delimiter})"""
-
         self_type = type(self)
 
         # The following regexes match different CDDL constructs. The order of the list
@@ -1376,11 +1380,11 @@ class CddlParser:
                 ),
             ),
             # These 5 match contents enclosed by (), [], and {}, ' or ":
-            (bracket, lambda m_self, s: m_self.type_and_value("LIST", lambda: m_self.parse_members(s))),
-            (paren, lambda m_self, s: m_self.type_and_value("GROUP", lambda: m_self.parse_members(s))),
-            (curly, lambda m_self, s: m_self.type_and_value("MAP", lambda: m_self.parse_members(s))),
-            (quote, lambda m_self, s: m_self.type_and_value("BSTR", lambda: s)),
-            (dquote, lambda m_self, s: m_self.type_and_value("TSTR", lambda: s)),
+            (rbracket, lambda m_self, s: m_self.type_and_value("LIST", lambda: m_self.parse_members(s))),
+            (rparen, lambda m_self, s: m_self.type_and_value("GROUP", lambda: m_self.parse_members(s))),
+            (rcurly, lambda m_self, s: m_self.type_and_value("MAP", lambda: m_self.parse_members(s))),
+            (rquote, lambda m_self, s: m_self.type_and_value("BSTR", lambda: s)),
+            (rdquote, lambda m_self, s: m_self.type_and_value("TSTR", lambda: s)),
             (
                 r"(uint|nint|int|float|bstr|tstr|bool|nil|undefined|any)(?![\w-])",
                 lambda m_self, type_str: m_self.type_and_value(type_str.upper()),
