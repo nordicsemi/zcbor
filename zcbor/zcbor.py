@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-from regex import compile, S, M
+from regex import compile, S, M, DOTALL
 from pprint import pformat, pprint
 from os import path, linesep, makedirs
 from collections import defaultdict, namedtuple
@@ -164,8 +164,10 @@ class CddlParsingError(Exception):
                 self.zcbor_notes.append(note)
 
 
-def getrp(pattern, flags=0):
+def getrp(pattern, flags=0, dotall=True):
     """Get a compiled regex pattern from the cache. Add it to the cache if not present."""
+    if dotall:
+        flags |= DOTALL
     pattern_key = pattern if not flags else (pattern, flags)
     if pattern_key not in regex_cache:
         regex_cache[pattern_key] = compile(pattern, flags)
@@ -1571,7 +1573,7 @@ class CddlParser:
         value = type(self)(**kwargs)
 
         try:
-            remainder = value.get_value(instr.strip().replace("\n", " ").lstrip("&"))
+            remainder = value.get_value(instr.strip().lstrip("&"))
             if remainder != "":
                 raise CddlParsingError(f"Extra characters found: '{remainder}'")
         except CddlParsingError as e:
