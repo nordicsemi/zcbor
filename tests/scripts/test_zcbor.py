@@ -1941,6 +1941,24 @@ class TestCodeGeneration(TestCase):
             with self.assertRaises(AssertionError):
                 test.full_xcode(res_var=test.full_result_var())
 
+    def test_comment_parsing_ignores_semicolon_in_string(self):
+        """Comments should not be parsed inside strings."""
+        cddl_string = """test = "foo;
+        bar" ; comment"""
+        res = self.do_test_code_generation(cddl_string).my_types["test"]
+        self.assertEqual(
+            res.value,
+            """foo;
+        bar""",
+        )
+
+    def test_comment_parsing_ignores_quotes_in_comment(self):
+        """Comments should not be parsed inside strings."""
+        cddl_string = """test = ;"foo"
+        "bar" """
+        res = self.do_test_code_generation(cddl_string).my_types["test"]
+        self.assertEqual(res.value, "bar")
+
 
 class TestUnicodeEscape(TestCase):
     def test_unicode_escape0(self):
