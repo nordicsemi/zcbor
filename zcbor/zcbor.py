@@ -3325,17 +3325,12 @@ class CodeGenerator(CddlXcoder):
             zip(*(child.list_counts() for child in self.value)) if self.value else ((0,), (0,))
         )
         count_arg = f", {sum_or_none(max_counts, default=0)}" if self.mode == "encode" else ""
-        with_children = "(%s && ((%s) || (%s, false)) && %s)" % (
+        xcoders = [child.full_xcode(res_var=res_var) for child in self.value]
+        return "(%s && ((%s) || (%s, false)))" % (
             f"{start_func}(state{count_arg})",
-            f"{newl_ind}&& ".join(child.full_xcode(res_var=res_var) for child in self.value),
+            f"{newl_ind}&& ".join(xcoders + [f"{end_func}(state{count_arg})"]),
             f"{end_func_force}(state)",
-            f"{end_func}(state{count_arg})",
         )
-        without_children = "(%s && %s)" % (
-            f"{start_func}(state{count_arg})",
-            f"{end_func}(state{count_arg})",
-        )
-        return with_children if len(self.value) > 0 else without_children
 
     def xcode_group(self, *, res_var, union_int=None):
         """Return the full code needed to encode/decode a "GROUP" element's children."""

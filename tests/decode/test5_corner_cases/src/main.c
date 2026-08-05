@@ -825,13 +825,14 @@ ZTEST(cbor_decode_test5, test_map)
 	zassert_equal(0, map.twotothree[1].twotothree.len, NULL);
 	zassert_equal(0, map.twotothree[2].twotothree.len, NULL);
 
+	int err = cbor_decode_Map(payload_map4_inv, sizeof(payload_map4_inv), &map, NULL);
+
 #ifdef TEST_INDEFINITE_LENGTH_ARRAYS
 	zassert_equal(ZCBOR_SUCCESS,
 #else
 	zassert_equal(ARR_ERR1,
 #endif
-		cbor_decode_Map(payload_map4_inv, sizeof(payload_map4_inv),
-			&map, NULL), NULL);
+		err, "%s\r\n", zcbor_error_str(err));
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_Map(payload_map5, sizeof(payload_map5),
 			&map, NULL), NULL);
