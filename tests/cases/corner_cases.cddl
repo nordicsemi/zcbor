@@ -504,3 +504,5 @@ OptFloatThenInt = [
 
 ; Optional float union with ranged branches: second branch must be tried after first fails.
 OptFloatUnion = [foo: ?((oneToFive: 1.0..5.0) / (sixToTen: 6.0..10.0))]
+
+CborBstrList = [?bstr .cbor [int, tstr]]

@@ -37,13 +37,15 @@ static bool encode_Pet(
 {
 	zcbor_log("%s\r\n", __func__);
 
-	bool res = (((zcbor_list_start_encode(state, 3) && ((((zcbor_list_start_encode(state, 0) && ((zcbor_multi_encode_minmax(1, ZCBOR_PET_DEFAULT_MAX_QTY, &(*input).names_count, ZCBOR_CUSTOM_CAST_FP(zcbor_tstr_encode), state, (*&(*input).names), sizeof(struct zcbor_string))) || (zcbor_list_map_end_force_encode(state), false)) && zcbor_list_end_encode(state, 0)))
+	bool res = (((zcbor_list_start_encode(state, 3) && ((((zcbor_list_start_encode(state, 0) && ((zcbor_multi_encode_minmax(1, ZCBOR_PET_DEFAULT_MAX_QTY, &(*input).names_count, ZCBOR_CUSTOM_CAST_FP(zcbor_tstr_encode), state, (*&(*input).names), sizeof(struct zcbor_string))
+	&& zcbor_list_end_encode(state, 0)) || (zcbor_list_map_end_force_encode(state), false))))
 	&& (((((((*input).birthday.len == 8)) || (zcbor_error(state, ZCBOR_ERR_WRONG_RANGE), false))) || (zcbor_error(state, ZCBOR_ERR_WRONG_RANGE), false))
 	&& (zcbor_bstr_encode(state, (&(*input).birthday))))
 	&& ((((*input).species_choice == Pet_species_cat_c) ? ((zcbor_uint8_put(state, (1))))
 	: (((*input).species_choice == Pet_species_dog_c) ? ((zcbor_uint8_put(state, (2))))
 	: (((*input).species_choice == Pet_species_other_c) ? ((zcbor_uint8_put(state, (3))))
-	: false))))) || (zcbor_list_map_end_force_encode(state), false)) && zcbor_list_end_encode(state, 3))));
+	: false))))
+	&& zcbor_list_end_encode(state, 3)) || (zcbor_list_map_end_force_encode(state), false)))));
 
 	if (false) {
 		/* For testing that the types of the arguments are correct.

@@ -3325,17 +3325,12 @@ class CodeGenerator(CddlXcoder):
             zip(*(child.list_counts() for child in self.value)) if self.value else ((0,), (0,))
         )
         count_arg = f", {sum_or_none(max_counts, default=0)}" if self.mode == "encode" else ""
-        with_children = "(%s && ((%s) || (%s, false)) && %s)" % (
+        xcoders = [child.full_xcode(res_var=res_var) for child in self.value]
+        return "(%s && ((%s) || (%s, false)))" % (
             f"{start_func}(state{count_arg})",
-            f"{newl_ind}&& ".join(child.full_xcode(res_var=res_var) for child in self.value),
+            f"{newl_ind}&& ".join(xcoders + [f"{end_func}(state{count_arg})"]),
             f"{end_func_force}(state)",
-            f"{end_func}(state{count_arg})",
         )
-        without_children = "(%s && %s)" % (
-            f"{start_func}(state{count_arg})",
-            f"{end_func}(state{count_arg})",
-        )
-        return with_children if len(self.value) > 0 else without_children
 
     def xcode_group(self, *, res_var, union_int=None):
         """Return the full code needed to encode/decode a "GROUP" element's children."""
@@ -3433,15 +3428,11 @@ class CodeGenerator(CddlXcoder):
             val_access = self.val_access(res_var=res_var)
             access_arg = f", {deref_if_not_null(val_access)}" if self.mode == "decode" else ""
             res_arg = f", &tmp_str" if self.mode == "encode" else ""
-            xcode_cbor = "(%s)" % (
-                (newl_ind + "&& ").join(
-                    [
-                        f"zcbor_bstr_start_{self.mode}(state{access_arg})",
-                        f"(int_res = ({self.cbor.full_xcode(res_var=res_var)}), "
-                        f"zcbor_bstr_end_{self.mode}(state{res_arg}), int_res)",
-                    ]
-                )
-            )
+            start = f"(zcbor_bstr_start_{self.mode}(state{access_arg}))"
+            end = f"(zcbor_bstr_end_{self.mode}(state{res_arg}))"
+            end_func_force = f"zcbor_bstr_end_force_{self.mode}(state)"
+            body = f"({self.cbor.full_xcode(res_var=res_var)})"
+            xcode_cbor = "(%s && ((%s) || (%s, false)) && %s)" % (start, body, end_func_force, end)
             if self.mode == "decode" or self.is_unambiguous():
                 return xcode_cbor
             else:
