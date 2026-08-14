@@ -618,6 +618,26 @@ ZTEST(zcbor_unit_tests, test_null_state)
 }
 
 
+ZTEST(zcbor_unit_tests, test_null_params)
+{
+	uint8_t payload[10];
+	ZCBOR_STATE_E(state_e, 0, payload, sizeof(payload), 0);
+	struct zcbor_string dummy_string = {0};
+	uint8_t hello[] = "Hello";
+
+	zassert_true(zcbor_bstr_encode(state_e, &dummy_string), NULL);
+	dummy_string.len = 5;
+	zassert_false(zcbor_bstr_encode(state_e, &dummy_string), NULL);
+	zassert_equal(ZCBOR_ERR_BAD_ARG, zcbor_peek_error(state_e), NULL);
+	dummy_string.value = hello;
+	zassert_true(zcbor_bstr_encode(state_e, &dummy_string), NULL);
+
+	uint8_t exp_payload[] = {0x40, 0x45, 0x48, 0x65, 0x6c, 0x6c, 0x6f};
+	zassert_equal(sizeof(exp_payload), state_e->payload - payload, NULL);
+	zassert_mem_equal(exp_payload, payload, sizeof(exp_payload), NULL);
+}
+
+
 /** The string "HelloWorld" is split into 2 fragments, and a number of different
  * functions are called to test that they respond correctly to the situation.
 **/

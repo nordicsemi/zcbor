@@ -318,10 +318,13 @@ static bool str_encode(zcbor_state_t *state,
 	if (input->len > (size_t)(state->payload_end - state->payload)) {
 		ZCBOR_ERR(ZCBOR_ERR_NO_PAYLOAD);
 	}
+	if (!input->value && (input->len > 0)) {
+		ZCBOR_ERR(ZCBOR_ERR_BAD_ARG);
+	}
 	if (!str_start_encode(state, input, major_type)) {
 		ZCBOR_FAIL();
 	}
-	if (state->payload_mut != input->value) {
+	if ((state->payload_mut != input->value) && (input->len > 0)) {
 		/* Use memmove since string might be encoded into the same space
 		 * because of zcbor_bstr_start_encode/zcbor_bstr_end_encode. */
 		memmove(state->payload_mut, input->value, input->len);
