@@ -485,8 +485,11 @@ Tags = [
 
 map1 = {"1": int}
 map2 = {"2": int}
+map3 = {"2": int, "3": int}
 
 TwoMaps = [ ?map1, map2 ]
+BstrMapUnion = (bstr .cbor map1 / bstr .cbor map2)
+AmbigMap = (map1 / map2 / map3)
 
 InnerPair = (left: int, right: int)
 InnerPairOpt = ?(left: int, right: int)
@@ -495,6 +498,7 @@ WrapListGroupOpt1 = [inner1: ?InnerPair]
 WrapListGroupOpt2 = [inner2: InnerPairOpt]
 WrapListGroupOptMult = ?[*(inner: InnerPair)]
 OptCbor = [?(cbor: bstr .cbor int)]
+BstrMap = bstr .cbor map1
 
 ; Optional float with range: decode must restore state when range check fails.
 OptFloatThenInt = [
@@ -504,3 +508,5 @@ OptFloatThenInt = [
 
 ; Optional float union with ranged branches: second branch must be tried after first fails.
 OptFloatUnion = [foo: ?((oneToFive: 1.0..5.0) / (sixToTen: 6.0..10.0))]
+
+CborBstrList = [?bstr .cbor [int, tstr]]

@@ -271,12 +271,14 @@ bool zcbor_elem_processed(zcbor_state_t *state);
  * In all successful cases, the state is returned pointing to the byte/element
  * after the list/map in the payload.
  *
+ * @param[in] force  If true, forcibly consume the backup even on failure.
+ *
  * @retval true   Everything ok.
  * @retval false  Element count not correct.
  */
-bool zcbor_list_end_decode(zcbor_state_t *state);
-bool zcbor_map_end_decode(zcbor_state_t *state);
-bool zcbor_unordered_map_end_decode(zcbor_state_t *state);
+bool zcbor_list_end_decode(zcbor_state_t *state, bool force);
+bool zcbor_map_end_decode(zcbor_state_t *state, bool force);
+bool zcbor_unordered_map_end_decode(zcbor_state_t *state, bool force);
 bool zcbor_list_map_end_force_decode(zcbor_state_t *state);
 
 /** Find whether the state is at the end of a list or map.
@@ -433,8 +435,11 @@ bool zcbor_bstr_start_decode(zcbor_state_t *state, struct zcbor_string *result);
 /** Finalize decoding a CBOR-encoded bstr.
  *
  * Restore element count from backup.
+ *
+ * @param[in] force  If true, forcibly consume the backup even on failure.
  */
-bool zcbor_bstr_end_decode(zcbor_state_t *state);
+bool zcbor_bstr_end_decode(zcbor_state_t *state, bool force);
+bool zcbor_bstr_end_force_decode(zcbor_state_t *state);
 
 
 #ifdef ZCBOR_FRAGMENTS

@@ -1336,8 +1336,9 @@ ZTEST(cbor_decode_test5, test_value_range)
 	zassert_equal(exp_output_value_range2.defaultfalse,
 			output.defaultfalse, NULL);
 
-	zassert_equal(ZCBOR_ERR_WRONG_RANGE, cbor_decode_ValueRange(payload_value_range3_inv,
-				sizeof(payload_value_range3_inv), &output, &out_len), NULL);
+	int res = cbor_decode_ValueRange(payload_value_range3_inv,
+				sizeof(payload_value_range3_inv), &output, &out_len);
+	zassert_equal(ZCBOR_ERR_WRONG_RANGE, res, "%s\n", zcbor_error_str(res));
 	zassert_equal(ZCBOR_ERR_WRONG_RANGE, cbor_decode_ValueRange(payload_value_range4_inv,
 				sizeof(payload_value_range4_inv), &output, &out_len), NULL);
 	zassert_equal(ZCBOR_ERR_WRONG_RANGE, cbor_decode_ValueRange(payload_value_range5_inv,
@@ -1357,7 +1358,7 @@ ZTEST(cbor_decode_test5, test_value_range)
 	// HIGH_ELEM_COUNT because the entry is optional, so decoding continues to the end of the list.
 	ret = cbor_decode_ValueRange(payload_value_range12_inv,
 				sizeof(payload_value_range12_inv), &output, &out_len);
-	zassert_equal(ARR_ERR5, ret, "%s != %s\n", zcbor_error_str(ARR_ERR5), zcbor_error_str(ret));
+	zassert_equal(ARR_ERR1, ret, "%s != %s\n", zcbor_error_str(ARR_ERR1), zcbor_error_str(ret));
 }
 
 
@@ -1982,18 +1983,18 @@ ZTEST(cbor_decode_test5, test_cbor_bstr)
 	zassert_equal(&cbor_bstr_payload1[23], result.big_uint_bstr_cbor.value, NULL);
 
 	int res = cbor_decode_CBORBstr(cbor_bstr_payload2_inv, sizeof(cbor_bstr_payload2_inv), &result, &num_decode);
-	zassert_equal(ZCBOR_ERR_PAYLOAD_NOT_CONSUMED, res, "%d\r\n", res);
+	zassert_equal(ZCBOR_ERR_WRONG_VALUE, res, "%s\r\n", zcbor_error_str(res));
 
-	zassert_equal(ZCBOR_ERR_PAYLOAD_NOT_CONSUMED, cbor_decode_CBORBstr(cbor_bstr_payload3_inv, sizeof(cbor_bstr_payload3_inv), &result, &num_decode), NULL);
+	zassert_equal(ZCBOR_ERR_WRONG_VALUE, cbor_decode_CBORBstr(cbor_bstr_payload3_inv, sizeof(cbor_bstr_payload3_inv), &result, &num_decode), NULL);
 
 	res = cbor_decode_CBORBstr(cbor_bstr_payload4_inv, sizeof(cbor_bstr_payload4_inv), &result, &num_decode);
-	zassert_equal(ARR_ERR4, res, "%s\r\n", zcbor_error_str(res));
+	zassert_equal(ARR_ERR3, res, "%s\r\n", zcbor_error_str(res));
 
 	res = cbor_decode_CBORBstr(cbor_bstr_payload5_inv, sizeof(cbor_bstr_payload5_inv), &result, &num_decode);
-	zassert_equal(ARR_ERR4, res, "%s\r\n", zcbor_error_str(res));
+	zassert_equal(ARR_ERR3, res, "%s\r\n", zcbor_error_str(res));
 
 	res = cbor_decode_CBORBstr(cbor_bstr_payload6_inv, sizeof(cbor_bstr_payload6_inv), &result, &num_decode);
-	zassert_equal(ZCBOR_ERR_PAYLOAD_NOT_CONSUMED, res, "%d\r\n", res);
+	zassert_equal(ZCBOR_ERR_WRONG_VALUE, res, "%s\r\n", zcbor_error_str(res));
 }
 
 
@@ -3072,6 +3073,156 @@ ZTEST(cbor_decode_test5, test_opt_cbor)
 		sizeof(absent_payload), &result, &num_decode), NULL);
 	zassert_equal(sizeof(absent_payload), num_decode, NULL);
 	zassert_false(result.cbor_present);
+}
+
+
+ZTEST(cbor_decode_test5, test_cbor_bstr_map)
+{
+	uint8_t bstr_map_payload1[] = {
+		STR_LEN(0x44, 1),
+			MAP(1),
+				0x61, '1', 0,
+			END
+	};
+	uint8_t bstr_map_payload2_inv[] = {
+		STR_LEN(0x47, 1),
+			MAP(1),
+				0x61, '1', 0,
+			END
+			/* superfluous bstr bytes -> */ 0, 0, 0,
+	};
+
+	struct BstrMap result;
+	size_t num_decode;
+
+	int err = cbor_decode_BstrMap(bstr_map_payload1, sizeof(bstr_map_payload1), &result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(bstr_map_payload1), num_decode, NULL);
+	zassert_equal(0, result.BstrMap_cbor._1);
+	zassert_equal(STR_LEN(4, 1), result.BstrMap.len);
+	zassert_mem_equal(&bstr_map_payload1[1], result.BstrMap.value, result.BstrMap.len);
+
+	err = cbor_decode_BstrMap(bstr_map_payload2_inv, sizeof(bstr_map_payload2_inv), &result, &num_decode);
+	zassert_equal(ZCBOR_ERR_PAYLOAD_NOT_CONSUMED, err, "%s\n", zcbor_error_str(err));
+}
+
+
+ZTEST(cbor_decode_test5, test_cbor_ambig_map)
+{
+	uint8_t ambig_map_payload1[] = {
+		MAP(1),
+			0x61, '1', 1,
+		END
+	};
+	uint8_t ambig_map_payload2[] = {
+		MAP(1),
+			0x61, '2', 2,
+		END
+	};
+	uint8_t ambig_map_payload3[] = {
+		MAP(2),
+			0x61, '2', 3,
+			0x61, '3', 4,
+		END
+	};
+	struct AmbigMap result;
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_AmbigMap(ambig_map_payload1,
+		sizeof(ambig_map_payload1), &result, &num_decode), NULL);
+	zassert_equal(AmbigMap_map1_m_c, result.AmbigMap_choice, NULL);
+	zassert_equal(1, result.map1_m._1, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_AmbigMap(ambig_map_payload2,
+		sizeof(ambig_map_payload2), &result, &num_decode), NULL);
+	zassert_equal(AmbigMap_map2_m_c, result.AmbigMap_choice, NULL);
+	zassert_equal(2, result.map2_m._2, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_AmbigMap(ambig_map_payload3,
+		sizeof(ambig_map_payload3), &result, &num_decode), NULL);
+	zassert_equal(AmbigMap_map3_m_c, result.AmbigMap_choice, NULL);
+	zassert_equal(3, result.map3_m._2, NULL);
+	zassert_equal(4, result.map3_m._3, NULL);
+}
+
+
+ZTEST(cbor_decode_test5, test_cbor_bstr_map_union)
+{
+	uint8_t bstr_map_union_payload1[] = {
+		STR_LEN(0x44, 1),
+			MAP(1),
+				0x61, '1', 1,
+			END
+	};
+	uint8_t bstr_map_union_payload2[] = {
+		STR_LEN(0x44, 1),
+			MAP(1),
+				0x61, '2', 2,
+			END
+	};
+	uint8_t bstr_map_union_payload3_inv[] = {
+		STR_LEN(0x43, 1),
+			MAP(1),
+				0x61, '2', 2,
+			END
+	};
+	uint8_t bstr_map_union_payload4_inv[] = {
+		STR_LEN(0x44, 1),
+			MAP(1),
+				0x61, '3', 3,
+			END
+	};
+
+	struct BstrMapUnion result;
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_BstrMapUnion(bstr_map_union_payload1,
+		sizeof(bstr_map_union_payload1), &result, &num_decode));
+	zassert_equal(BstrMapUnion_map1_bstr_c, result.BstrMapUnion_choice, NULL);
+	zassert_equal(1, result.map1_bstr_cbor._1, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_BstrMapUnion(bstr_map_union_payload2,
+		sizeof(bstr_map_union_payload2), &result, &num_decode));
+	zassert_equal(BstrMapUnion_map2_bstr_c, result.BstrMapUnion_choice, NULL);
+	zassert_equal(2, result.map2_bstr_cbor._2, NULL);
+
+	int ret = cbor_decode_BstrMapUnion(bstr_map_union_payload3_inv,
+		sizeof(bstr_map_union_payload3_inv), &result, &num_decode);
+	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, ret, "%s\n", zcbor_error_str(ret));
+
+	ret = cbor_decode_BstrMapUnion(bstr_map_union_payload4_inv,
+		sizeof(bstr_map_union_payload4_inv), &result, &num_decode);
+	zassert_equal(ZCBOR_ERR_WRONG_VALUE, ret, "%s\n", zcbor_error_str(ret));
+}
+
+
+ZTEST(cbor_decode_test5, test_cbor_bstr_list)
+{
+	uint8_t cbor_bstr_list_payload1[] = {LIST(1),
+		STR_LEN(0x49, 1), LIST(2), 0x18, 42, 0x65, 'h', 'e', 'l', 'l', 'o', END
+		END
+	};
+	uint8_t cbor_bstr_list_payload2_inv[] = {LIST(1),
+		STR_LEN(0x49, 1), LIST(2), 0x18, 42, 0x45, 'h', 'e', 'l', 'l', 'o', END
+		END
+	};
+
+	struct CborBstrList result;
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_CborBstrList(cbor_bstr_list_payload1,
+		sizeof(cbor_bstr_list_payload1), &result, &num_decode));
+
+	zassert_true(result.bstr_present);
+	zassert_equal(STR_LEN(9, 1), result.bstr.bstr.len);
+	zassert_mem_equal(&cbor_bstr_list_payload1[2], result.bstr.bstr.value, result.bstr.bstr.len);
+	zassert_equal(42, result.bstr.Int);
+	zassert_equal(5, result.bstr.tstr.len);
+	zassert_mem_equal("hello", result.bstr.tstr.value, result.bstr.tstr.len);
+
+	int ret = cbor_decode_CborBstrList(cbor_bstr_list_payload2_inv,
+		sizeof(cbor_bstr_list_payload2_inv), &result, &num_decode);
+	zassert_equal(ARR_ERR1, ret, "%s\n", zcbor_error_str(ret));
 }
 
 
