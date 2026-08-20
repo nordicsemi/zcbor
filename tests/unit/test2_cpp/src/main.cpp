@@ -92,11 +92,11 @@ int main(void)
 	zcbor_nil_expect(state_d, NULL);
 	zcbor_undefined_expect(state_d, NULL);
 	zcbor_bstr_start_decode(state_d, &dummy_string);
-	zcbor_bstr_end_decode(state_d);
+	zcbor_bstr_end_decode(state_d, false);
 	zcbor_list_start_decode(state_d);
 	zcbor_map_start_decode(state_d);
-	zcbor_map_end_decode(state_d);
-	zcbor_list_end_decode(state_d);
+	zcbor_map_end_decode(state_d, true);
+	zcbor_list_end_decode(state_d, false);
 	zcbor_multi_decode(1, 1, &one, (zcbor_decoder_t *)zcbor_int32_expect, state_d, (void*)14, 0);
 	ret = zcbor_present_decode(&one_b, (zcbor_decoder_t *)zcbor_int32_expect, state_d, (void*)15);
 
