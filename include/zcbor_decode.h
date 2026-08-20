@@ -271,12 +271,20 @@ bool zcbor_elem_processed(zcbor_state_t *state);
  * In all successful cases, the state is returned pointing to the byte/element
  * after the list/map in the payload.
  *
+ * @param[inout] state   The current state of the decoding.
+ * @param[in] force  If true, forcibly consume the backup even on failure.
+ *                   Note that this leaves the decoding in an undefined state,
+ *                   and should only be used if the another backup can be used
+ *                   to restore the state to a valid state.
+ *                   If false, the decoding is left in the same state as before
+ *                   the call, if the call fails.
+ *
  * @retval true   Everything ok.
  * @retval false  Element count not correct.
  */
-bool zcbor_list_end_decode(zcbor_state_t *state);
-bool zcbor_map_end_decode(zcbor_state_t *state);
-bool zcbor_unordered_map_end_decode(zcbor_state_t *state);
+bool zcbor_list_end_decode(zcbor_state_t *state, bool force);
+bool zcbor_map_end_decode(zcbor_state_t *state, bool force);
+bool zcbor_unordered_map_end_decode(zcbor_state_t *state, bool force);
 bool zcbor_list_map_end_force_decode(zcbor_state_t *state);
 
 /** Find whether the state is at the end of a list or map.
@@ -433,8 +441,16 @@ bool zcbor_bstr_start_decode(zcbor_state_t *state, struct zcbor_string *result);
 /** Finalize decoding a CBOR-encoded bstr.
  *
  * Restore element count from backup.
+ *
+ * @param[inout] state   The current state of the decoding.
+ * @param[in] force  If true, forcibly consume the backup even on failure.
+ *                   Note that this leaves the decoding in an undefined state,
+ *                   and should only be used if the another backup can be used
+ *                   to restore the state to a valid state.
+ *                   If false, the decoding is left in the same state as before
+ *                   the call, if the call fails.
  */
-bool zcbor_bstr_end_decode(zcbor_state_t *state);
+bool zcbor_bstr_end_decode(zcbor_state_t *state, bool force);
 bool zcbor_bstr_end_force_decode(zcbor_state_t *state);
 
 

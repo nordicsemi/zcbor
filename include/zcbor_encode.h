@@ -134,6 +134,9 @@ bool zcbor_map_start_encode(zcbor_state_t *state, size_t size_hint);
  * something has gone wrong.
  *
  * See @ref zcbor_list_start_encode for param docs.
+ *
+ * @note If the call fails, the state is returned to how it was before the
+ *       corresponding `*_start_encode` call.
  */
 bool zcbor_list_end_encode(zcbor_state_t *state, size_t size_hint);
 bool zcbor_map_end_encode(zcbor_state_t *state, size_t size_hint);

@@ -1,5 +1,6 @@
 # zcbor v. 0.9.99
 
+
 * `from_cddl()` and `__init__()` now takes only keyword-only arguments.
   Positional arguments to any constructor or `from_cddl()` function must now be made into keyword arguments.
   Arguments have not changed otherwise.
@@ -8,6 +9,13 @@
 * CDDL parsing has been refactored, and the precedence rules of the CDDL spec are now more closely followed.
   This means that zcbor might e.g. apply labels to a different level of abstraction than it did previously.
   If you have problems, try adding parentheses to clarify the intention of the CDDL.
+
+
+* For decoding, a number of `*_end_decode()` functions have gained a `force` parameter.
+  The argument controls whether the backup taken at the corresponding `*_start_decode()` should be consumed even if the `*_end_decode()` call fails.
+  The previous behavior was inconsistent, so neither `force==true` nor `force==false` directly corresponds to the previous behavior.
+  See the documentation of the parameter in zcbor_decode.h for more info.
+  Applies to the following functions: `zcbor_list_end_decode()`, `zcbor_map_end_decode()`, `zcbor_unordered_map_end_decode()`, and `zcbor_bstr_end_decode()`.
 
 * [Recommended] A new macro `ZCBOR_CAST_FP` has been added for casting function pointers for use in the zcbor API.
   The macro will first check that the function pointer has one of the supported signatures.
