@@ -41,11 +41,10 @@ add_custom_target(pet1_yaml
 # generated code and the necessary zcbor C code files.
 include(${CMAKE_CURRENT_LIST_DIR}/pet.cmake)
 
-add_executable(app src/main.c)
+add_executable(${PROJECT_NAME} src/main.c)
 
 # Link the library from pet.cmake
-target_link_libraries(app PRIVATE pet)
-add_dependencies(app pet1_yaml)
-
+target_link_libraries(${PROJECT_NAME} PRIVATE pet)
+add_dependencies(${PROJECT_NAME} pet1_yaml)
 # Add the directory containing pet1.h
-target_include_directories(app PRIVATE ${PROJECT_BINARY_DIR}/include)
+target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_BINARY_DIR}/include)
