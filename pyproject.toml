@@ -12,12 +12,14 @@ build-backend = 'setuptools.build_meta'
 name = 'zcbor'
 description = 'Code generation and data validation using CDDL schemas'
 readme = 'pypi_README.md'
-license = {text = 'Apache'}
-requires-python = ">=3.10"
+license = 'Apache-2.0'
+license-files = [
+	'LICENSE',
+]
+requires-python = '>=3.10'
 classifiers = [
 	'Development Status :: 4 - Beta',
 	'Intended Audience :: Developers',
-	'License :: OSI Approved :: Apache Software License',
 	'Programming Language :: Python :: 3',
 	'Programming Language :: C',
 	'Topic :: File Formats :: JSON :: JSON Schema',
