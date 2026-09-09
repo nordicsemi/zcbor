@@ -663,6 +663,8 @@ static bool exit_backup(zcbor_state_t *state, bool skip_check_error)
 {
 	ZCBOR_CHECK_NULL(state);
 
+	bool fail = false;
+
 #ifdef ZCBOR_STOP_ON_ERROR
 	int err_backup = ZCBOR_SUCCESS;
 
@@ -679,15 +681,23 @@ static bool exit_backup(zcbor_state_t *state, bool skip_check_error)
 	if (!zcbor_process_backup(state,
 			ZCBOR_FLAG_RESTORE | ZCBOR_FLAG_CONSUME | ZCBOR_FLAG_KEEP_PAYLOAD,
 			ZCBOR_MAX_ELEM_COUNT)) {
-		ZCBOR_FAIL();
+		zcbor_log("zcbor_process_backup() failed: %d.\r\n", zcbor_peek_error(state));
+		fail = true;
 	}
 
 #ifdef ZCBOR_STOP_ON_ERROR
 	if (err_backup != ZCBOR_SUCCESS) {
+		/* Report the stashed error (if present) rather than the one from
+		 * zcbor_process_backup(), since the stashed one is the root cause. */
+		(void)zcbor_pop_error(state);
 		zcbor_error(state, err_backup);
-		ZCBOR_FAIL();
+		fail = true;
 	}
 #endif
+
+	if (fail) {
+		ZCBOR_FAIL();
+	}
 
 	return true;
 }

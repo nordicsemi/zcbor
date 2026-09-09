@@ -2335,7 +2335,7 @@ ZTEST(zcbor_unit_tests, test_end_decode_force_stop_on_error)
 	ZCBOR_STATE_D(state_d2, 2, list_payload, sizeof(list_payload), 10, 0);
 	state_d2->constant_state->stop_on_error = true;
 	state_d2->constant_state->enforce_canonical = false;
-	
+
 	backup_before = state_d2->constant_state->current_backup;
 	zassert_true(zcbor_list_start_decode(state_d2), NULL);
 	zassert_true(zcbor_int32_expect(state_d2, 1), NULL);
@@ -2971,5 +2971,55 @@ ZTEST(zcbor_unit_tests, test_size_hint)
 	}
 #endif
 }
+
+
+/* Test the error reported when exit_backup() has an error stashed and then also fails to
+ * consume the backup. zcbor_process_backup() registers an error of its own in that case,
+ * but the stashed error is what stopped the decoding, so that is the one the caller must
+ * be told about.
+ * The backup is consumed up front to make zcbor_process_backup() fail, which is the
+ * situation a caller ends up in when its backup handling is mismatched. */
+ZTEST(zcbor_unit_tests, test_end_decode_force_no_backup)
+{
+	/* Indefinite length list: [1, 2] */
+	uint8_t list_payload[] = {0x9F, 0x01, 0x02, 0xFF};
+
+	/* First test without backup failure. */
+	ZCBOR_STATE_D(state_d, 2, list_payload, sizeof(list_payload), 10, 0);
+	state_d->constant_state->stop_on_error = true;
+	state_d->constant_state->enforce_canonical = false;
+
+	zassert_true(zcbor_list_start_decode(state_d), NULL);
+	zassert_true(zcbor_int32_expect(state_d, 1), NULL);
+
+	/* array_end_expect() fails because the list end (0xFF) has not been reached, so its
+	 * error is stashed across the zcbor_process_backup() call, and the backup
+	 * should be consumed regardless of the error and the stop_on_error. */
+	zassert_false(zcbor_list_end_decode(state_d, true), NULL);
+	zassert_equal(ZCBOR_ERR_WRONG_TYPE, zcbor_peek_error(state_d), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d)));
+	zassert_equal(0, state_d->constant_state->current_backup, NULL);
+
+
+	/* Test with backup failure. */
+	ZCBOR_STATE_D(state_d2, 2, list_payload, sizeof(list_payload), 10, 0);
+	state_d2->constant_state->stop_on_error = true;
+	state_d2->constant_state->enforce_canonical = false;
+
+	zassert_true(zcbor_list_start_decode(state_d2), NULL);
+	zassert_true(zcbor_int32_expect(state_d2, 1), NULL);
+
+	zassert_true(zcbor_process_backup(state_d2, ZCBOR_FLAG_CONSUME, ZCBOR_MAX_ELEM_COUNT), NULL);
+	zassert_equal(0, state_d2->constant_state->current_backup, NULL);
+
+	/* array_end_expect() fails because the list end (0xFF) has not been reached, so its
+	 * error is stashed across the zcbor_process_backup() call, which then fails with
+	 * ZCBOR_ERR_NO_BACKUP_ACTIVE. */
+	zassert_false(zcbor_list_end_decode(state_d2, true), NULL);
+	zassert_equal(ZCBOR_ERR_WRONG_TYPE, zcbor_peek_error(state_d2), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d2)));
+	zassert_equal(0, state_d2->constant_state->current_backup, NULL);
+}
+
 
 ZTEST_SUITE(zcbor_unit_tests, NULL, NULL, NULL, NULL, NULL);
