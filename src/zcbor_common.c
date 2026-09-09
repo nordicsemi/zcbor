@@ -89,26 +89,20 @@ bool zcbor_new_backup_w_elem_state(zcbor_state_t *state, size_t new_elem_count, 
 	if (backup_elem_state) {
 		ZCBOR_FAIL_IF(!do_elem_state_backup(state, true));
 	}
-	state->decode_state.elem_state_backed_up = backup_elem_state;
+	state->decode_state.elem_state_backed_up = backup_elem_state; /* only read in backups, not live states. */
 #endif
 
-	state->payload_moved = false;
-
-	(state->constant_state->current_backup)++;
-
-	/* use the backup at current_backup - 1, since otherwise, the 0th
-	 * backup would be unused. */
-	size_t i = (state->constant_state->current_backup) - 1;
-
-	state->constant_state->backup_list[i] = *state;
-
-	state->elem_count = new_elem_count;
+	state->payload_moved = false; /* only read in backups, not live states. */
+	state->constant_state->backup_list[state->constant_state->current_backup] = *state;
 
 #ifdef ZCBOR_MAP_SMART_SEARCH
 	if (backup_elem_state) {
 		ZCBOR_FAIL_IF(!do_elem_state_backup(state, false));
 	}
 #endif
+
+	(state->constant_state->current_backup)++;
+	state->elem_count = new_elem_count;
 
 	return true;
 }
