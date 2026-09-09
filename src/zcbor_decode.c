@@ -617,15 +617,16 @@ static bool exit_map(zcbor_state_t *state)
 {
 #ifdef ZCBOR_MAP_SMART_SEARCH
 	/* This has no effect if we are not in an unordered map, since map_elem_count is 0. */
-	uint8_t *new_elem_state = state->decode_state.map_search_elem_state
-		+ zcbor_flags_to_bytes(state->decode_state.map_elem_count);
+	size_t elem_state_size = (size_t)state->constant_state->map_search_elem_state_end
+		- (size_t)state->decode_state.map_search_elem_state;
+	size_t new_flags = zcbor_flags_to_bytes(state->decode_state.map_elem_count);
 
-	if (new_elem_state > state->constant_state->map_search_elem_state_end) {
+	if (new_flags > elem_state_size) {
 		zcbor_log("map_search_elem_state overflowed!\r\n");
 		ZCBOR_ERR(ZCBOR_ERR_MAP_FLAGS_NOT_AVAILABLE);
 	}
 
-	state->decode_state.map_search_elem_state = new_elem_state;
+	state->decode_state.map_search_elem_state += new_flags;
 #else
 	state->decode_state.map_elems_processed = 0;
 #endif
@@ -1099,12 +1100,12 @@ static bool allocate_map_flags(zcbor_state_t *state, size_t old_flags)
 	size_t extra_bytes = new_bytes - old_bytes;
 
 	ZCBOR_ERR_IF(!state->constant_state, ZCBOR_ERR_CONSTANT_STATE_MISSING);
-	const uint8_t *flags_end = state->constant_state->map_search_elem_state_end;
+	size_t elem_state_size = (size_t)state->constant_state->map_search_elem_state_end
+		- (size_t)state->decode_state.map_search_elem_state;
 
 	if (extra_bytes) {
-		if ((state->decode_state.map_search_elem_state + new_bytes) > flags_end) {
-			state->decode_state.map_elem_count
-				= 8 * (size_t)(flags_end - state->decode_state.map_search_elem_state);
+		if (elem_state_size < new_bytes) {
+			state->decode_state.map_elem_count = 8 * elem_state_size;
 			ZCBOR_ERR(ZCBOR_ERR_MAP_FLAGS_NOT_AVAILABLE);
 		}
 
