@@ -635,6 +635,9 @@ static bool exit_map(zcbor_state_t *state)
 }
 
 
+static bool exit_backup(zcbor_state_t *state, bool skip_check_error, bool *backup_exited);
+
+
 bool zcbor_bstr_start_decode(zcbor_state_t *state, struct zcbor_string *result)
 {
 	ZCBOR_PRINT_FUNC_NAME();
@@ -650,7 +653,15 @@ bool zcbor_bstr_start_decode(zcbor_state_t *state, struct zcbor_string *result)
 	if (!zcbor_new_backup(state, ZCBOR_MAX_ELEM_COUNT)) {
 		FAIL_RESTORE();
 	}
-	ZCBOR_FAIL_IF(!exit_map(state)); // Exit the enclosing map if any
+
+	// Exit the enclosing map if any
+	if (!exit_map(state)) {
+		bool backup_exited = false;
+
+		exit_backup(state, true, &backup_exited);
+		ZCBOR_FAIL_IF(!backup_exited);
+		FAIL_RESTORE();
+	}
 
 	state->payload_end = result->value + result->len;
 	state->inside_cbor_bstr = true;
@@ -659,9 +670,16 @@ bool zcbor_bstr_start_decode(zcbor_state_t *state, struct zcbor_string *result)
 }
 
 
-static bool exit_backup(zcbor_state_t *state, bool skip_check_error)
+static bool exit_backup(zcbor_state_t *state, bool skip_check_error, bool *backup_exited)
 {
+	if (backup_exited != NULL) {
+		*backup_exited = false;
+	}
+
 	ZCBOR_CHECK_NULL(state);
+	ZCBOR_ERR_IF(!state->constant_state, ZCBOR_ERR_CONSTANT_STATE_MISSING);
+
+	size_t backup_num = state->constant_state->current_backup;
 
 	bool fail = false;
 
@@ -685,6 +703,11 @@ static bool exit_backup(zcbor_state_t *state, bool skip_check_error)
 		fail = true;
 	}
 
+	/* The backup is exited at this point, update immediately */
+	if (backup_exited != NULL) {
+		*backup_exited = (state->constant_state->current_backup == (backup_num - 1));
+	}
+
 #ifdef ZCBOR_STOP_ON_ERROR
 	if (err_backup != ZCBOR_SUCCESS) {
 		/* Report the stashed error (if present) rather than the one from
@@ -704,7 +727,7 @@ static bool exit_backup(zcbor_state_t *state, bool skip_check_error)
 
 
 #define EXIT_BACKUP_IF_FORCE(state, force, skip_check_error) \
-	ZCBOR_FAIL_IF(force && !exit_backup(state, skip_check_error))
+	ZCBOR_FAIL_IF(force && !exit_backup(state, skip_check_error, NULL))
 
 
 bool zcbor_bstr_end_decode(zcbor_state_t *state, bool force)
@@ -717,7 +740,7 @@ bool zcbor_bstr_end_decode(zcbor_state_t *state, bool force)
 		EXIT_BACKUP_IF_FORCE(state, force, false);
 		ZCBOR_ERR(ZCBOR_ERR_PAYLOAD_NOT_CONSUMED);
 	}
-	return exit_backup(state, false);
+	return exit_backup(state, false, NULL);
 }
 
 
@@ -945,7 +968,14 @@ static bool list_map_start_decode(zcbor_state_t *state,
 
 	state->decode_state.indefinite_length_array = indefinite_length_array;
 
-	ZCBOR_FAIL_IF(!exit_map(state)); // Exit the enclosing map if any
+	// Exit the enclosing map if any
+	if (!exit_map(state)) {
+		bool backup_exited = false;
+
+		exit_backup(state, true, &backup_exited);
+		ZCBOR_FAIL_IF(!backup_exited);
+		FAIL_RESTORE();
+	}
 
 	return true;
 }
@@ -965,7 +995,10 @@ bool zcbor_map_start_decode(zcbor_state_t *state)
 
 	if (ret && !state->decode_state.indefinite_length_array) {
 		if (state->elem_count >= (ZCBOR_MAX_ELEM_COUNT / 2)) {
-			/* The new elem_count is too large. */
+			bool backup_exited = false;
+
+			exit_backup(state, false, &backup_exited);
+			ZCBOR_FAIL_IF(!backup_exited);
 			ERR_RESTORE(ZCBOR_ERR_INT_SIZE);
 		}
 		state->elem_count *= 2;
@@ -1290,7 +1323,7 @@ static bool list_map_end_decode(zcbor_state_t *state, bool force)
 		}
 	}
 
-	return exit_backup(state, false);
+	return exit_backup(state, false, NULL);
 }
 
 
@@ -1370,14 +1403,14 @@ bool zcbor_unordered_map_end_decode(zcbor_state_t *state, bool force)
 bool zcbor_list_map_end_force_decode(zcbor_state_t *state)
 {
 	ZCBOR_PRINT_FUNC_NAME();
-	return exit_backup(state, false);
+	return exit_backup(state, false, NULL);
 }
 
 
 bool zcbor_bstr_end_force_decode(zcbor_state_t *state)
 {
 	ZCBOR_PRINT_FUNC_NAME();
-	return exit_backup(state, false);
+	return exit_backup(state, false, NULL);
 }
 
 

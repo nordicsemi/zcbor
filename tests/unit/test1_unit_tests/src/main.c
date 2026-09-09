@@ -2218,7 +2218,104 @@ ZTEST(zcbor_unit_tests, test_decode_start_failure_state)
 	zassert_equal(ZCBOR_ERR_WRONG_TYPE, zcbor_peek_error(state_d), NULL);
 	dec_assert_unchanged(state_d, &snap, "bstr_start wrong type");
 	zassert_true(zcbor_int32_expect(state_d, 1), NULL);
+
+	/* A map header with an element count that cannot be doubled without overflowing
+	 * elem_count. state_d2 has no backups, so the failure happens before the map is
+	 * entered. state_d3 has one, so the failure happens after the backup has been made,
+	 * which means the backup must be exited again on the way out. */
+#if SIZE_MAX == UINT64_MAX
+	uint8_t huge_map[] = {0xBB, 0x80, 0, 0, 0, 0, 0, 0, 0};
+#elif SIZE_MAX == UINT32_MAX
+	uint8_t huge_map[] = {0xBA, 0x80, 0, 0, 0};
+#else
+#error "Unsupported width of size_t."
+#endif
+
+	ZCBOR_STATE_D(state_d2, 0, huge_map, sizeof(huge_map), 1, 0);
+	ZCBOR_STATE_D(state_d3, 1, huge_map, sizeof(huge_map), 1, 0);
+
+	dec_snapshot(state_d2, &snap);
+	zassert_false(zcbor_map_start_decode(state_d2), NULL);
+	zassert_equal(ZCBOR_ERR_NO_BACKUP_MEM, zcbor_peek_error(state_d2), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d2)));
+	dec_assert_unchanged(state_d2, &snap, "map_start no backup mem");
+
+	dec_snapshot(state_d3, &snap);
+	zassert_false(zcbor_map_start_decode(state_d3), NULL);
+	zassert_equal(ZCBOR_ERR_INT_SIZE, zcbor_peek_error(state_d3), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d3)));
+	dec_assert_unchanged(state_d3, &snap, "map_start elem_count too large");
 }
+
+
+#ifdef ZCBOR_MAP_SMART_SEARCH
+/* Position the state on the value of key 1 of the unordered map at the start of the
+ * payload, then take away the map flag storage that exit_map() needs to descend into that
+ * value. allocate_map_flags() always reserves enough room for the maps that are actually
+ * entered, so shrinking the buffer afterwards is the only way to reach the failure. */
+static void exhaust_map_flags(zcbor_state_t *state)
+{
+	zassert_true(zcbor_unordered_map_start_decode(state), NULL);
+	zassert_true(zcbor_unordered_map_search(ZCBOR_CAST_FP(zcbor_int32_pexpect), state,
+		&(int32_t){1}), NULL);
+
+	/* exit_backup() only has to stash the error from exit_map() when stop_on_error is
+	 * enabled, so that is where the interesting cleanup happens. */
+	(void)zcbor_pop_error(state);
+	state->constant_state->stop_on_error = true;
+
+	state->constant_state->map_search_elem_state_end
+		= state->decode_state.map_search_elem_state;
+}
+
+
+/* Test the exit_map() failure path in the *_start_decode() functions. All three take a
+ * backup before calling exit_map(), so that backup has to be exited again on the way out,
+ * and the payload and element count restored, leaving the map usable. */
+ZTEST(zcbor_unit_tests, test_start_decode_exit_map_fail)
+{
+	/* MAP(1) with a bstr, a list and a map as the value of key 1. */
+	uint8_t bstr_payload[] = {0xA1, 0x01, 0x41, 0x01};
+	uint8_t list_payload[] = {0xA1, 0x01, 0x81, 0x01};
+	uint8_t map_payload[] = {0xA1, 0x01, 0xA1, 0x01, 0x01};
+	struct zcbor_dec_state_snapshot snap;
+
+	ZCBOR_STATE_D(state_d, 2, bstr_payload, sizeof(bstr_payload), 10, 8);
+	exhaust_map_flags(state_d);
+	dec_snapshot(state_d, &snap);
+	zassert_false(zcbor_bstr_start_decode(state_d, NULL), NULL);
+	zassert_equal(ZCBOR_ERR_MAP_FLAGS_NOT_AVAILABLE, zcbor_peek_error(state_d), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d)));
+	dec_assert_unchanged(state_d, &snap, "bstr_start exit_map fail");
+
+	ZCBOR_STATE_D(state_d2, 2, list_payload, sizeof(list_payload), 10, 8);
+	exhaust_map_flags(state_d2);
+	dec_snapshot(state_d2, &snap);
+	zassert_false(zcbor_list_start_decode(state_d2), NULL);
+	zassert_equal(ZCBOR_ERR_MAP_FLAGS_NOT_AVAILABLE, zcbor_peek_error(state_d2), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d2)));
+	dec_assert_unchanged(state_d2, &snap, "list_start exit_map fail");
+
+	ZCBOR_STATE_D(state_d3, 2, map_payload, sizeof(map_payload), 10, 8);
+	uint8_t *flags_end = state_d3->constant_state->map_search_elem_state_end;
+
+	exhaust_map_flags(state_d3);
+	dec_snapshot(state_d3, &snap);
+	zassert_false(zcbor_map_start_decode(state_d3), NULL);
+	zassert_equal(ZCBOR_ERR_MAP_FLAGS_NOT_AVAILABLE, zcbor_peek_error(state_d3), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d3)));
+	dec_assert_unchanged(state_d3, &snap, "map_start exit_map fail");
+
+	/* Give the flag storage back to check that the map really was left usable, i.e. that
+	 * the failed call restored everything it had changed. */
+	(void)zcbor_pop_error(state_d3);
+	state_d3->constant_state->map_search_elem_state_end = flags_end;
+	zassert_true(zcbor_map_start_decode(state_d3), NULL);
+	zassert_true(zcbor_int32_expect(state_d3, 1), NULL);
+	zassert_true(zcbor_int32_expect(state_d3, 1), NULL);
+	zassert_true(zcbor_map_end_decode(state_d3, false), NULL);
+}
+#endif
 
 
 /* Test the state left behind when the *_end_decode() functions fail because the container
