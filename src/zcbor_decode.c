@@ -679,7 +679,7 @@ static bool exit_backup(zcbor_state_t *state, bool skip_check_error, bool *backu
 	ZCBOR_CHECK_NULL(state);
 	ZCBOR_ERR_IF(!state->constant_state, ZCBOR_ERR_CONSTANT_STATE_MISSING);
 
-	size_t backup_num = state->constant_state->current_backup;
+	size_t backup_num = zcbor_get_backup_num(state);
 
 	bool fail = false;
 
@@ -705,7 +705,7 @@ static bool exit_backup(zcbor_state_t *state, bool skip_check_error, bool *backu
 
 	/* The backup is exited at this point, update immediately */
 	if (backup_exited != NULL) {
-		*backup_exited = (state->constant_state->current_backup == (backup_num - 1));
+		*backup_exited = (zcbor_get_backup_num(state) == (backup_num - 1));
 	}
 
 #ifdef ZCBOR_STOP_ON_ERROR
@@ -964,7 +964,7 @@ static bool list_map_start_decode(zcbor_state_t *state,
 				? ZCBOR_LARGE_ELEM_COUNT : new_elem_count)) {
 		FAIL_RESTORE();
 	}
-	state->decode_state.map_start_backup_num = state->constant_state->current_backup;
+	state->decode_state.map_start_backup_num = zcbor_get_backup_num(state);
 
 	state->decode_state.indefinite_length_array = indefinite_length_array;
 
@@ -1220,9 +1220,11 @@ bool zcbor_unordered_map_search(zcbor_decoder_t key_decoder, zcbor_state_t *stat
 
 	uint8_t const *payload_bak = state->payload;
 	size_t elem_count = state->elem_count;
+	size_t backup_num = zcbor_get_backup_num(state);
 
 	/* Loop once through all the elements of the map. */
 	do {
+		ZCBOR_ERR_IF(zcbor_get_backup_num(state) != backup_num, ZCBOR_ERR_BACKUP_MISMATCH);
 		if (zcbor_array_at_end(state)) {
 			if (!handle_map_end(state)) {
 				goto error;
@@ -1242,11 +1244,13 @@ bool zcbor_unordered_map_search(zcbor_decoder_t key_decoder, zcbor_state_t *stat
 
 		if (should_try_key(state)) {
 			if (try_key(state, key_result, key_decoder)) {
+				ZCBOR_ERR_IF(zcbor_get_backup_num(state) != backup_num, ZCBOR_ERR_BACKUP_MISMATCH);
 				if (!ZCBOR_MANUALLY_PROCESS_ELEM(state)) {
 					ZCBOR_FAIL_IF(!zcbor_elem_processed(state));
 				}
 				return true;
 			}
+			ZCBOR_ERR_IF(zcbor_get_backup_num(state) != backup_num, ZCBOR_ERR_BACKUP_MISMATCH);
 		} else {
 			zcbor_log("Skipping element at index %zu.\n", get_current_index(state, 0));
 		}
@@ -1891,6 +1895,7 @@ static bool multi_decode_backup(size_t min_decode,
 	for (size_t i = 0; i < max_decode; i++) {
 		uint8_t const *payload_bak;
 		size_t elem_count_bak;
+		size_t backup_num_outer = zcbor_get_backup_num(state);
 
 		if (backup) {
 			if (!zcbor_new_backup_w_elem_state(state, state->elem_count, true)) {
@@ -1901,7 +1906,11 @@ static bool multi_decode_backup(size_t min_decode,
 			elem_count_bak = state->elem_count;
 		}
 
+		size_t backup_num_inner = zcbor_get_backup_num(state);
+
 		if (!decoder(state, (uint8_t *)result + i*result_len)) {
+			ZCBOR_ERR_IF(zcbor_get_backup_num(state) != backup_num_inner, ZCBOR_ERR_BACKUP_MISMATCH);
+
 			*num_decode = i;
 
 			if (backup) {
@@ -1914,17 +1923,21 @@ static bool multi_decode_backup(size_t min_decode,
 				state->payload = payload_bak;
 				state->elem_count = elem_count_bak;
 			}
+			ZCBOR_ERR_IF(zcbor_get_backup_num(state) != backup_num_outer, ZCBOR_ERR_BACKUP_MISMATCH);
 
 			zcbor_log("Found %zu elements.\r\n", i);
 			ZCBOR_ERR_IF(i < min_decode, ZCBOR_ERR_ITERATIONS);
 			return true;
 		}
 
+		ZCBOR_ERR_IF(zcbor_get_backup_num(state) != backup_num_inner, ZCBOR_ERR_BACKUP_MISMATCH);
+
 		if (backup) {
 			if (!zcbor_process_backup(state, ZCBOR_FLAG_CONSUME, ZCBOR_MAX_ELEM_COUNT)) {
 				ZCBOR_FAIL();
 			}
 		}
+		ZCBOR_ERR_IF(zcbor_get_backup_num(state) != backup_num_outer, ZCBOR_ERR_BACKUP_MISMATCH);
 	}
 	zcbor_log("Found %zu elements.\r\n", max_decode);
 	*num_decode = max_decode;

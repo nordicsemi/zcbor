@@ -78,11 +78,14 @@ set(py_command
     CountUnion
     Tags
     TwoMaps
+    BstrMapUnion
+    AmbigMap
     WrapListGroup
     WrapListGroupOpt1
     WrapListGroupOpt2
     WrapListGroupOptMult
     OptCbor
+    BstrMap
     OptFloatUnion
     OptFloatThenInt
     CborBstrList

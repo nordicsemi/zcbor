@@ -782,11 +782,18 @@ bool zcbor_multi_encode(const size_t num_encode, zcbor_encoder_t encoder,
 	ZCBOR_CHECK_NULL(state);
 	ZCBOR_CHECK_ERROR();
 
+	size_t backup_num = zcbor_get_backup_num(state);
+
 	for (size_t i = 0; i < num_encode; i++) {
-		if (!encoder(state, (const uint8_t *)input + i*result_len)) {
+		bool ret = encoder(state, (const uint8_t *)input + i*result_len);
+
+		ZCBOR_ERR_IF(zcbor_get_backup_num(state) != backup_num, ZCBOR_ERR_BACKUP_MISMATCH);
+
+		if (!ret) {
 			ZCBOR_FAIL();
 		}
 	}
+
 	zcbor_log("Encoded %zu elements.\n", num_encode);
 	return true;
 }

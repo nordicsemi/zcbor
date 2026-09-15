@@ -1578,10 +1578,11 @@ ZTEST(zcbor_unit_tests, test_error_str)
 	test_str(ZCBOR_ERR_TOO_LARGE_FOR_STRING);
 	test_str(ZCBOR_ERR_NOT_IN_FRAGMENT);
 	test_str(ZCBOR_ERR_INSIDE_STRING);
+	test_str(ZCBOR_ERR_BACKUP_MISMATCH);
 	test_str(ZCBOR_ERR_UNKNOWN);
 	zassert_mem_equal(zcbor_error_str(-1), "ZCBOR_ERR_UNKNOWN", sizeof("ZCBOR_ERR_UNKNOWN"), NULL);
 	zassert_mem_equal(zcbor_error_str(-10), "ZCBOR_ERR_UNKNOWN", sizeof("ZCBOR_ERR_UNKNOWN"), NULL);
-	zassert_mem_equal(zcbor_error_str(ZCBOR_ERR_INSIDE_STRING + 1), "ZCBOR_ERR_UNKNOWN", sizeof("ZCBOR_ERR_UNKNOWN"), NULL);
+	zassert_mem_equal(zcbor_error_str(ZCBOR_ERR_BACKUP_MISMATCH + 1), "ZCBOR_ERR_UNKNOWN", sizeof("ZCBOR_ERR_UNKNOWN"), NULL);
 	zassert_mem_equal(zcbor_error_str(100000), "ZCBOR_ERR_UNKNOWN", sizeof("ZCBOR_ERR_UNKNOWN"), NULL);
 }
 
@@ -1879,7 +1880,8 @@ ZTEST(zcbor_unit_tests, test_unordered_map)
 	ret = zcbor_unordered_map_end_decode(state_d, false);
 	zassert_false(ret, NULL);
 	zassert_equal(ZCBOR_ERR_ELEMS_NOT_PROCESSED, zcbor_peek_error(state_d), NULL);
-	zassert_true(zcbor_unordered_map_search(ZCBOR_CAST_FP(zcbor_int32_pexpect), state_d, &(int32_t){2}), NULL);
+	ret = zcbor_unordered_map_search(ZCBOR_CAST_FP(zcbor_int32_pexpect), state_d, &(int32_t){2});
+	zassert_true(ret, "err: %d\n", zcbor_peek_error(state_d));
 	zassert_true(zcbor_int32_expect(state_d, 2), NULL);
 	ret = zcbor_unordered_map_end_decode(state_d, false);
 	zassert_true(ret, "err: %d\n", zcbor_peek_error(state_d));
@@ -3116,6 +3118,202 @@ ZTEST(zcbor_unit_tests, test_end_decode_force_no_backup)
 	zassert_equal(ZCBOR_ERR_WRONG_TYPE, zcbor_peek_error(state_d2), "err: %s\n",
 		zcbor_error_str(zcbor_peek_error(state_d2)));
 	zassert_equal(0, state_d2->constant_state->current_backup, NULL);
+}
+
+
+
+bool dummy_function_extra_backup(zcbor_state_t *state, uint32_t *result)
+{
+	/* This function tests logic for checking the consistency of backups. */
+	(void)result;
+	zassert_true(zcbor_new_backup(state, 0), NULL);
+	return true;
+}
+
+
+bool dummy_function_removed_backup(zcbor_state_t *state, uint32_t *result)
+{
+	/* This function tests logic for checking the consistency of backups. */
+	zassert_true(zcbor_process_backup(state, ZCBOR_FLAG_CONSUME, ZCBOR_MAX_ELEM_COUNT), NULL);
+	return true;
+}
+
+
+bool dummy_function_extra_backup_fail(zcbor_state_t *state, uint32_t *result)
+{
+	/* Leave a backup behind and fail, to check that the reported error is the one
+	 * from here, and not the leftover backup. */
+	(void)result;
+	zassert_true(zcbor_new_backup(state, 0), NULL);
+	zcbor_error(state, ZCBOR_ERR_WRONG_TYPE);
+	return false;
+}
+
+
+bool dummy_function_extra_backup_nomatch(zcbor_state_t *state, uint32_t *result)
+{
+	/* Change the backup count and then report failure, so the mismatch has to be caught
+	 * on the path taken when the called function fails. */
+	(void)result;
+	zassert_true(zcbor_new_backup(state, 0), NULL);
+	return false;
+}
+
+
+bool dummy_function_removed_backup_nomatch(zcbor_state_t *state, uint32_t *result)
+{
+	/* The same, in the other direction. */
+	(void)result;
+	zassert_true(zcbor_process_backup(state, ZCBOR_FLAG_CONSUME, ZCBOR_MAX_ELEM_COUNT), NULL);
+	return false;
+}
+
+
+bool dummy_function_extra_backup_e(zcbor_state_t *state, const uint32_t *result)
+{
+	return dummy_function_extra_backup(state, (uint32_t *)result);
+}
+
+
+bool dummy_function_removed_backup_e(zcbor_state_t *state, const uint32_t *result)
+{
+	return dummy_function_removed_backup(state, (uint32_t *)result);
+}
+
+
+bool dummy_function_extra_backup_nomatch_e(zcbor_state_t *state, const uint32_t *result)
+{
+	return dummy_function_extra_backup_nomatch(state, (uint32_t *)result);
+}
+
+
+ZTEST(zcbor_unit_tests, test_backup_mismatch)
+{
+	zcbor_state_t states[4];
+	uint8_t dummy_payload[10] = {0xA1, 0x18, 42, 0x18, 43 /* uint: 42, 43 */};
+	uint8_t payload[10];
+	bool ret;
+	int err = zcbor_entry_function(dummy_payload, sizeof(dummy_payload),
+					&dummy_entry_func_result, NULL, states,
+					ZCBOR_CAST_FP(dummy_function_extra_backup),
+					sizeof(states) / sizeof(zcbor_state_t), 1);
+	zassert_equal(err, ZCBOR_ERR_BACKUP_MISMATCH, "err: %d\n", err);
+
+	err = zcbor_entry_function(dummy_payload, sizeof(dummy_payload),
+					&dummy_entry_func_result, NULL, states,
+					ZCBOR_CAST_FP(dummy_function_extra_backup_fail),
+					sizeof(states) / sizeof(zcbor_state_t), 1);
+	zassert_equal(err, ZCBOR_ERR_WRONG_TYPE, "err: %s\n", zcbor_error_str(err));
+
+	ZCBOR_STATE_D(state_d1, 2, dummy_payload, sizeof(dummy_payload), 1, 0);
+	ret = zcbor_multi_decode_w_backup(1, 2, NULL, ZCBOR_CAST_FP(dummy_function_extra_backup), state_d1, NULL, 0);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_d1), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d1)));
+
+	ZCBOR_STATE_D(state_d2, 2, dummy_payload, sizeof(dummy_payload), 1, 0);
+	zassert_true(zcbor_new_backup(state_d2, 0), NULL);
+	ret = zcbor_multi_decode_w_backup(1, 2, NULL, ZCBOR_CAST_FP(dummy_function_removed_backup), state_d2, NULL, 0);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_d2), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d2)));
+
+	ZCBOR_STATE_D(state_d3, 2, dummy_payload, sizeof(dummy_payload), 1, 0);
+	ret = zcbor_multi_decode(1, 2, NULL, ZCBOR_CAST_FP(dummy_function_extra_backup), state_d3, NULL, 0);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_d3), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d3)));
+
+	ZCBOR_STATE_D(state_d4, 2, dummy_payload, sizeof(dummy_payload), 1, 0);
+	zassert_true(zcbor_new_backup(state_d4, 0), NULL);
+	ret = zcbor_multi_decode(1, 2, NULL, ZCBOR_CAST_FP(dummy_function_removed_backup), state_d4, NULL, 0);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_d4), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d4)));
+
+	ZCBOR_STATE_D(state_d5, 2, dummy_payload, sizeof(dummy_payload), 1, 8);
+	ret = zcbor_unordered_map_start_decode(state_d5);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d5)));
+	ret = zcbor_unordered_map_search(ZCBOR_CAST_FP(dummy_function_extra_backup), state_d5, NULL);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_d5), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d5)));
+
+	ZCBOR_STATE_D(state_d6, 3, dummy_payload, sizeof(dummy_payload), 1, 8);
+	zassert_true(zcbor_new_backup(state_d6, 1), NULL);
+	ret = zcbor_unordered_map_start_decode(state_d6);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d6)));
+	ret = zcbor_unordered_map_search(ZCBOR_CAST_FP(dummy_function_removed_backup), state_d6, NULL);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_d6), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d6)));
+
+
+	ZCBOR_STATE_E(state_e1, 2, payload, sizeof(payload), 20);
+	ret = zcbor_multi_encode(1, ZCBOR_CAST_FP(dummy_function_extra_backup_e), state_e1, NULL, 0);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_e1), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_e1)));
+
+	ZCBOR_STATE_E(state_e2, 2, payload, sizeof(payload), 20);
+	zassert_true(zcbor_new_backup(state_e2, 0), NULL);
+	ret = zcbor_multi_encode(1, ZCBOR_CAST_FP(dummy_function_removed_backup_e), state_e2, NULL, 0);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_e2), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_e2)));
+
+	/* The cases above all call a function that succeeds, which means they only ever
+	 * reach the checks on the success path. Repeat them with functions that report
+	 * failure, so the checks on the failure path are covered too. */
+	size_t num_decode;
+
+	ZCBOR_STATE_D(state_d7, 2, dummy_payload, sizeof(dummy_payload), 1, 8);
+	ret = zcbor_unordered_map_start_decode(state_d7);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d7)));
+	ret = zcbor_unordered_map_search(ZCBOR_CAST_FP(dummy_function_extra_backup_nomatch), state_d7, NULL);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_d7), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d7)));
+
+	ZCBOR_STATE_D(state_d8, 3, dummy_payload, sizeof(dummy_payload), 1, 8);
+	zassert_true(zcbor_new_backup(state_d8, 1), NULL);
+	ret = zcbor_unordered_map_start_decode(state_d8);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d8)));
+	ret = zcbor_unordered_map_search(ZCBOR_CAST_FP(dummy_function_removed_backup_nomatch), state_d8, NULL);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_d8), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d8)));
+
+	ZCBOR_STATE_D(state_d9, 2, dummy_payload, sizeof(dummy_payload), 1, 0);
+	ret = zcbor_multi_decode(1, 2, &num_decode, ZCBOR_CAST_FP(dummy_function_extra_backup_nomatch), state_d9, NULL, 0);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_d9), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d9)));
+
+	ZCBOR_STATE_D(state_d10, 2, dummy_payload, sizeof(dummy_payload), 1, 0);
+	ret = zcbor_multi_decode_w_backup(1, 2, &num_decode, ZCBOR_CAST_FP(dummy_function_removed_backup_nomatch), state_d10, NULL, 0);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_d10), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d10)));
+
+	/* The checks above are all backed up by the one at the top of the next loop iteration.
+	 * Here the value cannot be skipped, so the loop ends instead, and the mismatch must
+	 * still take precedence over the error from the payload. */
+	uint8_t unskippable_payload[] = {0xA1, 0x18, 42, 0x1C};
+
+	ZCBOR_STATE_D(state_d11, 2, unskippable_payload, sizeof(unskippable_payload), 1, 8);
+	ret = zcbor_unordered_map_start_decode(state_d11);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d11)));
+	ret = zcbor_unordered_map_search(ZCBOR_CAST_FP(dummy_function_extra_backup_nomatch), state_d11, NULL);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_d11), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d11)));
+
+	/* A state array of 1 has no constant_state at all, so the backup checks must reach
+	 * the backup count through zcbor_get_backup_num() rather than dereferencing it. */
+	zcbor_state_t state_no_const_e[1];
+	zcbor_new_encode_state(state_no_const_e, 1, payload, sizeof(payload), 0);
+	zassert_is_null(state_no_const_e[0].constant_state, NULL);
+	zassert_true(zcbor_multi_encode(1, ZCBOR_CAST_FP(zcbor_int32_encode), state_no_const_e, &(int32_t){14}, 0), NULL);
+
+	zcbor_state_t state_no_const_d[1];
+	zcbor_new_decode_state(state_no_const_d, 1, dummy_payload, sizeof(dummy_payload), 1, NULL, 0);
+	zassert_is_null(state_no_const_d[0].constant_state, NULL);
+	zassert_true(zcbor_multi_decode(1, 1, &num_decode, ZCBOR_CAST_FP(zcbor_any_skip), state_no_const_d, NULL, 0), NULL);
+
+	/* zcbor_multi_encode() checks inside the loop, so the leak is caught even though the
+	 * encoder fails in the same call. */
+	ZCBOR_STATE_E(state_e3, 2, payload, sizeof(payload), 20);
+	ret = zcbor_multi_encode(1, ZCBOR_CAST_FP(dummy_function_extra_backup_nomatch_e), state_e3, NULL, 0);
+	zassert_false(ret, NULL);
+	zassert_equal(ZCBOR_ERR_BACKUP_MISMATCH, zcbor_peek_error(state_e3), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_e3)));
 }
 
 

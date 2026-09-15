@@ -346,6 +346,7 @@ do { \
 #define ZCBOR_ERR_TOO_LARGE_FOR_STRING 26 ///! Trying to start a nested string that is too large to fit in the container string.
 #define ZCBOR_ERR_NOT_IN_FRAGMENT 27 ///! The action requires being inside a fragmented string, but we are currently not inside one.
 #define ZCBOR_ERR_INSIDE_STRING 28 ///! Currently encoding/decoding a non-CBOR-encoded string, so cannot use most zcbor encoding/decoding functions
+#define ZCBOR_ERR_BACKUP_MISMATCH 29 ///! An encoding or decoding action unexpectedly changed the active backup count. The zcbor state is likely corrupted.
 #define ZCBOR_ERR_UNKNOWN 31
 
 /** The largest possible elem_count. */
@@ -505,6 +506,15 @@ static inline void zcbor_error(zcbor_state_t *state, int err)
 static inline bool zcbor_payload_at_end(const zcbor_state_t *state)
 {
 	return (state->payload == state->payload_end);
+}
+
+
+static inline size_t zcbor_get_backup_num(const zcbor_state_t *state)
+{
+	if (!state || !state->constant_state) {
+		return 0;
+	}
+	return state->constant_state->current_backup;
 }
 
 /** Introduce a new payload section.
