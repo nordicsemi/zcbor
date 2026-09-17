@@ -283,7 +283,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        python-version: ['3.12', '3.13', '3.14']
+        python-version: ['3.12', '3.13', '3.14', '3.15']
         asserts: ["", "-x VERBOSE=ON -x ASSERTS=ON"]
     name: Release tests 3 - Twister (Python ${{ matrix.python-version }}${{ matrix.asserts != '' && ' with asserts' || '' }})
     needs:
