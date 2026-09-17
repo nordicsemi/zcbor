@@ -1864,6 +1864,52 @@ class TestCodeGeneration(TestCase):
         self.assertEqual("\tstruct zcbor_string test_tstr_l_tstr;", res[0][0][2])
         self.assertEqual("}", res[0][0][3])
 
+    def test_no_struct_for_literal_key(self):
+        cddl_string = 'test = {? "image" => uint}'
+        types = self.do_test_code_generation(cddl_string)
+        res = types.my_types["test"].type_def()
+        self.assertEqual(1, len(res))
+        self.assertEqual("struct test", res[0][1])
+        self.assertEqual(4, len(res[0][0]))
+        self.assertEqual("struct {", res[0][0][0])
+        self.assertEqual("\tuint32_t test_image;", res[0][0][1])
+        self.assertEqual("\tbool test_image_present;", res[0][0][2])
+        self.assertEqual("}", res[0][0][3])
+
+        entry = types.my_types["test"].value[0]
+        self.assertFalse(entry.repeated_type_def_condition())
+        # The literal key still has to be matched at runtime, so the entry must keep its
+        # own xcoder function even though it no longer needs a struct.
+        self.assertTrue(entry.repeated_single_func_impl_condition())
+
+    def test_struct_for_stored_key(self):
+        cddl_string = "test = {? int => uint}"
+        res = self.do_test_code_generation(cddl_string).my_types["test"].type_def()
+        self.assertEqual(2, len(res))
+        self.assertEqual("struct test_intuint_r", res[0][1])
+        self.assertEqual(4, len(res[0][0]))
+        self.assertEqual("struct {", res[0][0][0])
+        self.assertEqual("\tint32_t test_intuint_key;", res[0][0][1])
+        self.assertEqual("\tuint32_t test_intuint;", res[0][0][2])
+        self.assertEqual("}", res[0][0][3])
+
+    def test_backup_for_repeated_keyed_group(self):
+        cddl_string = "group1 = 3*3 (uint => tstr, nint => bstr)\ntest = {1*3 group1}"
+        types = self.do_test_code_generation(cddl_string)
+        entry = types.my_types["test"].value[0]
+        self.assertEqual("OTHER", entry.type)
+
+        # The group needs no wrapping struct of its own, ...
+        self.assertFalse(entry.repeated_type_def_condition())
+        self.assertEqual("struct group1", entry.repeated_type_name())
+
+        # ... but each repetition can still fail partway through, so it must be decoded
+        # via its own function and with a backup to rewind to. This is what the
+        # GROUP/UNION branch of key_var_condition() is there for; dropping that branch
+        # silently turns the multi_decode() below into the variant without a backup.
+        self.assertTrue(entry.repeated_single_func_impl_condition())
+        self.assertTrue(entry.multi_decode_w_backup_condition())
+
     def test_float_range_check_condition1(self):
         cddl_string = "test = ? 1.0..10.0"
         res = self.do_test_code_generation(cddl_string)

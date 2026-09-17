@@ -165,7 +165,7 @@ ZTEST(cbor_encode_test3, test_number_map)
 	struct NumberMap number_map1 = {
 		.byte = 42,
 		.opt_short_present = true,
-		.opt_short.opt_short = 0x1234,
+		.opt_short = 0x1234,
 		.opt_cbor_present = true,
 		.opt_cbor.opt_cbor_cbor = 0x12345678,
 	};
@@ -612,8 +612,8 @@ ZTEST(cbor_encode_test3, test_map)
 		.uint7uint = 1,
 		.twotothree_count = 2,
 		.twotothree = {
-			{.twotothree = {.value = "hello", .len = 5}},
-			{.twotothree = {.len = 0}},
+			{.value = "hello", .len = 5},
+			{.len = 0},
 		}
 	};
 	struct Map map2 = {
@@ -622,9 +622,9 @@ ZTEST(cbor_encode_test3, test_map)
 		.uint7uint = 1,
 		.twotothree_count = 3,
 		.twotothree = {
-			{.twotothree = {.value = "hello", .len = 5}},
-			{.twotothree = {.len = 0}},
-			{.twotothree = {.len = 0}},
+			{.value = "hello", .len = 5},
+			{.len = 0},
+			{.len = 0},
 		}
 	};
 	struct Map map3 = {
@@ -632,8 +632,8 @@ ZTEST(cbor_encode_test3, test_map)
 		.nint8uint = 1,
 		.twotothree_count = 2,
 		.twotothree = {
-			{.twotothree = {.value = "hello", .len = 5}},
-			{.twotothree = {.len = 0}},
+			{.value = "hello", .len = 5},
+			{.len = 0},
 		}
 	};
 
@@ -1251,14 +1251,14 @@ ZTEST(cbor_encode_test3, test_doublemap)
 				.uintmap_key = 1,
 				.MyKeys_m = {
 					.uint1int_present = true,
-					.uint1int = {.uint1int = 1},
+					.uint1int = 1,
 				}
 			},
 			{
 				.uintmap_key = 2,
 				.MyKeys_m = {
 					.uint2int_present = true,
-					.uint2int = {.uint2int = 2},
+					.uint2int = 2,
 				}
 			},
 		}

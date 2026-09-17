@@ -49,6 +49,11 @@
   * The naming logic has been somewhat refactored. Regenerate if needed.
     E.g. the application of '_r' to type names has been changed.
 
+  * Some C types have now lost a level of abstraction, when that abstraction was unneccessary (single member struct).
+    In particular, map entries whose key is a literal no longer get a wrapping struct of their own.
+    Such members are now declared directly in the parent struct, removing one level of nesting from the access path.
+    Example: for `Upload = {? "image" => uint}`, `result.Upload_image.Upload_image` becomes `result.Upload_image`.
+
 
 # zcbor v. 0.9.0
 

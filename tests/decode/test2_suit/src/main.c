@@ -137,12 +137,10 @@ ZTEST(cbor_decode_test2, test_5)
 			->SUIT_Manifest_suit_common
 			.SUIT_Manifest_suit_common_cbor
 			.SUIT_Common_suit_common_sequence
-			.SUIT_Common_suit_common_sequence
 			.value,
 			manifest
 			->SUIT_Manifest_suit_common
 			.SUIT_Manifest_suit_common_cbor
-			.SUIT_Common_suit_common_sequence
 			.SUIT_Common_suit_common_sequence
 			.len,
 			&sequence, &decode_len);
@@ -150,7 +148,6 @@ ZTEST(cbor_decode_test2, test_5)
 	zassert_equal(manifest
 			->SUIT_Manifest_suit_common
 			.SUIT_Manifest_suit_common_cbor
-			.SUIT_Common_suit_common_sequence
 			.SUIT_Common_suit_common_sequence
 			.len, decode_len, NULL);
 	zassert_equal(1, sequence
@@ -172,17 +169,14 @@ ZTEST(cbor_decode_test2, test_5)
 	res = cbor_decode_SUIT_Command_Sequence(
 			manifest
 			->SUIT_Manifest_suit_run
-			.SUIT_Manifest_suit_run
 			.value,
 			manifest
 			->SUIT_Manifest_suit_run
-			.SUIT_Manifest_suit_run
 			.len,
 			&sequence, &decode_len);
 	zassert_equal(ZCBOR_SUCCESS, res, "Parsing run command sequence failed.");
 	zassert_equal(manifest
 			->SUIT_Manifest_suit_run
-			.SUIT_Manifest_suit_run
 			.len, decode_len, NULL);
 }
 

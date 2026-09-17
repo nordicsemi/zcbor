@@ -345,21 +345,18 @@ void test_manifest(const uint8_t *input, uint32_t len)
 	zassert_equal(ZCBOR_SUCCESS, res, "top-level decoding failed.");
 
 	dependency1 = &outerwrapper1
-		.SUIT_Outer_Wrapper_suit_dependency_resolution
 		.SUIT_Outer_Wrapper_suit_dependency_resolution;
 	dependency1_present = outerwrapper1
 		.SUIT_Outer_Wrapper_suit_dependency_resolution_present;
 	test_command_sequence(dependency1, dependency1_present, "dependency1");
 
 	fetch1 = &outerwrapper1
-		.SUIT_Outer_Wrapper_suit_payload_fetch
 		.SUIT_Outer_Wrapper_suit_payload_fetch;
 	fetch1_present = outerwrapper1
 		.SUIT_Outer_Wrapper_suit_payload_fetch_present;
 	test_command_sequence(fetch1, fetch1_present, "fetch1");
 
 	install1 = &outerwrapper1
-		.SUIT_Outer_Wrapper_suit_install
 		.SUIT_Outer_Wrapper_suit_install;
 	install1_present = outerwrapper1
 		.SUIT_Outer_Wrapper_suit_install_present;
@@ -372,7 +369,6 @@ void test_manifest(const uint8_t *input, uint32_t len)
 	common_seq = &manifest
 		->SUIT_Manifest_suit_common
 		.SUIT_Manifest_suit_common_cbor
-		.SUIT_Common_suit_common_sequence
 		.SUIT_Common_suit_common_sequence;
 	common_seq_present = manifest
 		->SUIT_Manifest_suit_common_present
@@ -416,22 +412,19 @@ void test_manifest(const uint8_t *input, uint32_t len)
 	test_command_sequence(install2, install2_present, "install2");
 
 	validate = &manifest
-		->SUIT_Manifest_suit_validate
-		.SUIT_Manifest_suit_validate;
+		->SUIT_Manifest_suit_validate;
 	validate_present = manifest
 		->SUIT_Manifest_suit_validate_present;
 	test_command_sequence(validate, validate_present, "validate");
 
 	load = &manifest
-		->SUIT_Manifest_suit_load
-		.SUIT_Manifest_suit_load;
+		->SUIT_Manifest_suit_load;
 	load_present = manifest
 		->SUIT_Manifest_suit_load_present;
 	test_command_sequence(load, load_present, "load");
 
 	run = &manifest
-		->SUIT_Manifest_suit_run
-		.SUIT_Manifest_suit_run;
+		->SUIT_Manifest_suit_run;
 	run_present = manifest
 		->SUIT_Manifest_suit_run_present;
 	test_command_sequence(run, run_present, "run");

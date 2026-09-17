@@ -155,16 +155,16 @@ ZTEST(cbor_decode_testA, test_unordered_map2)
 	zassert_equal(typeUnion_type1_m_c, unordered_map2.UnorderedMap2_typeUnion_m[0].typeUnion_choice);
 	zassert_equal(typeUnion_type2_m_c, unordered_map2.UnorderedMap2_typeUnion_m[1].typeUnion_choice);
 	zassert_equal(typeUnion_typeDefault_m_c, unordered_map2.UnorderedMap2_typeUnion_m[2].typeUnion_choice);
-	zassert_equal(1, unordered_map2.UnorderedMap2_typeUnion_m[0].typeUnion_type1_m.type1.len);
-	zassert_equal('a', unordered_map2.UnorderedMap2_typeUnion_m[0].typeUnion_type1_m.type1.value[0]);
-	zassert_equal(1, unordered_map2.UnorderedMap2_typeUnion_m[1].typeUnion_type2_m.type2.len);
-	zassert_equal('b', unordered_map2.UnorderedMap2_typeUnion_m[1].typeUnion_type2_m.type2.value[0]);
+	zassert_equal(1, unordered_map2.UnorderedMap2_typeUnion_m[0].typeUnion_type1_m.len);
+	zassert_equal('a', unordered_map2.UnorderedMap2_typeUnion_m[0].typeUnion_type1_m.value[0]);
+	zassert_equal(1, unordered_map2.UnorderedMap2_typeUnion_m[1].typeUnion_type2_m.len);
+	zassert_equal('b', unordered_map2.UnorderedMap2_typeUnion_m[1].typeUnion_type2_m.value[0]);
 	zassert_equal(-2, unordered_map2.UnorderedMap2_typeUnion_m[2].typeUnion_typeDefault_m.typeDefault_key);
 	zassert_true(unordered_map2.map_nint1bstr_present);
 	zassert_true(unordered_map2.map_nint2bstr_present);
 	zassert_true(unordered_map2.map_boolint_present);
-	zassert_equal(0, unordered_map2.map_nint1bstr.map_nint1bstr.len);
-	zassert_equal(0, unordered_map2.map_nint2bstr.map_nint2bstr.len);
+	zassert_equal(0, unordered_map2.map_nint1bstr.len);
+	zassert_equal(0, unordered_map2.map_nint2bstr.len);
 	zassert_false(unordered_map2.map_boolint.UnorderedMap2_map_boolint_key);
 	zassert_equal(100, unordered_map2.map_boolint.map_boolint);
 
@@ -182,13 +182,13 @@ ZTEST(cbor_decode_testA, test_unordered_map2)
 	zassert_equal(2, unordered_map2.UnorderedMap2_typeUnion_m_count);
 	zassert_equal(typeUnion_type1_m_c, unordered_map2.UnorderedMap2_typeUnion_m[0].typeUnion_choice);
 	zassert_equal(typeUnion_type2_m_c, unordered_map2.UnorderedMap2_typeUnion_m[1].typeUnion_choice);
-	zassert_equal(0, unordered_map2.UnorderedMap2_typeUnion_m[0].typeUnion_type1_m.type1.len);
-	zassert_equal(6, unordered_map2.UnorderedMap2_typeUnion_m[1].typeUnion_type2_m.type2.len);
-	zassert_mem_equal("foobar", unordered_map2.UnorderedMap2_typeUnion_m[1].typeUnion_type2_m.type2.value, 6);
+	zassert_equal(0, unordered_map2.UnorderedMap2_typeUnion_m[0].typeUnion_type1_m.len);
+	zassert_equal(6, unordered_map2.UnorderedMap2_typeUnion_m[1].typeUnion_type2_m.len);
+	zassert_mem_equal("foobar", unordered_map2.UnorderedMap2_typeUnion_m[1].typeUnion_type2_m.value, 6);
 	zassert_true(unordered_map2.map_nint1bstr_present);
 	zassert_true(unordered_map2.map_nint2bstr_present);
-	zassert_equal(0, unordered_map2.map_nint1bstr.map_nint1bstr.len);
-	zassert_equal(0, unordered_map2.map_nint2bstr.map_nint2bstr.len);
+	zassert_equal(0, unordered_map2.map_nint1bstr.len);
+	zassert_equal(0, unordered_map2.map_nint2bstr.len);
 
 	err = cbor_decode_UnorderedMap2(payload_unordered_map2_inv4, sizeof(payload_unordered_map2_inv4), &unordered_map2, NULL);
 	zassert_equal(ZCBOR_ERR_ELEMS_NOT_PROCESSED, err, "%s %d\n", zcbor_error_str(err), err);
@@ -247,12 +247,12 @@ ZTEST(cbor_decode_testA, test_unordered_map4)
 	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);
 
 	zassert_equal(2, unordered_map4.UnorderedMap4_group1_m_count, "%d != %d", 2, unordered_map4.UnorderedMap4_group1_m_count);
-	zassert_equal(3, unordered_map4.UnorderedMap4_group1_m[0].UnorderedMap4_group1_m.group1_count, "%d != %d", 3, unordered_map4.UnorderedMap4_group1_m[0].UnorderedMap4_group1_m.group1_count);
+	zassert_equal(3, unordered_map4.UnorderedMap4_group1_m[0].group1_count, "%d != %d", 3, unordered_map4.UnorderedMap4_group1_m[0].group1_count);
 	zassert_false(unordered_map4.UnorderedMap4_intunion_present);
 	for (int32_t i = 0; i < 2; i++) {
 		for (int32_t j = 1; j <= 3; j++) {
-			zassert_equal(j + (i * 3), unordered_map4.UnorderedMap4_group1_m[i].UnorderedMap4_group1_m.group1[j - 1].group1_uinttstr_key);
-			zassert_equal(-j - (i * 3), unordered_map4.UnorderedMap4_group1_m[i].UnorderedMap4_group1_m.group1[j - 1].group1_nintbstr_key);
+			zassert_equal(j + (i * 3), unordered_map4.UnorderedMap4_group1_m[i].group1[j - 1].group1_uinttstr_key);
+			zassert_equal(-j - (i * 3), unordered_map4.UnorderedMap4_group1_m[i].group1[j - 1].group1_nintbstr_key);
 		}
 	}
 
@@ -278,12 +278,12 @@ ZTEST(cbor_decode_testA, test_unordered_map4)
 	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);
 
 	zassert_equal(1, unordered_map4.UnorderedMap4_group1_m_count, "%d != %d", 1, unordered_map4.UnorderedMap4_group1_m_count);
-	zassert_equal(3, unordered_map4.UnorderedMap4_group1_m[0].UnorderedMap4_group1_m.group1_count, "%d != %d", 3, unordered_map4.UnorderedMap4_group1_m[0].UnorderedMap4_group1_m.group1_count);
+	zassert_equal(3, unordered_map4.UnorderedMap4_group1_m[0].group1_count, "%d != %d", 3, unordered_map4.UnorderedMap4_group1_m[0].group1_count);
 	zassert_true(unordered_map4.UnorderedMap4_intunion_present);
 	for (int32_t i = 0; i < 1; i++) {
 		for (int32_t j = 1; j <= 3; j++) {
-			zassert_equal(j + (i * 3), unordered_map4.UnorderedMap4_group1_m[i].UnorderedMap4_group1_m.group1[j - 1].group1_uinttstr_key);
-			zassert_equal(-j - (i * 3), unordered_map4.UnorderedMap4_group1_m[i].UnorderedMap4_group1_m.group1[j - 1].group1_nintbstr_key);
+			zassert_equal(j + (i * 3), unordered_map4.UnorderedMap4_group1_m[i].group1[j - 1].group1_uinttstr_key);
+			zassert_equal(-j - (i * 3), unordered_map4.UnorderedMap4_group1_m[i].group1[j - 1].group1_nintbstr_key);
 		}
 	}
 	zassert_equal(4, unordered_map4.UnorderedMap4_intunion.UnorderedMap4_intunion_key);

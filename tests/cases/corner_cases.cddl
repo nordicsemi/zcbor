@@ -510,3 +510,37 @@ OptFloatThenInt = [
 OptFloatUnion = [foo: ?((oneToFive: 1.0..5.0) / (sixToTen: 6.0..10.0))]
 
 CborBstrList = [?bstr .cbor [int, tstr]]
+
+MapOptElem1 = (MapOptElemRoot)
+
+MapOptElemRoot = {
+    first     : ("a" => bstr),
+    second    : ("b" => bstr),
+    ?third    : ("c" => bstr),
+}
+
+MapIndirect = {
+ 0: Group1,
+ 1: ((zero: 0) / (one: 1))
+}
+
+Group1 = (
+ (zero: 0) / (one: 1)
+)
+
+MapOptElem2 = {
+ 0: Map1,
+ 1: Map2Opt,
+}
+
+Map1 = {
+ 0: int,
+}
+
+Map2Opt = {
+ ? 0: int,
+}
+
+Map3Inner = {"1": int}
+
+Map3 = { "inner": [Map3Inner] }

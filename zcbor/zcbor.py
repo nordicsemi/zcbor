@@ -1718,11 +1718,26 @@ class CddlXcoder(CddlParser):
             return True
         if self.type == "OTHER" and self.my_types[self.value].key_var_condition():
             return True
+        # The following branch is not strictly needed, but gives errors if removed because
+        # of limitations in the repeated_single_func_impl_condition() function.
+        # The branch was tested and omitted in key_member_condition().
         if (
             self.type in ["GROUP", "UNION"]
             and len(self.value) >= 1
             and self.value[0].reduced_key_var_condition()
         ):
+            return True
+        return False
+
+    def key_member_condition(self):
+        """Whether this element's key needs a member variable of its own.
+
+        A key that is a literal (e.g. the "image" in `"image" => uint`) is matched
+        directly by the generated code and needs no storage.
+        """
+        if self.reduced_key_var_condition():
+            return not self.key.is_unambiguous()
+        if self.type == "OTHER" and self.my_types[self.value].key_member_condition():
             return True
         return False
 
@@ -2470,6 +2485,14 @@ class CodeGenerator(CddlXcoder):
         """Whether this type has multiple member variables."""
         return self.multi_var_condition() or self.repeated_multi_var_condition()
 
+    def multi_member_decl(self):
+        """Like multi_member(), but only counting things that occupy a member variable.
+
+        This is the variant to use when deciding the shape of the generated types;
+        multi_member() decides which xcoder functions are needed.
+        """
+        return self.multi_var_condition() or self.repeated_multi_member_condition()
+
     def self_repeated_multi_var_condition(self):
         """Whether this value adds any repeated elements by itself. I.e. excluding
         multiple elements from children.
@@ -2479,7 +2502,7 @@ class CodeGenerator(CddlXcoder):
     def multi_val_condition(self):
         """Whether this element's actual value has multiple members."""
         return self.type in ["LIST", "MAP", "GROUP", "UNION"] and (
-            len(self.value) > 1 or (len(self.value) == 1 and self.value[0].multi_member())
+            len(self.value) > 1 or (len(self.value) == 1 and self.value[0].multi_member_decl())
         )
 
     def repeated_multi_var_condition(self):
@@ -2487,6 +2510,19 @@ class CodeGenerator(CddlXcoder):
         repetition.
         """
         return self.self_repeated_multi_var_condition() or self.multi_val_condition()
+
+    def self_repeated_multi_member_condition(self):
+        """Like self_repeated_multi_var_condition(), but only counting things that
+        actually occupy a member variable.
+
+        A literal key still needs its own xcoder function, but no storage, so it must
+        not on its own cause a struct to be generated.
+        """
+        return self.key_member_condition() or self.cbor_var_condition() or self.choice_var_condition()
+
+    def repeated_multi_member_condition(self):
+        """Whether the repeated part of this element holds more than one member."""
+        return self.self_repeated_multi_member_condition() or self.multi_val_condition()
 
     def range_check_condition(self):
         """Whether this element needs a check (memcmp) for a string value."""
@@ -2508,14 +2544,14 @@ class CodeGenerator(CddlXcoder):
 
     def type_def_condition(self):
         """Whether this element should have a typedef in the code."""
-        if self in self.my_types.values() and self.multi_member() and not self.is_unambiguous():
+        if self in self.my_types.values() and self.multi_member_decl() and not self.is_unambiguous():
             return True
         return False
 
     def repeated_type_def_condition(self):
         """Whether this type needs a typedef for its repeated part."""
         return (
-            self.repeated_multi_var_condition()
+            self.repeated_multi_member_condition()
             and self.multi_var_condition()
             and not self.is_unambiguous_repeated()
         )
@@ -2765,7 +2801,7 @@ class CodeGenerator(CddlXcoder):
         """
         if self.repeated_type_def_condition():
             return self.raw_type_name() + "_r"
-        if self.self_repeated_multi_var_condition():
+        if self.self_repeated_multi_member_condition():
             return self.raw_type_name()
         return self.val_type_name()
 
@@ -2873,9 +2909,9 @@ class CodeGenerator(CddlXcoder):
         struct so the function always returns a single type with no name. If full is False, only
         repeated part is used.
         """
-        if full and self.multi_member():
+        if full and self.multi_member_decl():
             return self.enclose("struct", self.full_declaration())
-        elif not full and self.repeated_multi_var_condition():
+        elif not full and self.repeated_multi_member_condition():
             return self.enclose("struct", self.repeated_declaration())
         else:
             return self.var_type()

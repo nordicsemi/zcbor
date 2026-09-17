@@ -324,7 +324,7 @@ ZTEST(cbor_decode_test5, test_number_map)
 		sizeof(payload_number_map1), &number_map, &decode_len), NULL);
 	zassert_equal(42, number_map.byte, NULL);
 	zassert_true(number_map.opt_short_present, NULL);
-	zassert_equal(0x1234, number_map.opt_short.opt_short, NULL);
+	zassert_equal(0x1234, number_map.opt_short, NULL);
 	zassert_true(number_map.opt_cbor_present, NULL);
 	zassert_equal(0x12345678, number_map.opt_cbor.opt_cbor_cbor, NULL);
 
@@ -338,7 +338,7 @@ ZTEST(cbor_decode_test5, test_number_map)
 		sizeof(payload_number_map3), &number_map, &decode_len), NULL);
 	zassert_equal(42, number_map.byte, NULL);
 	zassert_true(number_map.opt_short_present, NULL);
-	zassert_equal(0x12, number_map.opt_short.opt_short, NULL);
+	zassert_equal(0x12, number_map.opt_short, NULL);
 	zassert_false(number_map.opt_cbor_present, NULL);
 
 	zassert_equal(ZCBOR_ERR_INT_SIZE, cbor_decode_NumberMap(payload_number_map4_inv,
@@ -805,10 +805,9 @@ ZTEST(cbor_decode_test5, test_map)
 	zassert_equal(union_uint7uint_c, map.Union_choice, NULL);
 	zassert_equal(1, map.uint7uint, NULL);
 	zassert_equal(2, map.twotothree_count, NULL);
-	zassert_equal(5, map.twotothree[0].twotothree.len, NULL);
-	zassert_mem_equal("hello", map.twotothree[0].twotothree.value,
-			5, NULL);
-	zassert_equal(0, map.twotothree[1].twotothree.len, NULL);
+	zassert_equal(5, map.twotothree[0].len, NULL);
+	zassert_mem_equal("hello", map.twotothree[0].value, 5, NULL);
+	zassert_equal(0, map.twotothree[1].len, NULL);
 
 	zassert_equal(ZCBOR_ERR_ITERATIONS, cbor_decode_Map(payload_map2_inv, sizeof(payload_map2_inv),
 			&map, NULL), NULL);
@@ -819,11 +818,10 @@ ZTEST(cbor_decode_test5, test_map)
 	zassert_equal(union_uint7uint_c, map.Union_choice, NULL);
 	zassert_equal(1, map.uint7uint, NULL);
 	zassert_equal(3, map.twotothree_count, NULL);
-	zassert_equal(5, map.twotothree[0].twotothree.len, NULL);
-	zassert_mem_equal("hello", map.twotothree[0].twotothree.value,
-			5, NULL);
-	zassert_equal(0, map.twotothree[1].twotothree.len, NULL);
-	zassert_equal(0, map.twotothree[2].twotothree.len, NULL);
+	zassert_equal(5, map.twotothree[0].len, NULL);
+	zassert_mem_equal("hello", map.twotothree[0].value, 5, NULL);
+	zassert_equal(0, map.twotothree[1].len, NULL);
+	zassert_equal(0, map.twotothree[2].len, NULL);
 
 #ifdef TEST_INDEFINITE_LENGTH_ARRAYS
 	zassert_equal(ZCBOR_SUCCESS,
@@ -1588,12 +1586,12 @@ ZTEST(cbor_decode_test5, test_doublemap)
 	zassert_equal(result_doublemap.uintmap_count, 2, NULL);
 	zassert_equal(result_doublemap.uintmap[0].uintmap_key, 1, NULL);
 	zassert_true(result_doublemap.uintmap[0].MyKeys_m.uint1int_present, NULL);
-	zassert_equal(result_doublemap.uintmap[0].MyKeys_m.uint1int.uint1int, 1, NULL);
+	zassert_equal(result_doublemap.uintmap[0].MyKeys_m.uint1int, 1, NULL);
 	zassert_false(result_doublemap.uintmap[0].MyKeys_m.uint2int_present, NULL);
 	zassert_equal(result_doublemap.uintmap[1].uintmap_key, 2, NULL);
 	zassert_false(result_doublemap.uintmap[1].MyKeys_m.uint1int_present, NULL);
 	zassert_true(result_doublemap.uintmap[1].MyKeys_m.uint2int_present, NULL);
-	zassert_equal(result_doublemap.uintmap[1].MyKeys_m.uint2int.uint2int, 2, NULL);
+	zassert_equal(result_doublemap.uintmap[1].MyKeys_m.uint2int, 2, NULL);
 
 	int ret = cbor_decode_DoubleMap(payload_doublemap1_inv,
 					sizeof(payload_doublemap1_inv),
@@ -2373,14 +2371,14 @@ ZTEST(cbor_decode_test5, test_bstr_size)
 		sizeof(bstr_size_payload1), &result, &num_decode);
 	zassert_equal(ZCBOR_SUCCESS, ret, "%s\n", zcbor_error_str(ret));
 	zassert_equal(sizeof(bstr_size_payload1), num_decode, NULL);
-	zassert_equal(12, result.bstr12_m.s.len, NULL);
+	zassert_equal(12, result.bstr12_m.len, NULL);
 	zassert_equal(BstrSize_check_bstr16_c, result.check_choice);
 	zassert_equal(16, result.bstr16.len);
 
 	ret = cbor_decode_BstrSize(bstr_size_payload2,
 		sizeof(bstr_size_payload2), &result, &num_decode);
 	zassert_equal(ZCBOR_SUCCESS, ret, "%s\n", zcbor_error_str(ret));
-	zassert_equal(12, result.bstr12_m.s.len, NULL);
+	zassert_equal(12, result.bstr12_m.len, NULL);
 	zassert_equal(BstrSize_check_bstr0_c, result.check_choice);
 	zassert_equal(0, result.bstr0.len);
 
@@ -3130,7 +3128,7 @@ ZTEST(cbor_decode_test5, test_cbor_bstr_map)
 	int err = cbor_decode_BstrMap(bstr_map_payload1, sizeof(bstr_map_payload1), &result, &num_decode);
 	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
 	zassert_equal(sizeof(bstr_map_payload1), num_decode, NULL);
-	zassert_equal(0, result.BstrMap_cbor._1);
+	zassert_equal(0, result.BstrMap_cbor);
 	zassert_equal(STR_LEN(4, 1), result.BstrMap.len);
 	zassert_mem_equal(&bstr_map_payload1[1], result.BstrMap.value, result.BstrMap.len);
 
@@ -3163,12 +3161,12 @@ ZTEST(cbor_decode_test5, test_cbor_ambig_map)
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_AmbigMap(ambig_map_payload1,
 		sizeof(ambig_map_payload1), &result, &num_decode), NULL);
 	zassert_equal(AmbigMap_map1_m_c, result.AmbigMap_choice, NULL);
-	zassert_equal(1, result.map1_m._1, NULL);
+	zassert_equal(1, result.map1_m, NULL);
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_AmbigMap(ambig_map_payload2,
 		sizeof(ambig_map_payload2), &result, &num_decode), NULL);
 	zassert_equal(AmbigMap_map2_m_c, result.AmbigMap_choice, NULL);
-	zassert_equal(2, result.map2_m._2, NULL);
+	zassert_equal(2, result.map2_m, NULL);
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_AmbigMap(ambig_map_payload3,
 		sizeof(ambig_map_payload3), &result, &num_decode), NULL);
@@ -3211,12 +3209,12 @@ ZTEST(cbor_decode_test5, test_cbor_bstr_map_union)
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_BstrMapUnion(bstr_map_union_payload1,
 		sizeof(bstr_map_union_payload1), &result, &num_decode));
 	zassert_equal(BstrMapUnion_map1_bstr_c, result.BstrMapUnion_choice, NULL);
-	zassert_equal(1, result.map1_bstr_cbor._1, NULL);
+	zassert_equal(1, result.map1_bstr_cbor, NULL);
 
 	zassert_equal(ZCBOR_SUCCESS, cbor_decode_BstrMapUnion(bstr_map_union_payload2,
 		sizeof(bstr_map_union_payload2), &result, &num_decode));
 	zassert_equal(BstrMapUnion_map2_bstr_c, result.BstrMapUnion_choice, NULL);
-	zassert_equal(2, result.map2_bstr_cbor._2, NULL);
+	zassert_equal(2, result.map2_bstr_cbor, NULL);
 
 	int ret = cbor_decode_BstrMapUnion(bstr_map_union_payload3_inv,
 		sizeof(bstr_map_union_payload3_inv), &result, &num_decode);
@@ -3225,6 +3223,140 @@ ZTEST(cbor_decode_test5, test_cbor_bstr_map_union)
 	ret = cbor_decode_BstrMapUnion(bstr_map_union_payload4_inv,
 		sizeof(bstr_map_union_payload4_inv), &result, &num_decode);
 	zassert_equal(ZCBOR_ERR_WRONG_VALUE, ret, "%s\n", zcbor_error_str(ret));
+}
+
+
+/* Regression test for issue #416 */
+ZTEST(cbor_decode_test5, test_map_opt_elem1)
+{
+	uint8_t map_opt_elem1_payload1[] = {
+		MAP(2),
+			0x61, 'a', 0x40,
+			0x61, 'b', 0x40,
+		END
+	};
+	uint8_t map_opt_elem1_payload2[] = {
+		MAP(3),
+			0x61, 'a', 0x40,
+			0x61, 'b', 0x40,
+			0x61, 'c', 0x40,
+		END
+	};
+	uint8_t map_opt_elem1_payload3_inv[] = {
+		MAP(2),
+			0x61, 'a', 0x40,
+			0x61, 'c', 0x40,
+		END
+	};
+
+	struct MapOptElemRoot result;
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_MapOptElem1(map_opt_elem1_payload1,
+		sizeof(map_opt_elem1_payload1), &result, &num_decode), NULL);
+	zassert_false(result.third_present);
+	zassert_equal(0, result.first.len);
+	zassert_equal(0, result.second.len);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_MapOptElem1(map_opt_elem1_payload2,
+		sizeof(map_opt_elem1_payload2), &result, &num_decode), NULL);
+	zassert_true(result.third_present);
+	zassert_equal(0, result.first.len);
+	zassert_equal(0, result.second.len);
+	zassert_equal(0, result.third.len);
+
+	zassert_equal(ZCBOR_ERR_WRONG_VALUE, cbor_decode_MapOptElem1(map_opt_elem1_payload3_inv,
+		sizeof(map_opt_elem1_payload3_inv), &result, &num_decode), NULL);
+}
+
+
+/* Regression test for issue #526 */
+ZTEST(cbor_decode_test5, test_map_indirect)
+{
+	uint8_t map_indirect_payload1[] = {
+		MAP(2),
+			0x00, 0x00,
+			0x01, 0x01,
+		END
+	};
+	uint8_t map_indirect_payload2[] = {
+		MAP(2),
+			0x00, 0x01,
+			0x01, 0x00,
+		END
+	};
+
+	struct MapIndirect result;
+	size_t num_decode;
+
+	int ret = cbor_decode_MapIndirect(map_indirect_payload1,
+		sizeof(map_indirect_payload1), &result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, ret, "%d\n", ret);
+	zassert_equal(Group1_zero_c, result.Group1_m.Group1_choice);
+	zassert_equal(MapIndirect_uint1union_one_c, result.uint1union_choice);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_MapIndirect(map_indirect_payload2,
+		sizeof(map_indirect_payload2), &result, &num_decode), NULL);
+	zassert_equal(Group1_one_c, result.Group1_m.Group1_choice);
+	zassert_equal(MapIndirect_uint1union_zero_c, result.uint1union_choice);
+}
+
+
+/* Regression test for issue #527 */
+ZTEST(cbor_decode_test5, test_map_opt_elem2)
+{
+	uint8_t map_opt_elem2_payload1[] = {
+		MAP(2),
+			0x00, MAP(1), 0x00, 1, END
+			0x01, MAP(0), END
+		END
+	};
+	uint8_t map_opt_elem2_payload2[] = {
+		MAP(2),
+			0x00, MAP(1), 0x00, 1, END
+			0x01, MAP(1), 0x00, 2, END
+		END
+	};
+
+	struct MapOptElem2 result;
+	size_t num_decode;
+
+	int ret = cbor_decode_MapOptElem2(map_opt_elem2_payload1,
+		sizeof(map_opt_elem2_payload1), &result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, ret, "%d\n", ret);
+	zassert_false(result.Map2Opt_m.uint0int_present);
+	zassert_equal(1, result.Map1_m);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_MapOptElem2(map_opt_elem2_payload2,
+		sizeof(map_opt_elem2_payload2), &result, &num_decode), NULL);
+	zassert_true(result.Map2Opt_m.uint0int_present);
+	zassert_equal(1, result.Map1_m);
+	zassert_equal(2, result.Map2Opt_m.uint0int);
+}
+
+
+/* Regression test for issue #586 */
+ZTEST(cbor_decode_test5, test_map3)
+{
+	uint8_t map3_payload1[] = {
+		MAP(1),
+			0x65, 'i', 'n', 'n', 'e', 'r', LIST(1), MAP(1),
+				0x61, '1', 5,
+			END END
+		END
+	};
+
+#ifdef CONFIG_64BIT
+	int64_t result;
+#else
+	int32_t result;
+#endif
+	size_t num_decode;
+
+	int ret = cbor_decode_Map3(map3_payload1,
+		sizeof(map3_payload1), &result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, ret, "%d\n", ret);
+	zassert_equal(5, result);
 }
 
 

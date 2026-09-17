@@ -16,13 +16,13 @@ ZTEST(cbor_encode_test4, test_senml)
 {
 	struct lwm2m_senml input = {
 		.lwm2m_senml_record_m[0] = {
-			.record_bn = {.record_bn = {.value = "Foo", .len = 3}},
+			.record_bn = {.value = "Foo", .len = 3},
 			.record_bn_present = 1,
-			.record_bt = {.record_bt = 42},
+			.record_bt = 42,
 			.record_bt_present = 1,
-			.record_n = {.record_n = {.value = "Bar", .len = 3}},
+			.record_n = {.value = "Bar", .len = 3},
 			.record_n_present = 1,
-			.record_t = {.record_t = 7},
+			.record_t = 7,
 			.record_t_present = 1,
 			.record_union = {
 				.union_vb = true,

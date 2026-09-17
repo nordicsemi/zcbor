@@ -31,11 +31,9 @@ bool fuzz_one_input(const uint8_t *data, size_t size)
         ret = cbor_decode_SUIT_Command_Sequence(
             result.SUIT_Envelope_suit_manifest_cbor
                 .SUIT_Manifest_SUIT_Severable_Manifest_Members_m
-                .SUIT_Severable_Manifest_Members_suit_dependency_resolution
                 .SUIT_Severable_Manifest_Members_suit_dependency_resolution.value,
             result.SUIT_Envelope_suit_manifest_cbor
                 .SUIT_Manifest_SUIT_Severable_Manifest_Members_m
-                .SUIT_Severable_Manifest_Members_suit_dependency_resolution
                 .SUIT_Severable_Manifest_Members_suit_dependency_resolution.len,
             &command_seq, &payload_len_out);
         if (!ret) {
@@ -49,11 +47,9 @@ bool fuzz_one_input(const uint8_t *data, size_t size)
         ret = cbor_decode_SUIT_Command_Sequence(
             result.SUIT_Envelope_suit_manifest_cbor
                 .SUIT_Manifest_SUIT_Severable_Manifest_Members_m
-                .SUIT_Severable_Manifest_Members_suit_payload_fetch
                 .SUIT_Severable_Manifest_Members_suit_payload_fetch.value,
             result.SUIT_Envelope_suit_manifest_cbor
                 .SUIT_Manifest_SUIT_Severable_Manifest_Members_m
-                .SUIT_Severable_Manifest_Members_suit_payload_fetch
                 .SUIT_Severable_Manifest_Members_suit_payload_fetch.len,
             &command_seq, &payload_len_out);
         if (!ret) {
@@ -67,11 +63,9 @@ bool fuzz_one_input(const uint8_t *data, size_t size)
         ret = cbor_decode_SUIT_Command_Sequence(
             result.SUIT_Envelope_suit_manifest_cbor
                 .SUIT_Manifest_SUIT_Severable_Manifest_Members_m
-                .SUIT_Severable_Manifest_Members_suit_install
                 .SUIT_Severable_Manifest_Members_suit_install.value,
             result.SUIT_Envelope_suit_manifest_cbor
                 .SUIT_Manifest_SUIT_Severable_Manifest_Members_m
-                .SUIT_Severable_Manifest_Members_suit_install
                 .SUIT_Severable_Manifest_Members_suit_install.len,
             &command_seq, &payload_len_out);
         if (!ret) {
@@ -85,11 +79,9 @@ bool fuzz_one_input(const uint8_t *data, size_t size)
         ret = cbor_decode_SUIT_Command_Sequence(
             result.SUIT_Envelope_suit_manifest_cbor
                 .SUIT_Manifest_SUIT_Unseverable_Members_m
-                .SUIT_Unseverable_Members_suit_validate
                 .SUIT_Unseverable_Members_suit_validate.value,
             result.SUIT_Envelope_suit_manifest_cbor
                 .SUIT_Manifest_SUIT_Unseverable_Members_m
-                .SUIT_Unseverable_Members_suit_validate
                 .SUIT_Unseverable_Members_suit_validate.len,
             &command_seq, &payload_len_out);
         if (!ret) {
@@ -103,11 +95,9 @@ bool fuzz_one_input(const uint8_t *data, size_t size)
         ret = cbor_decode_SUIT_Command_Sequence(
             result.SUIT_Envelope_suit_manifest_cbor
                 .SUIT_Manifest_SUIT_Unseverable_Members_m
-                .SUIT_Unseverable_Members_suit_load
                 .SUIT_Unseverable_Members_suit_load.value,
             result.SUIT_Envelope_suit_manifest_cbor
                 .SUIT_Manifest_SUIT_Unseverable_Members_m
-                .SUIT_Unseverable_Members_suit_load
                 .SUIT_Unseverable_Members_suit_load.len,
             &command_seq, &payload_len_out);
         if (!ret) {
@@ -121,11 +111,9 @@ bool fuzz_one_input(const uint8_t *data, size_t size)
         ret = cbor_decode_SUIT_Command_Sequence(
             result.SUIT_Envelope_suit_manifest_cbor
                 .SUIT_Manifest_SUIT_Unseverable_Members_m
-                .SUIT_Unseverable_Members_suit_run
                 .SUIT_Unseverable_Members_suit_run.value,
             result.SUIT_Envelope_suit_manifest_cbor
                 .SUIT_Manifest_SUIT_Unseverable_Members_m
-                .SUIT_Unseverable_Members_suit_run
                 .SUIT_Unseverable_Members_suit_run.len,
             &command_seq, &payload_len_out);
         if (!ret) {

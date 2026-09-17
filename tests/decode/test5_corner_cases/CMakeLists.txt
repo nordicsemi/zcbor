@@ -89,6 +89,10 @@ set(py_command
     OptFloatUnion
     OptFloatThenInt
     CborBstrList
+    MapOptElem1
+    MapIndirect
+    MapOptElem2
+    Map3
   --decode
   --git-sha-header
   --short-names
