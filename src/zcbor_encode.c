@@ -66,6 +66,7 @@ static bool value_encode_len(zcbor_state_t *state, zcbor_major_type_t major_type
 		const void *const result, size_t result_len)
 {
 	ZCBOR_CHECK_NULL(state);
+	ZCBOR_ERR_IF(result == NULL, ZCBOR_ERR_BAD_ARG);
 
 	uint8_t *u8_result  = (uint8_t *)result;
 
@@ -95,9 +96,15 @@ static bool value_encode_len(zcbor_state_t *state, zcbor_major_type_t major_type
 static bool value_encode(zcbor_state_t *state, zcbor_major_type_t major_type,
 		const void *const input, size_t max_result_len)
 {
+	ZCBOR_CHECK_NULL(state);
 	zcbor_assert_state(max_result_len != 0, "0-length result not supported.\r\n");
 
-	size_t result_len = zcbor_header_len_ptr(input, max_result_len) - 1;
+	size_t header_len = zcbor_header_len_ptr(input, max_result_len);
+
+	/* zcbor_header_len_ptr() returns 0 if @p input is NULL or @p max_result_len is too big. */
+	ZCBOR_ERR_IF(header_len == 0, ZCBOR_ERR_BAD_ARG);
+
+	size_t result_len = header_len - 1;
 	const void *result = input;
 
 #ifdef ZCBOR_BIG_ENDIAN
@@ -115,6 +122,9 @@ bool zcbor_int_encode(zcbor_state_t *state, const void *input_int, size_t int_si
 	const uint8_t *input_uint8 = input_int;
 	const int8_t *input_int8 = input_int;
 	const uint8_t *input = input_int;
+
+	ZCBOR_CHECK_NULL(state);
+	ZCBOR_ERR_IF(input_int == NULL, ZCBOR_ERR_BAD_ARG);
 
 	if (int_size > sizeof(int64_t)) {
 		ZCBOR_ERR(ZCBOR_ERR_INT_SIZE);
@@ -457,10 +467,13 @@ bool zcbor_str_fragment_encode(zcbor_state_t *state, struct zcbor_string *fragme
 	ZCBOR_ERR_IF(!state->inside_frag_str, ZCBOR_ERR_NOT_IN_FRAGMENT);
 	ZCBOR_FAIL_IF(!zcbor_current_string_remainder(state, &remainder));
 	ZCBOR_ERR_IF(fragment->len > remainder, ZCBOR_ERR_TOO_LARGE_FOR_STRING);
+	ZCBOR_ERR_IF(!fragment->value && (fragment->len > 0), ZCBOR_ERR_BAD_ARG);
 
 	size_t len  = MIN((size_t)state->payload_end - (size_t)state->payload, fragment->len);
 
-	memcpy(state->payload_mut, fragment->value, len);
+	if (len > 0) {
+		memcpy(state->payload_mut, fragment->value, len);
+	}
 	state->payload += len;
 
 	if (enc_len != NULL) {
@@ -719,6 +732,7 @@ bool zcbor_float32_put(zcbor_state_t *state, float input)
 
 bool zcbor_float16_encode(zcbor_state_t *state, const float *input)
 {
+	ZCBOR_ERR_IF(input == NULL, ZCBOR_ERR_BAD_ARG);
 	return zcbor_float16_put(state, *input);
 }
 

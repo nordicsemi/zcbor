@@ -581,7 +581,8 @@ bool zcbor_validate_string_fragments(struct zcbor_string_fragment *fragments,
  *                                Out: The length of the assembled string.
  *
  *  @retval  true   On success.
- *  @retval  false  If the assembled string would be larger than the buffer.
+ *  @retval  false  If the assembled string would be larger than the buffer, or
+ *                  if a fragment with non-zero length has a NULL value.
  *                  The buffer might still be written to.
  */
 bool zcbor_splice_string_fragments(struct zcbor_string_fragment *fragments,
@@ -610,7 +611,11 @@ bool zcbor_compare_strings(const struct zcbor_string *str1,
  */
 size_t zcbor_header_len(uint64_t value);
 
-/** Like @ref zcbor_header_len but for integer of any size <= 8. */
+/** Like @ref zcbor_header_len but for integer of any size <= 8.
+ *
+ *  @return  The length of the header in bytes (1-9), or 0 if @p value is NULL
+ *           or @p value_len is above 8.
+ */
 size_t zcbor_header_len_ptr(const void *const value, size_t value_len);
 
 /** If a string (header + payload) is encoded into the rest of the payload, how long would it be?

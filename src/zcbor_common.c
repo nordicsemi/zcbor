@@ -436,7 +436,7 @@ bool zcbor_validate_string_fragments(struct zcbor_string_fragment *fragments,
 		if (fragments[i].offset != total_len) {
 			return false;
 		}
-		if (fragments[i].fragment.value == NULL) {
+		if (fragments[i].fragment.value == NULL && fragments[i].fragment.len > 0) {
 			return false;
 		}
 		if (fragments[i].total_len != fragments[0].total_len) {
@@ -480,8 +480,13 @@ bool zcbor_splice_string_fragments(struct zcbor_string_fragment *fragments,
 			|| (fragments[i].fragment.len > (*result_len - total_len))) {
 			return false;
 		}
-		memcpy(&result[total_len],
-			fragments[i].fragment.value, fragments[i].fragment.len);
+		if (fragments[i].fragment.len > 0) {
+			if (fragments[i].fragment.value == NULL) {
+				return false;
+			}
+			memcpy(&result[total_len],
+				fragments[i].fragment.value, fragments[i].fragment.len);
+		}
 		total_len += fragments[i].fragment.len;
 	}
 
@@ -519,11 +524,13 @@ size_t zcbor_header_len_ptr(const void *const value, size_t value_len)
 {
 	uint64_t val64 = 0;
 
-	if (value_len > sizeof(val64)) {
+	if ((value == NULL) || (value_len > sizeof(val64))) {
 		return 0;
 	}
 
-	memcpy(((uint8_t*)&val64) + ZCBOR_ECPY_OFFS(sizeof(val64), value_len), value, value_len);
+	if (value_len > 0) {
+		memcpy(((uint8_t*)&val64) + ZCBOR_ECPY_OFFS(sizeof(val64), value_len), value, value_len);
+	}
 	return zcbor_header_len(val64);
 }
 

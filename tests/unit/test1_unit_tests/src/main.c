@@ -699,6 +699,21 @@ ZTEST(zcbor_unit_tests, test_null_params)
 	uint8_t exp_payload[] = {0x40, 0x45, 0x48, 0x65, 0x6c, 0x6c, 0x6f};
 	zassert_equal(sizeof(exp_payload), state_e->payload - payload, NULL);
 	zassert_mem_equal(exp_payload, payload, sizeof(exp_payload), NULL);
+
+	/* A NULL value must be rejected before it reaches the byte copying. */
+	zassert_false(zcbor_uint_encode(state_e, NULL, sizeof(uint32_t)), NULL);
+	zassert_equal(ZCBOR_ERR_BAD_ARG, zcbor_peek_error(state_e), NULL);
+	zassert_false(zcbor_int_encode(state_e, NULL, sizeof(int32_t)), NULL);
+	zassert_equal(ZCBOR_ERR_BAD_ARG, zcbor_peek_error(state_e), NULL);
+	zassert_false(zcbor_float64_encode(state_e, NULL), NULL);
+	zassert_equal(ZCBOR_ERR_BAD_ARG, zcbor_peek_error(state_e), NULL);
+	zassert_false(zcbor_float32_encode(state_e, NULL), NULL);
+	zassert_equal(ZCBOR_ERR_BAD_ARG, zcbor_peek_error(state_e), NULL);
+	zassert_false(zcbor_float16_encode(state_e, NULL), NULL);
+	zassert_equal(ZCBOR_ERR_BAD_ARG, zcbor_peek_error(state_e), NULL);
+
+	/* None of the failures should have consumed payload. */
+	zassert_equal(sizeof(exp_payload), state_e->payload - payload, NULL);
 }
 
 
@@ -1211,6 +1226,64 @@ ZTEST(zcbor_unit_tests, test_nested_fragments)
 }
 
 
+/** A fragment with a NULL value must be treated like zcbor_bstr_encode() treats a
+ * string with a NULL value: accepted (and ignored) when empty, rejected otherwise.
+ * Neither case may reach memcpy() with a NULL source.
+**/
+ZTEST(zcbor_unit_tests, test_fragment_encode_null_value)
+{
+	uint8_t payload[64];
+	ZCBOR_STATE_E(state_e, 2, payload, sizeof(payload), 0);
+	struct zcbor_string fragment = {.value = NULL, .len = 0};
+	size_t enc_len = SIZE_MAX;
+
+	zassert_true(zcbor_bstr_fragments_start_encode(state_e, 5), NULL);
+
+	zassert_true(zcbor_str_fragment_encode(state_e, &fragment, &enc_len), NULL);
+	zassert_equal(0, enc_len, NULL);
+	zassert_error(ZCBOR_SUCCESS, state_e);
+
+	fragment.len = 5;
+	zassert_false(zcbor_str_fragment_encode(state_e, &fragment, &enc_len), NULL);
+	zassert_error(ZCBOR_ERR_BAD_ARG, state_e);
+	zassert_equal(0, enc_len, NULL);
+
+	/* The string can still be encoded after the rejected fragment. */
+	fragment.value = (const uint8_t *)"Hello";
+	zassert_true(zcbor_str_fragment_encode(state_e, &fragment, &enc_len), NULL);
+	zassert_equal(5, enc_len, NULL);
+	zassert_true(zcbor_str_fragments_end_encode(state_e), NULL);
+
+	uint8_t exp_payload[] = {0x45, 0x48, 0x65, 0x6c, 0x6c, 0x6f};
+
+	zassert_equal(sizeof(exp_payload), state_e->payload - payload, NULL);
+	zassert_mem_equal(exp_payload, payload, sizeof(exp_payload), NULL);
+}
+
+
+/** Same contract as above, for the splicing of already-decoded fragments. **/
+ZTEST(zcbor_unit_tests, test_splice_fragments_null_value)
+{
+	uint8_t result[16];
+	size_t result_len = sizeof(result);
+	struct zcbor_string_fragment fragments[] = {
+		{.fragment = {.value = NULL, .len = 0}, .offset = 0, .total_len = 5},
+		{.fragment = {.value = (const uint8_t *)"Hello", .len = 5}, .offset = 0,
+			.total_len = 5},
+	};
+
+	zassert_true(zcbor_validate_string_fragments(fragments, 2), NULL);
+	zassert_true(zcbor_splice_string_fragments(fragments, 2, result, &result_len), NULL);
+	zassert_equal(5, result_len, NULL);
+	zassert_mem_equal("Hello", result, 5, NULL);
+
+	fragments[0].fragment.len = 1;
+	result_len = sizeof(result);
+	zassert_false(zcbor_validate_string_fragments(fragments, 2), NULL);
+	zassert_false(zcbor_splice_string_fragments(fragments, 2, result, &result_len), NULL);
+}
+
+
 ZTEST(zcbor_unit_tests, test_canonical_list)
 {
 #ifndef ZCBOR_CANONICAL
@@ -1489,6 +1562,14 @@ ZTEST(zcbor_unit_tests, test_header_len)
 	zassert_equal(9, zcbor_header_len(0xFFFFFFFFFFFFFFFF), NULL);
 	zassert_equal(9, zcbor_header_len_ptr((uint8_t*)&(uint64_t){0xFFFFFFFFFFFFFFFF}, 8), NULL);
 #endif
+
+	/* A 0-length value is all zeroes, i.e. the value 0. */
+	zassert_equal(1, zcbor_header_len_ptr((uint8_t*)&(uint8_t){0xFF}, 0), NULL);
+
+	/* Invalid arguments give 0. A NULL value must not be handed to memcpy(). */
+	zassert_equal(0, zcbor_header_len_ptr(NULL, 0), NULL);
+	zassert_equal(0, zcbor_header_len_ptr(NULL, 4), NULL);
+	zassert_equal(0, zcbor_header_len_ptr((uint8_t*)&(uint64_t){0}, 9), NULL);
 }
 
 
