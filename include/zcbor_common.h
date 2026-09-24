@@ -20,9 +20,9 @@ extern "C" {
 #define ZCBOR_STRINGIFY_PRE(x) #x
 #define ZCBOR_STRINGIFY(s) ZCBOR_STRINGIFY_PRE(s)
 
-#define ZCBOR_VERSION_MAJOR 0
-#define ZCBOR_VERSION_MINOR 9
-#define ZCBOR_VERSION_BUGFIX 99
+#define ZCBOR_VERSION_MAJOR 1
+#define ZCBOR_VERSION_MINOR 0
+#define ZCBOR_VERSION_BUGFIX 0
 
 /** The version string with dots and not prefix. */
 #define ZCBOR_VERSION_STR   ZCBOR_STRINGIFY(ZCBOR_VERSION_MAJOR) \

@@ -1,10 +1,84 @@
-# zcbor v. 0.9.99
+# zcbor v. 1.0.0 (2026-09-24)
 
 Any new bugs, requests, or missing features should be reported as [Github issues](https://github.com/nordicsemi/zcbor/issues).
 
 ## Improvements:
 
+### C libraries:
+
+* Redesign the fragment decoding API and add new fragmented string encoding API
+* zcbor_common: Add support for backing up elem_state
+* zcbor_common.c: Deprecate the max_elem_count argument in zcbor_process_backup() to fix an issue.
+* zcbor_common.h: Introduce the ZCBOR_CAST_FP() macro for casting function pointers (RECOMMENDED, see MIGRATION_GUIDE)
+* zcbor_decode: Introduce the 'force' arg to *_(list|map|bstr)_end_decode()
+* Add support for encoding and decoding smaller int types (8 and 16 bit).
+* Improved backup handling (backups could sometimes be mismatched):
+  * src: Explicitly throw an error if backups are mismatched
+  * zcbor_decode: Always exit backup if a *_start_decode() fails
+* Add zcbor_bstr_end_force_(de|en)code and use them in generated code
+* src: Avoid calling memmove/memcpy with NULL pointers
+* zcbor_encode.c: Allow size_hint for maps and lists to be smaller than actual size
+* zcbor_common.h: Add NULL-checking of the state var in all public APIs
+* zcbor_common: Adapt zcbor_entry_function() to be able to create elem_states
+* zcbor_decode.c: Gracefully handle calling elem_processed early
+* zcbor_common.h: Convert zcbor_flags_to_states() and zcbor_round_up() to macros
+
+### zcbor.py:
+
+* General zcbor.py and Python code improvements:
+  * zcbor.py: Make arguments to all __init__() and from_cddl() keyword-only
+  * zcbor.py: Make changes to support both versions 5 and 6 of cbor2.
+  * Reformat all python files with black
+  * Add support for Python up to 3.15, and remove support for defunct Python versions
+* CDDL parsing:
+  * zcbor.py: Refactor .eq, .default, .size, etc. to accept types, not just numbers
+  * zcbor.py: Allow value ranges (x..y) to contain types and floats
+  * zcbor.py: Add support for .default for unions
+  * zcbor.py: Refactor exceptions and improve error reporting for CDDL parsing
+  * zcbor.py: Refactor the CddlParser class to make it able to run by itself
+  * zcbor.py: Refactor parsing of "float16", "float32-64" etc
+  * zcbor.py: Support unicode escape sequences
+* Code generation:
+  * zcbor.py: Add support for unordered maps in generated code
+  * zcbor.py: Add cli option to generate defines for magic values/numbers
+  * zcbor.py: Use ZCBOR_CAST_FP() in generated code
+  * zcbor.py: Add basic support for .default in code generation.
+  * zcbor.py: Use smaller int types in generated code when possible.
+  * zcbor.py: Avoid redundant single-member structs in generated types.
+  * zcbor.py: Include tag in var name if using the type for name
+  * zcbor.py: Avoid duplicate declarations
+  * zcbor.py: Use the DEFAULT_MAX_QTY define in the generated code
+  * zcbor.py: Add arg type checking for generated entry functions
+* Data translation:
+  * zcbor.py: Support canonical encoding when converting to CBOR in script
+  * zcbor.py: Add custom float precision support for YAML conversion
+  * zcbor.py: Performance improvements in DataTranslator
+
 ## Bugfixes:
+
+### C libraries:
+
+* zcbor_decode.c: Fix bug in zcbor_tag_expect() where it changes elem_count if it fails.
+* zcbor_decode.c: Fix bug in zcbor_any_skip() where it doesn't catch a string overflow if incorrectly formatted
+* zcbor_common: Fix issue where the wrong backup was used for searching in unordered maps
+* zcbor_common.c: Fix ubsan (-fsanitize=undefined) and strict-aliasing errors in float conversion 16 <-> 32
+* zcbor_print.h: Fix an issue where NULL payload could cause crash
+
+### zcbor.py:
+
+* CDDL parsing:
+  * zcbor.py: Fix an issue with optional elements ('?') where a non-present element can leave the decoding in a bad state.
+  * zcbor.py: Fix a naming bug causing unfixable CDDL naming collisions.
+  * zcbor.py: Fix issue where semicolons in string literals were seen as comments
+  * zcbor.py: Fix issue where newlines in string literals were removed
+  * zcbor.py: Fix bug in quote parsing when nested with braces.
+  * zcbor.py: Fix a small bug for repeated elements in unions, where _count variable could be missing if the element is unambiguous.
+  * zcbor.py: Fix bug where .le 1 .ge 1 would cause an issue.
+  * zcbor.py: Fix control groups "&()" so they can have a single member
+* Code generation:
+  * zcbor.py: Fix bug where float range checks could be ignored
+* Data translation:
+  * zcbor.py: Fix reading of .cbor files
 
 
 # zcbor v. 0.9.1 (2024-10-17)
