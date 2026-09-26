@@ -139,9 +139,19 @@ bool zcbor_process_backup_num(zcbor_state_t *state, uint32_t flags,
 		ZCBOR_ERR_IF(backup_num != state->constant_state->current_backup, ZCBOR_ERR_BAD_ARG);
 	}
 
-
-	zcbor_state_t local_copy = *state;
+	/* Save only the members needed after (possibly) restoring from the backup,
+	 * instead of copying the whole state. The local keeps the same stack
+	 * footprint as the full copy it replaces. */
+	zcbor_state_t local_copy;
+	uint8_t const *saved_payload = state->payload;
+	size_t saved_elem_count = state->elem_count;
+	bool keep_decode_state = (flags & ZCBOR_FLAG_KEEP_DECODE_STATE) != 0;
 	zcbor_state_t *backup = &state->constant_state->backup_list[i];
+
+	if (keep_decode_state) {
+		local_copy.decode_state = state->decode_state;
+	}
+	(void)&local_copy;
 
 	if (flags & ZCBOR_FLAG_RESTORE) {
 		if (!(flags & ZCBOR_FLAG_KEEP_PAYLOAD)) {
@@ -172,17 +182,17 @@ bool zcbor_process_backup_num(zcbor_state_t *state, uint32_t flags,
 		zcbor_log("Deprecation warning: Using max_elem_count != ZCBOR_MAX_ELEM_COUNT is deprecated.\r\n");
 		zcbor_log("See function documentation for details.\r\n");
 	}
-	if (local_copy.elem_count > max_elem_count) {
+	if (saved_elem_count > max_elem_count) {
 		zcbor_log("elem_count: %zu (expected max %zu)\r\n",
-			local_copy.elem_count, max_elem_count);
+			saved_elem_count, max_elem_count);
 		ZCBOR_ERR(ZCBOR_ERR_HIGH_ELEM_COUNT);
 	}
 
 	if (flags & ZCBOR_FLAG_KEEP_PAYLOAD) {
-		state->payload = local_copy.payload;
+		state->payload = saved_payload;
 	}
 
-	if (flags & ZCBOR_FLAG_KEEP_DECODE_STATE) {
+	if (keep_decode_state) {
 		/* Copy decode state */
 		state->decode_state = local_copy.decode_state;
 	}
