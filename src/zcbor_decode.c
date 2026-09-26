@@ -74,7 +74,7 @@ do {\
 #endif
 
 
-static bool type_check(zcbor_state_t *state, zcbor_major_type_t exp_major_type)
+static inline bool type_check(zcbor_state_t *state, zcbor_major_type_t exp_major_type)
 {
 	INITIAL_CHECKS();
 	zcbor_major_type_t major_type = ZCBOR_MAJOR_TYPE(*state->payload);
@@ -115,8 +115,35 @@ static void endian_copy(uint8_t *dst, const uint8_t *src, size_t src_len)
 #ifdef ZCBOR_BIG_ENDIAN
 	memcpy(dst, src, src_len);
 #else
-	for (size_t i = 0; i < src_len; i++) {
-		dst[i] = src[src_len - 1 - i];
+	switch (src_len) {
+	case 1:
+		dst[0] = src[0];
+		break;
+	case 2:
+		dst[0] = src[1];
+		dst[1] = src[0];
+		break;
+	case 4:
+		dst[0] = src[3];
+		dst[1] = src[2];
+		dst[2] = src[1];
+		dst[3] = src[0];
+		break;
+	case 8:
+		dst[0] = src[7];
+		dst[1] = src[6];
+		dst[2] = src[5];
+		dst[3] = src[4];
+		dst[4] = src[3];
+		dst[5] = src[2];
+		dst[6] = src[1];
+		dst[7] = src[0];
+		break;
+	default:
+		for (size_t i = 0; i < src_len; i++) {
+			dst[i] = src[src_len - 1 - i];
+		}
+		break;
 	}
 #endif /* ZCBOR_BIG_ENDIAN */
 }
@@ -160,14 +187,15 @@ static bool value_extract(zcbor_state_t *state,
 {
 	zcbor_trace(state, "value_extract");
 
-	INITIAL_CHECKS();
+	/* All callers are internal and have already performed INITIAL_CHECKS() */
 	ZCBOR_ERR_IF((state->elem_count == 0), ZCBOR_ERR_LOW_ELEM_COUNT);
+
+	uint8_t header_byte = *state->payload;
 
 	zcbor_assert_state(result_len != 0, "0-length result not supported.\r\n");
 	zcbor_assert_state(result_len <= 8, "result sizes above 8 bytes not supported.\r\n");
 	zcbor_assert_state(result != NULL, "result cannot be NULL.\r\n");
 
-	uint8_t header_byte = *state->payload;
 	uint8_t additional = ZCBOR_ADDITIONAL(header_byte);
 	size_t len = 0;
 
@@ -179,14 +207,43 @@ static bool value_extract(zcbor_state_t *state,
 		*indefinite_length_array = true;
 	} else {
 		len = additional_len(additional);
-		uint8_t *result_offs = (uint8_t *)result + ZCBOR_ECPY_OFFS(result_len, MAX(1, len));
+		size_t val_len = MAX(1, len);
 
 		ZCBOR_ERR_IF(additional > ZCBOR_VALUE_IS_8_BYTES, ZCBOR_ERR_ADDITIONAL_INVAL);
 		ZCBOR_ERR_IF(len > result_len, ZCBOR_ERR_INT_SIZE);
 		ZCBOR_ERR_IF((state->payload + len + 1) > state->payload_end,
 			ZCBOR_ERR_NO_PAYLOAD);
 
-		memset(result, 0, result_len);
+		/* result_offs is computed only after the checks above, so that the
+		 * pointer arithmetic never leaves the result object. */
+		uint8_t *result_offs = (uint8_t *)result + ZCBOR_ECPY_OFFS(result_len, val_len);
+
+		/* Only zero the bytes of the result not covered by the value.
+		 * Small explicit loop: cheaper than a memset() call for the
+		 * typical 1-7 byte tails, and alignment-safe. */
+#ifdef ZCBOR_BIG_ENDIAN
+		{
+			uint8_t *res = (uint8_t *)result;
+			size_t prefix = (size_t)(result_offs - res);
+			size_t i;
+
+			for (i = 0; i < prefix; i++) {
+				res[i] = 0;
+			}
+			for (i = (size_t)(result_offs - res) + val_len; i < result_len; i++) {
+				res[i] = 0;
+			}
+		}
+#else
+		{
+			uint8_t *res = (uint8_t *)result;
+			size_t i;
+
+			for (i = val_len; i < result_len; i++) {
+				res[i] = 0;
+			}
+		}
+#endif
 
 		if (len == 0) {
 			*result_offs = additional;

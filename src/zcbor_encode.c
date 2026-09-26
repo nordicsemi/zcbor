@@ -60,7 +60,7 @@ static bool encode_header_byte(zcbor_state_t *state,
 }
 
 
-/** Encode a single value.
+/** Encode a single raw big-endian value (used for floats).
  */
 static bool value_encode_len(zcbor_state_t *state, zcbor_major_type_t major_type,
 		const void *const result, size_t result_len)
@@ -92,61 +92,163 @@ static bool value_encode_len(zcbor_state_t *state, zcbor_major_type_t major_type
 	return true;
 }
 
+/** Encode a single value from a host-endian integer.
+ *
+ * The value is encoded with the shortest possible header (canonical), i.e.
+ * values <= 23 are encoded in the header byte only.
+ */
+static bool value_encode_u64(zcbor_state_t *state, zcbor_major_type_t major_type,
+		uint64_t val)
+{
+	size_t header_len = zcbor_header_len(val);
+	size_t result_len = header_len - 1;
 
-static bool value_encode(zcbor_state_t *state, zcbor_major_type_t major_type,
+	ZCBOR_CHECK_NULL(state);
+	ZCBOR_CHECK_ERROR();
+
+	if ((state->payload + header_len) > state->payload_end) {
+		ZCBOR_ERR(ZCBOR_ERR_NO_PAYLOAD);
+	}
+
+	if (!encode_header_byte(state, major_type,
+			get_additional(result_len, (uint8_t)val))) {
+		ZCBOR_FAIL();
+	}
+
+	{
+		uint8_t *p = state->payload_mut;
+		size_t nbytes = result_len;
+
+		/* result_len is 0, 1, 2, 4 or 8 (from zcbor_header_len()). */
+		switch (result_len) {
+		case 0:
+			break;
+		case 1:
+			*p = (uint8_t)val;
+			break;
+		case 2:
+			p[0] = (uint8_t)(val >> 8);
+			p[1] = (uint8_t)val;
+			break;
+		case 4:
+			p[0] = (uint8_t)(val >> 24);
+			p[1] = (uint8_t)(val >> 16);
+			p[2] = (uint8_t)(val >> 8);
+			p[3] = (uint8_t)val;
+			break;
+		case 8:
+			p[0] = (uint8_t)(val >> 56);
+			p[1] = (uint8_t)(val >> 48);
+			p[2] = (uint8_t)(val >> 40);
+			p[3] = (uint8_t)(val >> 32);
+			p[4] = (uint8_t)(val >> 24);
+			p[5] = (uint8_t)(val >> 16);
+			p[6] = (uint8_t)(val >> 8);
+			p[7] = (uint8_t)val;
+			break;
+		default:
+			for (size_t i = 0; i < nbytes; i++) {
+				p[i] = (uint8_t)(val >> (8 * (nbytes - 1 - i)));
+			}
+			break;
+		}
+		state->payload_mut += nbytes;
+	}
+
+	state->elem_count++;
+	return true;
+}
+
+/** Load a big-endian integer of value_len (<= 8) bytes into a host integer. */
+static inline uint64_t value_load(const void *const input, size_t value_len)
+{
+	const uint8_t *p = (const uint8_t *)input;
+
+	switch (value_len) {
+	case 1:
+		return p[0];
+	case 2:
+#ifdef ZCBOR_BIG_ENDIAN
+		return ((uint64_t)p[0] << 8) | p[1];
+#else
+		return ((uint64_t)p[1] << 8) | p[0];
+#endif
+	case 4: {
+		uint32_t v;
+#ifdef ZCBOR_BIG_ENDIAN
+		v = ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16)
+			| ((uint32_t)p[2] << 8) | p[3];
+#else
+		v = ((uint32_t)p[3] << 24) | ((uint32_t)p[2] << 16)
+			| ((uint32_t)p[1] << 8) | p[0];
+#endif
+		return v;
+	}
+	case 8: {
+		uint64_t v = value_load(p, 4);
+		uint64_t hi = value_load(p + 4, 4);
+#ifdef ZCBOR_BIG_ENDIAN
+		return (v << 32) | hi;
+#else
+		return (hi << 32) | v;
+#endif
+	}
+	default: {
+		uint64_t val = 0;
+#ifdef ZCBOR_BIG_ENDIAN
+		memcpy(((uint8_t *)&val) + sizeof(val) - value_len, input, value_len);
+#else
+		memcpy(&val, input, value_len);
+#endif
+		return val;
+	}
+	}
+}
+
+/** Encode a single value (integer, tag, or simple) from a fixed-size integer.
+ */
+static inline bool value_encode(zcbor_state_t *state, zcbor_major_type_t major_type,
 		const void *const input, size_t max_result_len)
 {
 	ZCBOR_CHECK_NULL(state);
-	zcbor_assert_state(max_result_len != 0, "0-length result not supported.\r\n");
+	ZCBOR_ERR_IF(input == NULL, ZCBOR_ERR_BAD_ARG);
+	ZCBOR_ERR_IF((max_result_len == 0) || (max_result_len > sizeof(uint64_t)),
+		ZCBOR_ERR_BAD_ARG);
 
-	size_t header_len = zcbor_header_len_ptr(input, max_result_len);
-
-	/* zcbor_header_len_ptr() returns 0 if @p input is NULL or @p max_result_len is too big. */
-	ZCBOR_ERR_IF(header_len == 0, ZCBOR_ERR_BAD_ARG);
-
-	size_t result_len = header_len - 1;
-	const void *result = input;
-
-#ifdef ZCBOR_BIG_ENDIAN
-	result = (uint8_t *)input + max_result_len - (result_len ? result_len : 1);
-#endif
-
-	return value_encode_len(state, major_type, result, result_len);
+	return value_encode_u64(state, major_type, value_load(input, max_result_len));
 }
 
 
 bool zcbor_int_encode(zcbor_state_t *state, const void *input_int, size_t int_size)
 {
 	zcbor_major_type_t major_type;
-	uint8_t input_buf[8];
-	const uint8_t *input_uint8 = input_int;
-	const int8_t *input_int8 = input_int;
-	const uint8_t *input = input_int;
+	uint64_t val;
 
 	ZCBOR_CHECK_NULL(state);
 	ZCBOR_ERR_IF(input_int == NULL, ZCBOR_ERR_BAD_ARG);
 
-	if (int_size > sizeof(int64_t)) {
+	if ((int_size > sizeof(int64_t)) || (int_size == 0)) {
 		ZCBOR_ERR(ZCBOR_ERR_INT_SIZE);
 	}
 
 #ifdef ZCBOR_BIG_ENDIAN
-	if (input_int8[0] < 0) {
+	if (((const int8_t *)input_int)[0] < 0) {
 #else
-	if (input_int8[int_size - 1] < 0) {
+	if (((const int8_t *)input_int)[int_size - 1] < 0) {
 #endif
 		major_type = ZCBOR_MAJOR_TYPE_NINT;
 
 		/* Convert to CBOR's representation by flipping all bits. */
-		for (unsigned int i = 0; i < int_size; i++) {
-			input_buf[i] = (uint8_t)~input_uint8[i];
-		}
-		input = input_buf;
+		val = value_load(input_int, int_size)
+			^ ((int_size == sizeof(uint64_t))
+				? UINT64_MAX
+				: ((UINT64_C(1) << (int_size * 8)) - 1));
 	} else {
 		major_type = ZCBOR_MAJOR_TYPE_PINT;
+		val = value_load(input_int, int_size);
 	}
 
-	if (!value_encode(state, major_type, input, int_size)) {
+	if (!value_encode_u64(state, major_type, val)) {
 		ZCBOR_FAIL();
 	}
 
