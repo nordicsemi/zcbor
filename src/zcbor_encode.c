@@ -96,19 +96,30 @@ static bool value_encode_len(zcbor_state_t *state, zcbor_major_type_t major_type
 static bool value_encode(zcbor_state_t *state, zcbor_major_type_t major_type,
 		const void *const input, size_t max_result_len)
 {
-	ZCBOR_CHECK_NULL(state);
-	zcbor_assert_state(max_result_len != 0, "0-length result not supported.\r\n");
+	/* Zero-extended copy of the input, so that the value bytes always sit in
+	 * the low-order end of an 8-byte integer. This avoids reading outside the
+	 * input when the minimal CBOR encoding of the value is wider than
+	 * max_result_len (possible for odd sizes like 3, 5, 6 and 7). */
+	uint8_t val_buf[8] = { 0 };
 
-	size_t header_len = zcbor_header_len_ptr(input, max_result_len);
+	ZCBOR_CHECK_NULL(state);
+	ZCBOR_ERR_IF(input == NULL, ZCBOR_ERR_BAD_ARG);
+	ZCBOR_ERR_IF((max_result_len == 0) || (max_result_len > sizeof(val_buf)),
+		ZCBOR_ERR_BAD_ARG);
+
+	memcpy(&val_buf[ZCBOR_ECPY_OFFS(sizeof(val_buf), max_result_len)],
+		input, max_result_len);
+
+	size_t header_len = zcbor_header_len_ptr(val_buf, sizeof(val_buf));
 
 	/* zcbor_header_len_ptr() returns 0 if @p input is NULL or @p max_result_len is too big. */
 	ZCBOR_ERR_IF(header_len == 0, ZCBOR_ERR_BAD_ARG);
 
 	size_t result_len = header_len - 1;
-	const void *result = input;
+	const void *result = val_buf;
 
 #ifdef ZCBOR_BIG_ENDIAN
-	result = (uint8_t *)input + max_result_len - (result_len ? result_len : 1);
+	result = &val_buf[sizeof(val_buf) - (result_len ? result_len : 1)];
 #endif
 
 	return value_encode_len(state, major_type, result, result_len);
@@ -126,7 +137,7 @@ bool zcbor_int_encode(zcbor_state_t *state, const void *input_int, size_t int_si
 	ZCBOR_CHECK_NULL(state);
 	ZCBOR_ERR_IF(input_int == NULL, ZCBOR_ERR_BAD_ARG);
 
-	if (int_size > sizeof(int64_t)) {
+	if ((int_size > sizeof(int64_t)) || (int_size == 0)) {
 		ZCBOR_ERR(ZCBOR_ERR_INT_SIZE);
 	}
 
