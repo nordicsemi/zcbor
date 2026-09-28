@@ -63,28 +63,28 @@ static bool encode_header_byte(zcbor_state_t *state,
 /** Encode a single value.
  */
 static bool value_encode_len(zcbor_state_t *state, zcbor_major_type_t major_type,
-		const void *const result, size_t result_len)
+		const void *const input, size_t input_len)
 {
 	ZCBOR_CHECK_NULL(state);
-	ZCBOR_ERR_IF(result == NULL, ZCBOR_ERR_BAD_ARG);
+	ZCBOR_ERR_IF(input == NULL, ZCBOR_ERR_BAD_ARG);
 
-	uint8_t *u8_result  = (uint8_t *)result;
+	uint8_t *u8_input  = (uint8_t *)input;
 
-	if ((state->payload + 1 + result_len) > state->payload_end) {
+	if ((state->payload + 1 + input_len) > state->payload_end) {
 		ZCBOR_ERR(ZCBOR_ERR_NO_PAYLOAD);
 	}
 
 	if (!encode_header_byte(state, major_type,
-				get_additional(result_len, u8_result[0]))) {
+				get_additional(input_len, u8_input[0]))) {
 		ZCBOR_FAIL();
 	}
 
 #ifdef ZCBOR_BIG_ENDIAN
-	memcpy(state->payload_mut, u8_result, result_len);
-	state->payload_mut += result_len;
+	memcpy(state->payload_mut, u8_input, input_len);
+	state->payload_mut += input_len;
 #else
-	for (; result_len > 0; result_len--) {
-		*(state->payload_mut++) = u8_result[result_len - 1];
+	for (; input_len > 0; input_len--) {
+		*(state->payload_mut++) = u8_input[input_len - 1];
 	}
 #endif /* ZCBOR_BIG_ENDIAN */
 
@@ -94,21 +94,21 @@ static bool value_encode_len(zcbor_state_t *state, zcbor_major_type_t major_type
 
 
 static bool value_encode(zcbor_state_t *state, zcbor_major_type_t major_type,
-		const void *const input, size_t max_result_len)
+		const void *const input, size_t input_len)
 {
 	ZCBOR_CHECK_NULL(state);
-	zcbor_assert_state(max_result_len != 0, "0-length result not supported.\r\n");
+	zcbor_assert_state(input_len != 0, "0-length result not supported.\r\n");
 
-	size_t header_len = zcbor_header_len_ptr(input, max_result_len);
+	size_t header_len = zcbor_header_len_ptr(input, input_len);
 
-	/* zcbor_header_len_ptr() returns 0 if @p input is NULL or @p max_result_len is too big. */
+	/* zcbor_header_len_ptr() returns 0 if @p input is NULL or @p input_len is too big. */
 	ZCBOR_ERR_IF(header_len == 0, ZCBOR_ERR_BAD_ARG);
 
 	size_t result_len = header_len - 1;
 	const void *result = input;
 
 #ifdef ZCBOR_BIG_ENDIAN
-	result = (uint8_t *)input + max_result_len - (result_len ? result_len : 1);
+	result = (uint8_t *)input + input_len - (result_len ? result_len : 1);
 #endif
 
 	return value_encode_len(state, major_type, result, result_len);
