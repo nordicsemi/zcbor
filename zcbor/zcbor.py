@@ -4706,7 +4706,7 @@ entire declaration is a single line.""",
         action="store_true",
         default=False,
         help="""If the output data is CBOR, use canonical CBOR rules.
-(no indefinite length lists, minially encoded floats, map elements sorted by key value).""",
+(no indefinite length lists, minimally encoded floats, map elements sorted by key value).""",
     )
     convert_parser.set_defaults(process=process_convert)
 

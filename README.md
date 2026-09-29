@@ -756,7 +756,7 @@ options:
                         instantiation. If omitted, the entire declaration is a
                         single line.
   --output-canonical    If the output data is CBOR, use canonical CBOR rules.
-                        (no indefinite length lists, minially encoded floats,
+                        (no indefinite length lists, minimally encoded floats,
                         map elements sorted by key value).
 
 ```
