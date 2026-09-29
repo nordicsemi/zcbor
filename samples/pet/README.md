@@ -17,15 +17,14 @@ To change the output for the second and third, change the code in [src/main.c](s
 ### To build:
 
 ```
-mkdir build
-cmake . -Bbuild
-make -C build
+cmake -B build .
+cmake --build build
 ```
 
 ### To run:
 
 ```
-build/app
+./build/sample_pet
 ```
 
 ### Expected output:
