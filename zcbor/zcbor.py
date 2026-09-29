@@ -2471,11 +2471,14 @@ class CodeGenerator(CddlXcoder):
         """Name of the enum entry for this element."""
         return self.var_name(with_prefix=True) + "_c"
 
-    def enum_var(self, int_val=False):
+    def enum_var(self, int_val=False, use_val_define=False):
         """Enum entry for this element."""
-        return (
-            f"{self.enum_var_name()} = {val_to_str(self.int_val())}" if int_val else self.enum_var_name()
-        )
+        if not int_val:
+            return self.enum_var_name()
+        value = self.int_val(force_literal=not use_val_define)
+        value = val_to_str(value) if not use_val_define else value
+        assert value is not None, "Programmer error: missing integer enum value."
+        return f"{self.enum_var_name()} = {value}"
 
     def choice_var_access(self):
         """Full "path" of the "choice" variable for this element."""
@@ -2602,28 +2605,28 @@ class CodeGenerator(CddlXcoder):
             return self.my_types[self.value].safe_failable()
         return True
 
-    def int_val(self):
-        """If this element is an integer, or starts with an integer, return the integer value."""
+    def int_val(self, force_literal=False):
+        """If this element is, or starts with, an integer, return the value or #define name."""
         if self.key:
-            return self.key.int_val()
+            return self.key.int_val(force_literal=force_literal)
         elif self.type in ("UINT", "NINT") and self.is_unambiguous():
-            return self.value
+            return self.value if force_literal else self.val_define_name_or_lit("VAL")
         elif self.type == "GROUP" and not self.count_var_condition():
-            return self.value[0].int_val()
+            return self.value[0].int_val(force_literal=force_literal)
         elif (
             self.type == "OTHER"
             and not self.count_var_condition()
             and not self.single_func_impl_condition()
             and not self.my_types[self.value].single_func_impl_condition()
         ):
-            return self.my_types[self.value].int_val()
+            return self.my_types[self.value].int_val(force_literal=force_literal)
         return None
 
     def is_int_disambiguated(self):
         """Whether this element starts with a specific integer that can be used to immediately
         disambiguate it from other elements.
         """
-        return self.int_val() is not None
+        return self.int_val(force_literal=True) is not None
 
     def all_children_disambiguated(self, min_val, max_val):
         """Whether all children of this element can be disambiguated via a starting integer.
@@ -2632,7 +2635,7 @@ class CodeGenerator(CddlXcoder):
         value.
         The min_val and max_val are to check whether the integers are within a certain range.
         """
-        values = set(child.int_val() for child in self.value)
+        values = set(child.int_val(force_literal=True) for child in self.value)
         retval = (
             (len(values) == len(self.value))
             and None not in values
@@ -2682,14 +2685,17 @@ class CodeGenerator(CddlXcoder):
         """Declaration of the "count" variable for this element."""
         return ["size_t %s;" % self.count_var_name()]
 
-    def anonymous_choice_var(self):
+    def anonymous_choice_var(self, use_val_defines=False):
         """Declaration of the "choice" variable for this element."""
         int_vals = self.all_children_int_disambiguated()
-        return self.enclose("enum", [val.enum_var(int_vals) + "," for val in self.value])
+        return self.enclose(
+            "enum",
+            [val.enum_var(int_vals, use_val_define=use_val_defines) + "," for val in self.value],
+        )
 
     def choice_var(self):
         """Declaration of the "choice" variable for this element."""
-        var = self.anonymous_choice_var()
+        var = self.anonymous_choice_var(use_val_defines=True)
         var[-1] += f" {self.choice_var_name()};"
         return var
 
@@ -2822,7 +2828,8 @@ class CodeGenerator(CddlXcoder):
             assert var_type[-1][-1] == "}" or len(var_type) == 1, f"Expected single var: {var_type!r}"
             if not anonymous or var_type[-1][-1] != "}":
                 var_name = self.var_name()
-                max_qty = self.max_qty if self.max_qty is not None else self.default_max_qty_define
+                equal = self.min_qty == self.max_qty and self.min_qty is not None
+                max_qty = self.val_define_name_or_lit("MAX_QTY" if not equal else "QTY")
                 var_type[-1] += f' {var_name}{f"[{max_qty}]" if full and self.max_qty != 1 else ""}'
             var_type = add_semicolon(var_type)
         return var_type
@@ -3290,6 +3297,12 @@ class CodeGenerator(CddlXcoder):
         }[self.type]()
         return retval
 
+    def max_child_list_counts(self):
+        _, max_counts = (
+            zip(*(child.list_counts() for child in self.value)) if self.value else ((0,), (0,))
+        )
+        return sum_or_none(max_counts, default=0)
+
     def is_multiple_elem_group(self):
         """Recursively determine whether the current element is a GROUP with multiple elements."""
         if self.type == "UNION":
@@ -3358,11 +3371,8 @@ class CodeGenerator(CddlXcoder):
             "zcbor_unordered_map_end_decode",
         ]
         assert self.type in ["LIST", "MAP"], "Expected LIST or MAP type, was %s." % self.type
-        _, max_counts = (
-            zip(*(child.list_counts() for child in self.value)) if self.value else ((0,), (0,))
-        )
         child_xcode = [c.full_xcode(res_var=res_var) for c in self.value]
-        count_arg = f", {sum_or_none(max_counts, default=0)}" if self.mode == "encode" else ""
+        count_arg = f", {self.val_define_name_or_lit('MAX_COUNT')}" if self.mode == "encode" else ""
         return "(%s && ((%s) || (%s, false)))" % (
             f"{start_func}(state{count_arg})",
             f"{newl_ind}&& ".join(child_xcode + [f"{end_func}(state{count_arg})"]),
@@ -3524,6 +3534,7 @@ class CodeGenerator(CddlXcoder):
         "QTY": lambda m_self: m_self.min_qty,
         "TAG": lambda m_self, i: m_self.tags[i],
         "NUM_BACKUPS": lambda m_self: m_self.num_backups(),
+        "MAX_COUNT": lambda m_self: m_self.max_child_list_counts(),
     }
 
     def val_define_name(self, val_type, i=None):
@@ -3588,6 +3599,8 @@ class CodeGenerator(CddlXcoder):
                 if self.min_qty is not None:
                     _define("MIN_QTY")
                 _define("MAX_QTY")
+        if self.type in ["MAP", "LIST"]:
+            _define("MAX_COUNT")
         if self.tags:
             for i in range(len(self.tags)):
                 _define(f"TAG", i)
@@ -3927,7 +3940,7 @@ class CodeRenderer:
             self.functions[mode] = self.unique_funcs(mode)
             self.functions[mode] = self.used_funcs(mode)
             self.type_defs[mode] = self.unique_types(mode)
-            self.defines[mode] = self.used_defines(mode)
+            self.defines[mode] = self.unique_defines(mode)
 
             if mode == "decode":
                 self.needs_map_smart_search[mode] = any(
@@ -4011,18 +4024,16 @@ and
                 out_types.append(func_type)
         return list(reversed(out_types))
 
-    def used_defines(self, mode):
-        """Return a list of #defines for all defined types, with unused #defines removed."""
-        full_code = "".join([func_type[0] for func_type in self.functions[mode]])
+    def unique_defines(self, mode):
+        """Return a mode-independent list of #defines for all defined types."""
         chosen = dict()
         defines = list(chain(*(xcoder.val_defines_recursive() for xcoder in self.sorted_types[mode])))
 
         for name, body in defines:
-            if name in full_code or name.endswith("NUM_BACKUPS"):
-                if name not in chosen:
-                    chosen[name] = body
-                elif chosen[name] != body:
-                    raise ValueError(f"Two different '#define {name}': ({body} != {chosen[name]}).")
+            if name not in chosen:
+                chosen[name] = body
+            elif chosen[name] != body:
+                raise ValueError(f"Two different '#define {name}': ({body} != {chosen[name]}).")
         return list(sorted(f"#define {name} ({body})" for name, body in chosen.items()))
 
     def render_forward_declaration(self, xcoder, mode):
@@ -4202,7 +4213,7 @@ do { \\
 #ifdef __cplusplus
 extern "C" {{
 #endif
-{((linesep * 2) + (linesep).join(self.defines[mode]) + (linesep)) if self.defines[mode] else ""}
+
 {(linesep * 2).join([f"{xcoder.public_xcode_func_sig()};" for xcoder in self.entry_types[mode]])}
 
 
@@ -4226,11 +4237,15 @@ extern "C" {{
 	{body}, \\
 	default: ZCBOR_CAST_FP(func))"""
 
-    def render_type_file(self, header_guard, mode):
+    def render_type_file(self, header_guard, modes):
+        defines = self.defines[modes[0]]
+        if any(self.defines[mode] != defines for mode in modes[1:]):
+            raise ValueError("Encode and decode produced different #defines for the shared header.")
+        defines_doc = "/** Generated #defines (because of --defines). Edit at your own risk. */"
         body = (linesep + linesep).join(
             [
                 f"{typedef[1]} {{{linesep}{linesep.join(typedef[0][1:])};"
-                for typedef in self.type_defs[mode]
+                for typedef in self.type_defs[modes[0]]
             ]
         )
         return f"""/*{self.render_file_header(" *")}
@@ -4255,7 +4270,7 @@ extern "C" {{
  *  See `zcbor --help` for more information about --default-max-qty
  */
 #define {self.default_max_qty_define} {self.default_max_qty}
-
+{((linesep * 2) + defines_doc + linesep + (linesep).join(defines) + (linesep)) if defines else ""}
 {body}
 
 #ifdef __cplusplus
@@ -4335,7 +4350,7 @@ target_include_directories({target_name} PUBLIC
             )
 
         print_unless_quiet(quiet, "Writing to " + type_file.name)
-        type_file.write(self.render_type_file(self.header_guard(type_file.name), mode))
+        type_file.write(self.render_type_file(self.header_guard(type_file.name), modes))
 
         if cmake_file:
             print_unless_quiet(quiet, "Writing to " + cmake_file.name)
@@ -4575,8 +4590,8 @@ the file's contents will be used.""",
         action="store_true",
         default=False,
         help="""Make #defines for all magic numbers in generated code, and place them in the
-generated header file. This is off by default because it may create naming conflicts that don't
-show up otherwise.""",
+generated header file with typedefs (--output-h-types). This is off by default because it may
+create naming conflicts that don't show up otherwise.""",
     )
     code_parser.add_argument(
         "--unordered-maps",

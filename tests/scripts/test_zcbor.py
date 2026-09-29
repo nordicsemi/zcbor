@@ -1564,14 +1564,19 @@ class TestIntSize(PopenTest, TempdTest):
         for e in expected_output_types:
             self.assertIn(e, output_h_types, f"Expected '{e}' in output_h_types")
 
+        for n in expected_defines:
+            self.assertNotIn(f"#define {n}", output_h, f"Expected no '{n}' in output_h")
+
         if defines_arg == []:
             for n, v in expected_defines.items():
-                self.assertNotIn(f"#define {n} ({v})", output_h, f"Expected no '{e}' in output_h")
+                self.assertNotIn(
+                    f"#define {n} ({v})", output_h_types, f"Expected no '{n}' in output_h_types"
+                )
             for e in expected_output_code_lit:
                 self.assertIn(e, output_c, f"Expected '{e}' in output_c")
         else:
             for n, v in expected_defines.items():
-                self.assertIn(f"#define {n} ({v})", output_h, f"Expected '{e}' in output_h")
+                self.assertIn(f"#define {n} ({v})", output_h_types, f"Expected '{n}' in output_h_types")
             for e in expected_output_code:
                 self.assertIn(e, output_c, f"Expected '{e}' in output_c")
 
@@ -1582,6 +1587,49 @@ class TestIntSize(PopenTest, TempdTest):
             for defines_arg in ([], ["--defines"]):
                 for bit_size in (8, 16, 32, 64):
                     self.do_test_int_size(mode, defines_arg, bit_size)
+
+
+class TestDefines(PopenTest, TempdTest):
+    def test_shared_header_is_mode_independent(self):
+        """The shared type header must be identical for separate encode and decode runs."""
+        p_cddl = self.tempd / "shared.cddl"
+        p_types = self.tempd / "shared_types.h"
+        p_cddl.write_text(
+            "One = 1\n"
+            "Root = [items: [* uint], ? value: uint .default 5, outside: One,\n"
+            "        choice: ((one_choice: One) / (two_choice: 2))]\n",
+            encoding="utf-8",
+        )
+        common_args = [
+            "zcbor",
+            "code",
+            "--cddl",
+            p_cddl,
+            "-t",
+            "Root",
+            "--defines",
+            "--output-h-types",
+            p_types,
+        ]
+        type_headers = {}
+        for mode in ("encode", "decode"):
+            self.popen_test(
+                common_args
+                + [
+                    f"--{mode}",
+                    "--output-c",
+                    self.tempd / f"shared_{mode}.c",
+                    "--output-h",
+                    self.tempd / f"shared_{mode}.h",
+                ]
+            )
+            type_headers[mode] = p_types.read_text(encoding="utf-8")
+
+        self.assertEqual(type_headers["encode"], type_headers["decode"])
+        self.assertIn("#define ROOT_MAX_COUNT (4)", type_headers["encode"])
+        self.assertIn("#define ROOT_VALUE_DEFAULT_VAL (5)", type_headers["encode"])
+        self.assertIn("Root_choice_one_choice_c = ONE_UINT1_VAL", type_headers["encode"])
+        self.assertIn("Root_choice_two_choice_c = ROOT_CHOICE_TWO_CHOICE_VAL", type_headers["encode"])
 
 
 class TestCanonical(PopenTest):
