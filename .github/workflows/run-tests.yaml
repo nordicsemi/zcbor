@@ -25,6 +25,7 @@ jobs:
       matrix:
         platform: ["native_sim", "native_sim/native/64", "mps2/an521/cpu0"]
         asserts: ["", "-x VERBOSE=ON -x ASSERTS=ON"]
+        subset: ["1/2", "2/2"]
     name: Merge test 1 - Twister (Ubuntu) (${{ matrix.platform }}${{ matrix.asserts != '' && ' with asserts' || '' }})
     steps:
     - name: Checkout the code
@@ -36,7 +37,7 @@ jobs:
     - name: Prepare and run tests
       uses: ./.github/actions/prepare_and_run_tests
       with:
-        twister_arguments: "--timestamps --platform ${{ matrix.platform }} ${{ matrix.asserts }} --exclude-tag release"
+        twister_arguments: "--timestamps --platform ${{ matrix.platform }} ${{ matrix.asserts }} --exclude-tag release --subset ${{ matrix.subset }}"
         zephyr_toolchain: ${{ matrix.platform == 'mps2/an521/cpu0' && 'zephyr' || 'host'}}
         zephyr_toolchain_arch: ${{ matrix.platform == 'mps2/an521/cpu0' && 'arm' || ''}}
 
@@ -46,7 +47,7 @@ jobs:
       matrix:
         platform: ["mps2/an521/cpu0"]
         asserts: [""]
-        subset: ["1/2", "2/2"]
+        subset: ["1/3", "2/3", "3/3"]
     name: Merge test 1 - Twister (Windows) (${{ matrix.platform }}${{ matrix.asserts != '' && ' with asserts' || '' }} - build only)
     steps:
     - name: Checkout the code
