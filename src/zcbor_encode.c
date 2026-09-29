@@ -97,7 +97,12 @@ static bool value_encode(zcbor_state_t *state, zcbor_major_type_t major_type,
 		const void *const input, size_t input_len)
 {
 	ZCBOR_CHECK_NULL(state);
-	zcbor_assert_state(input_len != 0, "0-length result not supported.\r\n");
+
+	/* The following if should be converted to an efficient check by the compiler:
+	 * !(input_len < 9 && ((0x116u >> input_len) & 1u)) */
+	if (input_len != 1 && input_len != 2 && input_len != 4 && input_len != 8) {
+		ZCBOR_ERR(ZCBOR_ERR_INT_SIZE);
+	}
 
 	size_t header_len = zcbor_header_len_ptr(input, input_len);
 
@@ -125,10 +130,7 @@ bool zcbor_int_encode(zcbor_state_t *state, const void *input_int, size_t int_si
 
 	ZCBOR_CHECK_NULL(state);
 	ZCBOR_ERR_IF(input_int == NULL, ZCBOR_ERR_BAD_ARG);
-
-	if (int_size > sizeof(int64_t)) {
-		ZCBOR_ERR(ZCBOR_ERR_INT_SIZE);
-	}
+	ZCBOR_ERR_IF(int_size == 0 || int_size > 8, ZCBOR_ERR_INT_SIZE);
 
 #ifdef ZCBOR_BIG_ENDIAN
 	if (input_int8[0] < 0) {

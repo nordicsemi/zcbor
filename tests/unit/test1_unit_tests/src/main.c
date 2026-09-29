@@ -3398,4 +3398,55 @@ ZTEST(zcbor_unit_tests, test_backup_mismatch)
 }
 
 
+ZTEST(zcbor_unit_tests, test_odd_int_sizes)
+{
+	uint8_t payload[16];
+	ZCBOR_STATE_E(state_e, 0, payload, sizeof(payload), 0);
+	int64_t int64_val[2] = {0x0102030405060708, 0x0102030405060708};
+	uint8_t *val_ptr = (uint8_t*)int64_val;
+
+	#define CHECK_INT_ERROR(err) zassert_equal(err, zcbor_peek_error(state_e), "err: %s\n", zcbor_error_str(zcbor_peek_error(state_e)))
+
+	zassert_false(zcbor_int_encode(state_e, NULL, 1), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_BAD_ARG);
+	zassert_false(zcbor_int_encode(state_e, val_ptr, 0), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_int_encode(state_e, val_ptr, 3), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_int_encode(state_e, val_ptr, 5), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_int_encode(state_e, val_ptr, 6), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_int_encode(state_e, val_ptr, 7), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_int_encode(state_e, val_ptr, 9), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_int_encode(state_e, val_ptr, 9), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_int_encode(state_e, val_ptr, 16), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_int_encode(state_e, val_ptr, 0x10000000), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+
+	zassert_false(zcbor_uint_encode(state_e, NULL, 1), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_BAD_ARG);
+	zassert_false(zcbor_uint_encode(state_e, val_ptr, 0), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_uint_encode(state_e, val_ptr, 3), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_uint_encode(state_e, val_ptr, 5), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_uint_encode(state_e, val_ptr, 6), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_uint_encode(state_e, val_ptr, 7), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_uint_encode(state_e, val_ptr, 9), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_uint_encode(state_e, val_ptr, 16), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+	zassert_false(zcbor_uint_encode(state_e, val_ptr, 0x10000000), NULL);
+	CHECK_INT_ERROR(ZCBOR_ERR_INT_SIZE);
+}
+
+
 ZTEST_SUITE(zcbor_unit_tests, NULL, NULL, NULL, NULL, NULL);
