@@ -2969,6 +2969,59 @@ ZTEST(zcbor_unit_tests, test_elem_state_backup2)
 }
 
 
+/* A union like the ones in generated code, where the first member (tstr) doesn't match. */
+static bool decode_union_tstr_or_uint(zcbor_state_t *state, uint32_t *result)
+{
+	struct zcbor_string str;
+	bool res;
+
+	ZCBOR_FAIL_IF(!zcbor_union_start_code(state));
+	res = ((zcbor_union_elem_code(state) && zcbor_tstr_decode(state, &str))
+		|| (zcbor_union_elem_code(state) && zcbor_uint32_decode(state, result)));
+	ZCBOR_FAIL_IF(!zcbor_union_end_code(state));
+	return res;
+}
+
+/* States without an elem_state buffer must support the calls that back up the
+ * elem_state, also when ZCBOR_MAP_SMART_SEARCH is defined. Such states are created by
+ * zcbor_entry_function() and by zcbor_new_decode_state() with NULL flags, and generated
+ * code uses these calls for unions and for optional and repeated elements. */
+ZTEST(zcbor_unit_tests, test_elem_state_backup_no_buffer)
+{
+	uint8_t payload[] = {0x05, 0x06, 0x07}; /* uint: 5, 6, 7 */
+	zcbor_state_t state_d[4];
+	uint32_t result[2] = {0};
+	size_t num_decode = 0;
+	bool present = false;
+	bool ret;
+
+	zcbor_new_decode_state(state_d, ZCBOR_ARRAY_SIZE(state_d), payload, sizeof(payload), 3,
+			NULL, 0);
+
+	ret = decode_union_tstr_or_uint(state_d, &result[0]);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+	zassert_equal(5, result[0], NULL);
+
+	ret = zcbor_present_decode_w_backup(&present, ZCBOR_CAST_FP(zcbor_uint32_decode), state_d,
+			&result[0]);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+	zassert_true(present, NULL);
+	zassert_equal(6, result[0], NULL);
+
+	ret = zcbor_multi_decode_w_backup(1, 2, &num_decode, ZCBOR_CAST_FP(zcbor_uint32_decode),
+			state_d, result, sizeof(result[0]));
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+	zassert_equal(1, num_decode, NULL);
+	zassert_equal(7, result[0], NULL);
+	zassert_equal(0, state_d->constant_state->current_backup, NULL);
+
+	int err = zcbor_entry_function(payload, sizeof(payload), &result[1], NULL, state_d,
+			ZCBOR_CAST_FP(decode_union_tstr_or_uint), ZCBOR_ARRAY_SIZE(state_d), 1);
+	zassert_equal(ZCBOR_SUCCESS, err, "err: %s\n", zcbor_error_str(err));
+	zassert_equal(5, result[1], NULL);
+}
+
+
 uint8_t dummy_entry_func_payload[10] = {
 	0x18, 42, /* uint: 42 */};
 

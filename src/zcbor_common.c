@@ -26,13 +26,17 @@ _Static_assert((sizeof(zcbor_state_t) >= sizeof(struct zcbor_state_constant)),
  *  continue to grow without colliding with the backup.
  *
  *  @param[in] dry_run If true, only the checks are performed, and no backup is made.
+ *
+ *  @retval true   if the backup was successfully made or would be made in a dry run
+ *  @retval false  if the backup could not be made, either because of an error, or because
+ *                 there is no elem_state.
  */
 static bool do_elem_state_backup(zcbor_state_t *state, bool dry_run)
 {
 	uint8_t *flags = state->decode_state.map_search_elem_state;
 
 	if (!flags) {
-		ZCBOR_ERR(ZCBOR_ERR_MAP_FLAGS_NOT_AVAILABLE);
+		return false;
 	}
 
 	size_t flags_len = zcbor_flags_to_bytes(state->decode_state.map_elem_count);
@@ -87,6 +91,7 @@ bool zcbor_new_backup_w_elem_state(zcbor_state_t *state, size_t new_elem_count, 
 	}
 
 #ifdef ZCBOR_MAP_SMART_SEARCH
+	backup_elem_state = backup_elem_state && (state->decode_state.map_search_elem_state != NULL);
 	if (backup_elem_state) {
 		ZCBOR_FAIL_IF(!do_elem_state_backup(state, true));
 	}
@@ -257,9 +262,6 @@ void zcbor_new_state(zcbor_state_t *state_array, size_t n_states,
 	state_array[0].decode_state.indefinite_length_array = false;
 #ifdef ZCBOR_MAP_SMART_SEARCH
 	state_array[0].decode_state.map_search_elem_state = flags;
-	if (flags == NULL) {
-		flags_bytes = 0;
-	}
 	state_array[0].decode_state.map_elem_count = 0;
 #else
 	state_array[0].decode_state.map_elems_processed = 0;
@@ -292,7 +294,7 @@ void zcbor_new_state(zcbor_state_t *state_array, size_t n_states,
 	state_array[0].constant_state->enforce_canonical = ZCBOR_ENFORCE_CANONICAL_DEFAULT;
 	state_array[0].constant_state->manually_process_elem = ZCBOR_MANUALLY_PROCESS_ELEM_DEFAULT;
 #ifdef ZCBOR_MAP_SMART_SEARCH
-	state_array[0].constant_state->map_search_elem_state_end = flags + flags_bytes;
+	state_array[0].constant_state->map_search_elem_state_end = flags ? flags + flags_bytes : 0;
 #endif
 #ifdef ZCBOR_FRAGMENTS
 	state_array[0].constant_state->curr_payload_section = payload;
