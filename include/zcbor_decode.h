@@ -464,7 +464,7 @@ bool zcbor_bstr_end_force_decode(zcbor_state_t *state);
  *
  * After calling this, you can retrieve a fragment with @ref zcbor_str_fragment_decode,
  * then update the payload with @ref zcbor_update_state.
- * Repeat until the string is fully decoded, then call @ref zcbor_bstr_fragments_end_decode.
+ * Repeat until the string is fully decoded, then call @ref zcbor_str_fragments_end_decode.
  */
 bool zcbor_bstr_fragments_start_decode(zcbor_state_t *state);
 bool zcbor_tstr_fragments_start_decode(zcbor_state_t *state);
@@ -481,10 +481,10 @@ bool zcbor_tstr_fragments_start_decode(zcbor_state_t *state);
  * A state backup is created to keep track of the element count and original payload_end.
  * After calling this, you can decode elements using other zcbor functions,
  * then update the payload with @ref zcbor_update_state.
- * Repeat until the string is fully decoded, then call @ref zcbor_bstr_fragments_end_decode.
+ * Repeat until the string is fully decoded, then call @ref zcbor_str_fragments_end_decode.
  * When the current payload section contains the end of the string,
  * payload_end is set to the end of the string, so there is no risk of decoding past the end.
- * Then, when @ref zcbor_bstr_fragments_end_decode has been called, payload_end is restored to the
+ * Then, when @ref zcbor_str_fragments_end_decode has been called, payload_end is restored to the
  * end of the payload section.
  * (This is analogous to how @ref zcbor_bstr_start_decode works)
  */

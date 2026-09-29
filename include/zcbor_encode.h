@@ -258,7 +258,7 @@ bool zcbor_bstr_end_force_encode(zcbor_state_t *state);
  *
  * After calling this, you can write a fragment with @ref zcbor_str_fragment_encode,
  * then update the payload with @ref zcbor_update_state.
- * Repeat until the string is fully encoded, then call @ref zcbor_bstr_fragments_end_encode.
+ * Repeat until the string is fully encoded, then call @ref zcbor_str_fragments_end_encode.
  */
 bool zcbor_bstr_fragments_start_encode(zcbor_state_t *state, size_t total_len);
 bool zcbor_tstr_fragments_start_encode(zcbor_state_t *state, size_t total_len);
@@ -275,7 +275,7 @@ bool zcbor_tstr_fragments_start_encode(zcbor_state_t *state, size_t total_len);
  * A state backup is created to keep track of the element count and original payload_end.
  * After calling this, you can encode elements using other zcbor functions,
  * then update the payload with @ref zcbor_update_state.
- * Repeat until the string is fully encoded, then call @ref zcbor_bstr_fragments_end_encode.
+ * Repeat until the string is fully encoded, then call @ref zcbor_str_fragments_end_encode.
  * When the current payload section contains the end of the string,
  * payload_end is set to the end of the string, so there is no risk of encoding past the end.
  */
