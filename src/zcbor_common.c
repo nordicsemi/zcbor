@@ -32,7 +32,7 @@ static bool do_elem_state_backup(zcbor_state_t *state, bool dry_run)
 	uint8_t *flags = state->decode_state.map_search_elem_state;
 
 	if (!flags) {
-		ZCBOR_ERR(ZCBOR_ERR_MAP_FLAGS_NOT_AVAILABLE);
+		return true;
 	}
 
 	size_t flags_len = zcbor_flags_to_bytes(state->decode_state.map_elem_count);
