@@ -623,9 +623,10 @@ options:
                         path to a file. If interpreted as a path to an
                         existing file, the file's contents will be used.
   --defines             Make #defines for all magic numbers in generated code,
-                        and place them in the generated header file. This is
-                        off by default because it may create naming conflicts
-                        that don't show up otherwise.
+                        and place them in the generated header file with
+                        typedefs (--output-h-types). This is off by default
+                        because it may create naming conflicts that don't show
+                        up otherwise.
   --unordered-maps      [EXPERIMENTAL] Generate code in such a way that it can
                         decode maps with unknown element order. When enabled,
                         the generated code will use the
