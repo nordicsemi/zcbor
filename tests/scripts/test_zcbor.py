@@ -2151,6 +2151,25 @@ class TestFuncPointer(PopenTest, TempdTest):
         check_file(output_c_d, "decode")
         check_file(output_c_e, "encode")
 
+    def test_func_pointer_no_struct_types(self):
+        """Test that ZCBOR_CUSTOM_CAST_FP is defined even when there are no struct types.
+
+        The enums of control groups must not be part of the macro, because enums are compatible
+        with integer types, so two of them would make the _Generic() ambiguous."""
+        p_cddl = self.tempd / "bits.cddl"
+        p_cddl.write_text(
+            "Bits1 = uint .bits flags1\nBits2 = uint .bits flags2\n"
+            "flags1 = &(a: 0)\nflags2 = &(b: 1)\n",
+            encoding="utf-8",
+        )
+        self.popen_test(
+            ["zcbor", "code", "--cddl", p_cddl, "-t", "Bits1", "Bits2", "-d", "-e"]
+            + ["--output-cmake", self.tempd / "bits.cmake"]
+        )
+        for mode in ("decode", "encode"):
+            output_c = (self.tempd / "src" / f"bits_{mode}.c").read_text(encoding="utf-8")
+            self.assertIn("#define ZCBOR_CUSTOM_CAST_FP(func) ZCBOR_CAST_FP(func)", output_c)
+
 
 class TestControlGroups(TestCase):
     def test_single_member(self):
