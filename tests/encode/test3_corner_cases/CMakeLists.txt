@@ -66,6 +66,7 @@ set(py_command
   EmptyFirst
   CountUnion
   Tags
+  TaggedIntUnion
   WrapListGroup
   WrapListGroupOpt1
   WrapListGroupOpt2
