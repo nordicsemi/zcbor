@@ -19,6 +19,28 @@ env:
   ZEPHYR_REV: 59659ed7cbf3b84b4b62d3a7b904f2b8167a1cef
 
 jobs:
+  check-for-changes:
+    runs-on: ubuntu-24.04
+    name: Check for changes since last scheduled run
+    permissions:
+      actions: read
+    outputs:
+      skip: ${{ steps.compare.outputs.skip }}
+    steps:
+    # Only the step is conditional: skipping the whole job would also skip every job that needs it.
+    - name: Compare with last successful scheduled run
+      id: compare
+      if: ${{ github.event_name == 'schedule' }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+      run: |
+        last_sha=$(gh run list --workflow run-tests.yaml --event schedule --status success --limit 1 --json headSha --jq '.[0].headSha')
+        echo "Last successful scheduled run: ${last_sha:-none}, current: $GITHUB_SHA"
+        if [ "$last_sha" = "$GITHUB_SHA" ]; then
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+        fi
+
   merge-test-1:
     runs-on: ubuntu-24.04
     strategy:
@@ -27,6 +49,8 @@ jobs:
         asserts: ["", "-x VERBOSE=ON -x ASSERTS=ON"]
         subset: ["1/2", "2/2"]
     name: Merge test 1 - Twister - Ubuntu - ${{ matrix.platform }}${{ matrix.asserts != '' && ' - with asserts' || '' }} - subset ${{ matrix.subset }}
+    needs: check-for-changes
+    if: "needs.check-for-changes.outputs.skip != 'true'"
     steps:
     - name: Checkout the code
       uses: actions/checkout@v5
@@ -57,6 +81,8 @@ jobs:
           - python-version: '3.13'
             cbor2-version: "<6.0.0"
     name: Merge tests 2 - Python (${{ matrix.python-version }}) functional tests (Ubuntu) with cbor2 ${{ matrix.cbor2-version != '' && matrix.cbor2-version || 'latest' }}
+    needs: check-for-changes
+    if: "needs.check-for-changes.outputs.skip != 'true'"
     steps:
     - name: Checkout the code
       uses: actions/checkout@v5
@@ -84,6 +110,8 @@ jobs:
   merge-test-2-win:
     runs-on: windows-latest
     name: Merge tests 2 - Python (latest) functional tests (Windows)
+    needs: check-for-changes
+    if: "needs.check-for-changes.outputs.skip != 'true'"
     steps:
     - name: Checkout the code
       uses: actions/checkout@v5
@@ -119,6 +147,8 @@ jobs:
   merge-test-3:
     runs-on: ubuntu-24.04
     name: Merge tests 3 - Check repo files (Ubuntu)
+    needs: check-for-changes
+    if: "needs.check-for-changes.outputs.skip != 'true'"
     steps:
     - name: Checkout the code
       uses: actions/checkout@v5
