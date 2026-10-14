@@ -4226,10 +4226,13 @@ extern "C" {{
 
     def render_cast_macro(self, mode):
         """Render a macro that casts the function pointer to the correct type."""
-        if not self.type_defs[mode]:
-            return ""
+        # The enums (from control groups) are never function arguments, and must be left out
+        # because they are compatible with integer types, so e.g. two enums would clash.
+        type_names = [n for _, n in self.type_defs[mode] if not n.startswith("enum ")]
+        if not type_names:
+            return "#define ZCBOR_CUSTOM_CAST_FP(func) ZCBOR_CAST_FP(func)"
         c = "" if mode == "decode" else "const "
-        lines = list(f"bool(*)(zcbor_state_t *, {c}{n} *): " for _, n in self.type_defs[mode])
+        lines = list(f"bool(*)(zcbor_state_t *, {c}{n} *): " for n in type_names)
         maxline = max(len(line) for line in lines)
         lines = (line.ljust(maxline) + f"((zcbor_{mode}r_t *)func)" for line in lines)
         body = ", \\\n\t".join(lines)
