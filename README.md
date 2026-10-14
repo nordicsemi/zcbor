@@ -276,12 +276,25 @@ The generated C code is C++ compatible.
 Build system
 ------------
 
+### Using Generator
+
 When calling zcbor with the argument `--output-cmake <file path>`, a CMake file will be created at that location.
 The generated CMake file creates a target library and adds the generated and non-generated source files as well as required include directories to it.
 This CMake file can then be included in your project's `CMakeLists.txt` file, and the target can be linked into your project.
 This is demonstrated in the tests, e.g. at [tests/decode/test3_simple/CMakeLists.txt](tests/decode/test3_simple/CMakeLists.txt).
 zcbor can be instructed to copy the non-generated sources to the same location as the generated sources with `--copy-sources`.
 
+### Using Standard CMake
+
+The zcbor repository includes a standard `CMakeLists.txt` file that can be used to build the zcbor library. To build and install zcbor using a standard out-of-source build directory:
+
+```sh
+cmake -B build .
+cmake --build build
+cmake --install build
+```
+
+Alternatively, a convenience script `scripts/build_zcbor.sh` is provided which configures, builds and installs into a `$(pwd)/install` directory. A user-provided prefix can also be specified (e.g. `./scripts/build_zcbor.sh ~/local`) to override the default installation directory.
 
 Usage Example
 =============
