@@ -2731,6 +2731,9 @@ class CodeGenerator(CddlXcoder):
             default_min = 0 if self.type == "UINT" else INT_MIN[default]
 
             candidates = []
+            # Fixed values can be emitted as editable #defines, so use at least 32 bits.
+            if self.type in ["UINT", "NINT"] and self.value is not None:
+                candidates.append(32)
 
             for v in [
                 self.value or 0,
