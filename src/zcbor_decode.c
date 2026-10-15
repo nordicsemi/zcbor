@@ -726,20 +726,12 @@ static bool exit_backup(zcbor_state_t *state, bool skip_check_error, bool *backu
 }
 
 
-#define EXIT_BACKUP_IF_FORCE(state, force, skip_check_error) \
-	ZCBOR_FAIL_IF(force && !exit_backup(state, skip_check_error, NULL))
-
-
-bool zcbor_bstr_end_decode(zcbor_state_t *state, bool force)
+bool zcbor_bstr_end_decode(zcbor_state_t *state)
 {
 	ZCBOR_PRINT_FUNC_NAME();
 	ZCBOR_CHECK_NULL(state);
 	ZCBOR_CHECK_ERROR();
-
-	if (state->payload != state->payload_end){
-		EXIT_BACKUP_IF_FORCE(state, force, false);
-		ZCBOR_ERR(ZCBOR_ERR_PAYLOAD_NOT_CONSUMED);
-	}
+	ZCBOR_ERR_IF(state->payload != state->payload_end, ZCBOR_ERR_PAYLOAD_NOT_CONSUMED);
 	return exit_backup(state, false, NULL);
 }
 
@@ -849,7 +841,7 @@ bool zcbor_str_fragments_end_decode(zcbor_state_t *state)
 	if (state->inside_frag_str) {
 		state->inside_frag_str = false;
 	} else {
-		if (!zcbor_bstr_end_decode(state, false)) {
+		if (!zcbor_bstr_end_decode(state)) {
 			ZCBOR_FAIL();
 		}
 		state->inside_cbor_bstr = false;
@@ -1307,22 +1299,18 @@ static bool array_end_expect(zcbor_state_t *state)
 }
 
 
-static bool list_map_end_decode(zcbor_state_t *state, bool force)
+static bool list_map_end_decode(zcbor_state_t *state)
 {
 	ZCBOR_CHECK_NULL(state);
 
 	if (state->decode_state.indefinite_length_array) {
 		if (!array_end_expect(state)) {
-			/* Call EXIT_BACKUP_IF_FORCE with skip_check_error=true so it will
-			 * complete correctly even though array_end_expect() failed. */
-			EXIT_BACKUP_IF_FORCE(state, force, true);
 			ZCBOR_FAIL();
 		}
 		state->decode_state.indefinite_length_array = false;
 	} else {
 		if (state->elem_count > 0) {
 			zcbor_log("%zu elements left in map or array (should be 0).\r\n", state->elem_count);
-			EXIT_BACKUP_IF_FORCE(state, force, false);
 			ZCBOR_ERR(ZCBOR_ERR_HIGH_ELEM_COUNT);
 		}
 	}
@@ -1331,21 +1319,21 @@ static bool list_map_end_decode(zcbor_state_t *state, bool force)
 }
 
 
-bool zcbor_list_end_decode(zcbor_state_t *state, bool force)
+bool zcbor_list_end_decode(zcbor_state_t *state)
 {
 	ZCBOR_PRINT_FUNC_NAME();
-	return list_map_end_decode(state, force);
+	return list_map_end_decode(state);
 }
 
 
-bool zcbor_map_end_decode(zcbor_state_t *state, bool force)
+bool zcbor_map_end_decode(zcbor_state_t *state)
 {
 	ZCBOR_PRINT_FUNC_NAME();
-	return list_map_end_decode(state, force);
+	return list_map_end_decode(state);
 }
 
 
-bool zcbor_unordered_map_end_decode(zcbor_state_t *state, bool force)
+bool zcbor_unordered_map_end_decode(zcbor_state_t *state)
 {
 	ZCBOR_PRINT_FUNC_NAME();
 	bool err_not_processed = false;
@@ -1378,10 +1366,7 @@ bool zcbor_unordered_map_end_decode(zcbor_state_t *state, bool force)
 #endif
 	}
 
-	if (err_not_processed) {
-		EXIT_BACKUP_IF_FORCE(state, force, false);
-		ZCBOR_ERR(ZCBOR_ERR_ELEMS_NOT_PROCESSED);
-	}
+	ZCBOR_ERR_IF(err_not_processed, ZCBOR_ERR_ELEMS_NOT_PROCESSED);
 
 	while (!zcbor_array_at_end(state)) {
 		if (!zcbor_any_skip(state, NULL)) {
@@ -1393,14 +1378,11 @@ bool zcbor_unordered_map_end_decode(zcbor_state_t *state, bool force)
 			 * function, but then failed now in zcbor_any_skip().
 			 */
 			zcbor_log("Could not move to end of map. zcbor_any_skip() returned %d\n", zcbor_peek_error(state));
-			/* Call EXIT_BACKUP_IF_FORCE with skip_check_error=true so it will
-			 * complete correctly even though zcbor_any_skip() failed. */
-			EXIT_BACKUP_IF_FORCE(state, force, true);
 			ZCBOR_ERR(ZCBOR_ERR_BAD_STATE);
 		}
 	}
 
-	return zcbor_map_end_decode(state, force);
+	return zcbor_map_end_decode(state);
 }
 
 

@@ -572,15 +572,17 @@ static bool list_map_end_encode(zcbor_state_t *state, size_t size_hint,
 		return true;
 	}
 
-	/** This resets the payload pointer to before the list/map header.
-	  * For that reason the previous payload was stored above to be used in
-	  * later calculations. */
-	if (!zcbor_process_backup(state, ZCBOR_FLAG_RESTORE | ZCBOR_FLAG_CONSUME, ZCBOR_MAX_ELEM_COUNT)) {
+	/** Restore the backup into a copy (without consuming) to find the start of the list/map header.
+	  * Use a copy so that the state is left untouched if the checks fail.
+	  * If successful, the backup is consumed after the checks and state is updated accordingly. */
+	zcbor_state_t start_state = *state;
+
+	if (!zcbor_process_backup(&start_state, ZCBOR_FLAG_RESTORE, ZCBOR_MAX_ELEM_COUNT)) {
 		ZCBOR_FAIL();
 	}
 
-	const uint8_t *old_body_start = state->payload + hint_header_len;
-	uint8_t *new_body_start = state->payload_mut + header_len;
+	const uint8_t *old_body_start = start_state.payload + hint_header_len;
+	uint8_t *new_body_start = start_state.payload_mut + header_len;
 	size_t body_size = (size_t)payload - (size_t)old_body_start;
 
 	/* Overflow check */
@@ -588,15 +590,21 @@ static bool list_map_end_encode(zcbor_state_t *state, size_t size_hint,
 		ZCBOR_ERR(ZCBOR_ERR_BAD_ARG);
 	}
 
+	/* Check that the memmove() call below will not overflow the payload buffer */
+	if ((new_body_start + body_size) > state->payload_end) {
+		ZCBOR_ERR(ZCBOR_ERR_NO_PAYLOAD);
+	}
+
+	/** This resets the payload pointer to before the list/map header.
+	  * For that reason the previous payload was stored above to be used in
+	  * later calculations. */
+	if (!zcbor_process_backup(state, ZCBOR_FLAG_RESTORE | ZCBOR_FLAG_CONSUME, ZCBOR_MAX_ELEM_COUNT)) {
+		ZCBOR_FAIL();
+	}
+
 	/** memmove before encoding the header since encoding the header will
-	  * corrupt the data if the new header is larger than the previous header.
-	  * For this case, we must also check that the memmove does not overflow
-	  * the payload buffer, since the data is memmoved to a higher memory
-	  * address. */
+	  * corrupt the data if the new header is larger than the previous header. */
 	if (new_body_start != old_body_start) {
-		if ((new_body_start + body_size) > state->payload_end) {
-			ZCBOR_ERR(ZCBOR_ERR_NO_PAYLOAD);
-		}
 		memmove(new_body_start, old_body_start, body_size);
 	}
 

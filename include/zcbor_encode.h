@@ -130,14 +130,11 @@ bool zcbor_map_start_encode(zcbor_state_t *state, size_t size_hint);
  *    the list/map header. If the header ends up a different size than expected,
  *    the list/map contents are moved using memmove().
  *
+ * If the call fails, the encoding is left in the same state as before the call.
  * Use @ref zcbor_list_map_end_force_encode to forcibly consume the backup if
- * something has gone wrong.
+ * something has gone wrong, e.g. after a failed call to this function.
  *
  * See @ref zcbor_list_start_encode for param docs.
- *
- * @note If the call fails, The behavior depends on whether ZCBOR_CANONICAL is defined.
- *       If enabled, the state is returned to how it was before the corresponding `*_start_encode` call.
- *       If disabled, the state is left how it was before this call to `*_end_encode`.
  */
 bool zcbor_list_end_encode(zcbor_state_t *state, size_t size_hint);
 bool zcbor_map_end_encode(zcbor_state_t *state, size_t size_hint);
@@ -245,6 +242,10 @@ bool zcbor_bstr_start_encode(zcbor_state_t *state);
  *
  * This writes the final size of the bstr to the header.
  * Restore element count from backup.
+ *
+ * If the call fails, the encoding is left in the same state as before the call.
+ * Use @ref zcbor_bstr_end_force_encode to forcibly consume the backup if
+ * something has gone wrong, e.g. after a failed call to this function.
  */
 bool zcbor_bstr_end_encode(zcbor_state_t *state, struct zcbor_string *result);
 bool zcbor_bstr_end_force_encode(zcbor_state_t *state);
