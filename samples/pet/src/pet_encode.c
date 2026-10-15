@@ -41,9 +41,9 @@ static bool encode_Pet(
 	&& zcbor_list_end_encode(state, 0)) || (zcbor_list_map_end_force_encode(state), false))))
 	&& (((((((*input).birthday.len == 8)) || (zcbor_error(state, ZCBOR_ERR_WRONG_RANGE), false))) || (zcbor_error(state, ZCBOR_ERR_WRONG_RANGE), false))
 	&& (zcbor_bstr_encode(state, (&(*input).birthday))))
-	&& ((((*input).species_choice == Pet_species_cat_c) ? ((zcbor_uint8_put(state, (Pet_species_cat_c))))
-	: (((*input).species_choice == Pet_species_dog_c) ? ((zcbor_uint8_put(state, (Pet_species_dog_c))))
-	: (((*input).species_choice == Pet_species_other_c) ? ((zcbor_uint8_put(state, (Pet_species_other_c))))
+	&& ((((*input).species_choice == Pet_species_cat_c) ? ((zcbor_uint32_put(state, (Pet_species_cat_c))))
+	: (((*input).species_choice == Pet_species_dog_c) ? ((zcbor_uint32_put(state, (Pet_species_dog_c))))
+	: (((*input).species_choice == Pet_species_other_c) ? ((zcbor_uint32_put(state, (Pet_species_other_c))))
 	: false))))
 	&& zcbor_list_end_encode(state, 3)) || (zcbor_list_map_end_force_encode(state), false)))));
 
