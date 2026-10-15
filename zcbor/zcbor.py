@@ -3004,17 +3004,18 @@ class CodeGenerator(CddlXcoder):
         """Function name for xcoding this type, when it is a primitive type"""
         ptr_variant = ptr_result and self.type in ["UINT", "INT", "NINT", "FLOAT", "BOOL"]
         func_prefix = self.single_func_prim_prefix()
+        union_action = (union_int or {}).get("action")
         if self.mode == "decode":
             if self.type == "ANY":
                 func = "zcbor_any_skip"
             elif not self.is_unambiguous_value():
                 func = f"{func_prefix}_decode"
-            elif not union_int:
+            elif not union_action:
                 func = f"{func_prefix}_{'pexpect' if ptr_variant else 'expect'}"
-            elif union_int == "EXPECT":
+            elif union_action == "EXPECT":
                 assert not ptr_variant, "Programmer error: invalid use of expect_union."
                 func = f"{func_prefix}_expect_union"
-            elif union_int == "DROP":
+            elif union_action == "DROP":
                 return None
         else:
             if self.type == "ANY":
@@ -3057,7 +3058,7 @@ class CodeGenerator(CddlXcoder):
         elif self.type in ["BSTR", "TSTR"]:
             arg = assign_tmp_str(self.val_define_name_or_lit("VAL"))
         elif self.type in ["UINT", "INT", "NINT", "FLOAT", "BOOL"]:
-            value = self.val_define_name_or_lit("VAL")
+            value = (union_int or {}).get("enum") or self.val_define_name_or_lit("VAL")
             arg = f"&({self.val_type_name()}){{{value}}}" if ptr_result else value
         else:
             assert False, "Should not come here."
@@ -3384,6 +3385,8 @@ class CodeGenerator(CddlXcoder):
     def xcode_group(self, *, res_var, union_int=None):
         """Return the full code needed to encode/decode a "GROUP" element's children."""
         assert self.type in ["GROUP"], "Expected GROUP type."
+
+        # Pass union_int to the first child only.
         return "(%s)" % (newl_ind + "&& ").join(
             [self.value[0].full_xcode(res_var=res_var, union_int=union_int)]
             + [child.full_xcode(res_var=res_var) for child in self.value[1:]]
@@ -3424,7 +3427,7 @@ class CodeGenerator(CddlXcoder):
                         % (
                             self.choice_var_access(),
                             child.enum_var_name(),
-                            child.full_xcode(res_var=res_var, union_int="DROP"),
+                            child.full_xcode(res_var=res_var, union_int={"action": "DROP"}),
                         )
                         for child in self.value
                     ]
@@ -3444,7 +3447,7 @@ class CodeGenerator(CddlXcoder):
 
             child_values = []
             for child in self.value:
-                union_int = "EXPECT" if child.expect_union_condition() else None
+                union_int = {"action": "EXPECT"} if child.expect_union_condition() else None
                 xcode = child.full_xcode(res_var=res_var, union_int=union_int)
                 op = comma_operator(f"({self.choice_var_access()} = {child.enum_var_name()})", "true")
                 child_values.append(f"({xcode} && {op})")
@@ -3466,10 +3469,13 @@ class CodeGenerator(CddlXcoder):
             else:
                 return f"({child_code})"
         else:
+            # The decoder compares the integers with the enum values, so encode those.
+            implicit = self.implicit_union_condition()
+            union_int = lambda child: {"enum": child.enum_var_name()} if implicit else None
             return ternary_if_chain(
                 self.choice_var_access(),
                 [child.enum_var_name() for child in self.value],
-                [child.full_xcode(res_var=res_var) for child in self.value],
+                [child.full_xcode(res_var=res_var, union_int=union_int(child)) for child in self.value],
             )
 
     def xcode_bstr(self, *, res_var):
@@ -3672,7 +3678,7 @@ class CodeGenerator(CddlXcoder):
         return range_checks
 
     def xcode_key(self, *, res_var, union_int):
-        if self.mode == "decode" and self.unordered_maps and union_int != "DROP":
+        if self.mode == "decode" and self.unordered_maps and (union_int or {}).get("action") != "DROP":
             func, *arguments = self.key.single_func(
                 res_var=res_var,
                 access=self.key.val_access(res_var=res_var),
@@ -3791,6 +3797,15 @@ class CodeGenerator(CddlXcoder):
         """Return the full code needed to encode/decode this element.
 
         Including children, key, cbor, and repetitions.
+
+        union_int is a dict with information from a union about the integer that this element
+        starts with (see int_val()):
+         - "action": How to decode it: "EXPECT" to use *_expect_union(), or "DROP" to skip it
+           because it has been decoded into the choice variable.
+         - "enum": An enum value to encode instead of the integer.
+        It originates in xcode_union, and is propagated to first children until it reaches the
+        first element, which has already been established to be an integer (via
+        implicit_union_condition()).
         """
         if self.present_var_condition():
             if self.mode == "encode":
