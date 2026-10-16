@@ -465,10 +465,6 @@ class TestDocs(TestCase, LinkTester):
         results = self.check_urls_async(self.known_good_urls - self.urls_never_check)
         self._check_results(results)
 
-    @skipIf(
-        list(map(version_int, python_version_tuple())) < [3, 10, 0],
-        "Skip on Python < 3.10 because of different wording in argparse output.",
-    )
     @skipIf(platform.startswith("win"), "Skip on Windows because of path/newline issues.")
     def test_cli_doc(self):
         """Check the auto-generated CLI docs in the top level README.md file."""
