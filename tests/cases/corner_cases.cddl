@@ -478,6 +478,20 @@ UnionDefault = [
 OptUnion = [foo: ?((FooA: 1) / (FooB: 2) / (FooC: Three))]
 CountUnion = (+1) / nil
 
+; Each empty list/map is tried before a non-empty one that can be in the same position.
+EmptyFirst = [
+	ef_union_list: ((EFEmptyList: []) / (EFIntList: [+int])),
+	ef_union_map: ((EFEmptyMap: {}) / (EFIntMap: {+int => int})),
+	?ef_opt_list: [],
+	ef_tstr_list: [+tstr],
+	?ef_opt_map: {},
+	ef_tstr_map: {+tstr => int},
+	ef_rep_list: *[],
+	ef_bool_list: [+bool],
+	ef_rep_map: *{},
+	ef_bool_map: {+bool => int},
+]
+
 Tags = [
 	tag1: ((tag1_alt1: #6.1234(int)) / (tag1_alt2: #6.2345(int))),
 	tag2: ((tag2_alt1: (#6.3456(bool), #6.1234(int))) / (tag2_alt2: #6.3456(bool))),

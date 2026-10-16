@@ -74,6 +74,7 @@ set(py_command
     UnicodeEscape
     AmbigList
     UnionDefault
+    EmptyFirst
     OptUnion
     CountUnion
     Tags

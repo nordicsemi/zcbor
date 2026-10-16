@@ -797,6 +797,12 @@ ZTEST(cbor_encode_test3, test_nested_map_list_map)
 
 	zassert_equal(sizeof(exp_payload_nested_mlm5), out_len, "%d != %d", sizeof(exp_payload_nested_mlm5), out_len);
 	zassert_mem_equal(exp_payload_nested_mlm5, output, sizeof(exp_payload_nested_mlm5), NULL);
+
+	for (size_t i = 0; i < sizeof(exp_payload_nested_mlm5); i++) {
+		int err = cbor_encode_NestedMapListMap(output, i, &maplistmap5, &out_len);
+
+		zassert_equal(ZCBOR_ERR_NO_PAYLOAD, err, "len %zu: %s\n", i, zcbor_error_str(err));
+	}
 }
 
 
@@ -1972,6 +1978,93 @@ ZTEST(cbor_encode_test3, test_union_default)
 	zassert_equal(ZCBOR_SUCCESS, cbor_encode_UnionDefault(payload,
 		sizeof(payload), &input, NULL));
 	zassert_mem_equal(payload, union_default_exp_payload2, sizeof(union_default_exp_payload2));
+}
+
+
+/* Test encoding EmptyFirst with and without the empty lists/maps, and that encoding into a payload
+ * that is too small fails with ZCBOR_ERR_NO_PAYLOAD no matter where the payload runs out, e.g. in
+ * the header of one of the empty lists/maps. */
+ZTEST(cbor_encode_test3, test_empty_first)
+{
+	uint8_t exp_empty_first_payload1[] = {LIST(9),
+		LIST(2), 1, 2, END
+		MAP(1), 3, 4, END
+		LIST(1), 0x61, 'a', END
+		MAP(1), 0x61, 'b', 5, END
+		LIST(0), END
+		LIST(0), END
+		LIST(1), 0xF5, END
+		MAP(0), END
+		MAP(1), 0xF4, 6, END
+		END
+	};
+	uint8_t exp_empty_first_payload2[] = {LIST(8),
+		LIST(0), END
+		MAP(0), END
+		LIST(0), END
+		LIST(1), 0x61, 'a', END
+		MAP(0), END
+		MAP(1), 0x61, 'b', 5, END
+		LIST(1), 0xF5, END
+		MAP(1), 0xF4, 6, END
+		END
+	};
+	struct EmptyFirst input;
+	uint8_t payload[50];
+	size_t num_encode;
+	int err;
+
+	input.ef_union_list_choice = ef_union_list_EFIntList_c;
+	input.Int[0] = 1;
+	input.Int[1] = 2;
+	input.Int_count = 2;
+	input.ef_union_map_choice = ef_union_map_EFIntMap_c;
+	input.intint[0].intint_key = 3;
+	input.intint[0].intint = 4;
+	input.intint_count = 1;
+	input.ef_opt_list_present = false;
+	input.tstr[0].value = (const uint8_t *)"a";
+	input.tstr[0].len = 1;
+	input.tstr_count = 1;
+	input.ef_opt_map_present = false;
+	input.tstrint[0].tstrint_key.value = (const uint8_t *)"b";
+	input.tstrint[0].tstrint_key.len = 1;
+	input.tstrint[0].tstrint = 5;
+	input.tstrint_count = 1;
+	input.ef_rep_list_count = 2;
+	input.Bool[0] = true;
+	input.Bool_count = 1;
+	input.ef_rep_map_count = 1;
+	input.boolint[0].boolint_key = false;
+	input.boolint[0].boolint = 6;
+	input.boolint_count = 1;
+
+	err = cbor_encode_EmptyFirst(payload, sizeof(payload), &input, &num_encode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(exp_empty_first_payload1), num_encode, NULL);
+	zassert_mem_equal(exp_empty_first_payload1, payload, num_encode, NULL);
+
+	for (size_t i = 0; i < sizeof(exp_empty_first_payload1); i++) {
+		err = cbor_encode_EmptyFirst(payload, i, &input, &num_encode);
+		zassert_equal(ZCBOR_ERR_NO_PAYLOAD, err, "len %zu: %s\n", i, zcbor_error_str(err));
+	}
+
+	input.ef_union_list_choice = ef_union_list_EFEmptyList_c;
+	input.ef_union_map_choice = ef_union_map_EFEmptyMap_c;
+	input.ef_opt_list_present = true;
+	input.ef_opt_map_present = true;
+	input.ef_rep_list_count = 0;
+	input.ef_rep_map_count = 0;
+
+	err = cbor_encode_EmptyFirst(payload, sizeof(payload), &input, &num_encode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(exp_empty_first_payload2), num_encode, NULL);
+	zassert_mem_equal(exp_empty_first_payload2, payload, num_encode, NULL);
+
+	for (size_t i = 0; i < sizeof(exp_empty_first_payload2); i++) {
+		err = cbor_encode_EmptyFirst(payload, i, &input, &num_encode);
+		zassert_equal(ZCBOR_ERR_NO_PAYLOAD, err, "len %zu: %s\n", i, zcbor_error_str(err));
+	}
 }
 
 
