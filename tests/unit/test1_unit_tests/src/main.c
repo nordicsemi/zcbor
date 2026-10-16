@@ -2708,6 +2708,33 @@ ZTEST(zcbor_unit_tests, test_encode_start_end_failure_state)
 	zassert_equal(ZCBOR_ERR_NO_BACKUP_MEM, zcbor_peek_error(state_e2), NULL);
 	enc_assert_unchanged(state_e2, &snap, "bstr_start no backup mem");
 
+	/* Start without room for the header, i.e. failing after the backup has been taken. */
+	ZCBOR_STATE_E(state_e3, 1, payload, 0, 1);
+	enc_snapshot(state_e3, &snap);
+	zassert_false(zcbor_list_start_encode(state_e3, 1), NULL);
+	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, zcbor_peek_error(state_e3), NULL);
+	enc_assert_unchanged(state_e3, &snap, "list_start no payload");
+
+	zassert_false(zcbor_map_start_encode(state_e3, 1), NULL);
+	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, zcbor_peek_error(state_e3), NULL);
+	enc_assert_unchanged(state_e3, &snap, "map_start no payload");
+
+	zassert_false(zcbor_bstr_start_encode(state_e3), NULL);
+	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, zcbor_peek_error(state_e3), NULL);
+	enc_assert_unchanged(state_e3, &snap, "bstr_start no payload");
+
+	/* The same with stop_on_error, which makes zcbor_process_backup() refuse to run while the
+	 * error from the header is registered. */
+	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, zcbor_pop_error(state_e3), NULL);
+	state_e3->constant_state->stop_on_error = true;
+	zassert_false(zcbor_list_start_encode(state_e3, 1), NULL);
+	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, zcbor_pop_error(state_e3), NULL);
+	enc_assert_unchanged(state_e3, &snap, "list_start no payload, stop_on_error");
+
+	zassert_false(zcbor_bstr_start_encode(state_e3), NULL);
+	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, zcbor_pop_error(state_e3), NULL);
+	enc_assert_unchanged(state_e3, &snap, "bstr_start no payload, stop_on_error");
+
 	/* End without room for the final header. The size_hint of 0 gives a 1 byte header, but 24
 	 * elements need a 2 byte header, which doesn't fit. The backup is kept, so the list/map can
 	 * be left via zcbor_list_map_end_force_encode() instead. */

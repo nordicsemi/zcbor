@@ -286,6 +286,18 @@ static bool exit_backup(zcbor_state_t *state)
 }
 
 
+/* For when a *_start_encode() function fails after taking its backup. Exit the backup so the state
+ * is left as it was before the call. The error is popped during the call since
+ * zcbor_process_backup() refuses to run while an error is registered (with stop_on_error). */
+static void exit_backup_keep_error(zcbor_state_t *state)
+{
+	int err = zcbor_pop_error(state);
+
+	(void)exit_backup(state);
+	zcbor_error(state, err);
+}
+
+
 bool zcbor_bstr_start_encode(zcbor_state_t *state)
 {
 	if (!zcbor_new_backup(state, 0)) {
@@ -296,7 +308,7 @@ bool zcbor_bstr_start_encode(zcbor_state_t *state)
 
 	/* Encode a dummy header */
 	if (!value_encode(state, ZCBOR_MAJOR_TYPE_BSTR, &max_len, sizeof(max_len))) {
-		zcbor_process_backup(state, ZCBOR_FLAG_CONSUME, ZCBOR_MAX_ELEM_COUNT);
+		exit_backup_keep_error(state);
 		ZCBOR_FAIL();
 	}
 	return true;
@@ -518,6 +530,7 @@ static bool list_map_start_encode(zcbor_state_t *state, size_t size_hint,
 
 	/* Encode dummy header with max number of elements. */
 	if (!value_encode(state, major_type, &size_hint, sizeof(size_hint))) {
+		exit_backup_keep_error(state);
 		ZCBOR_FAIL();
 	}
 	state->elem_count--; /* Because of dummy header. */
