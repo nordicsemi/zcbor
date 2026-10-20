@@ -2059,6 +2059,28 @@ ZTEST(cbor_encode_test3, test_tags)
 }
 
 
+ZTEST(cbor_encode_test3, test_tagged_int_union)
+{
+	uint8_t tagged_int_union_exp_payload1[] = {0xC5, 0x01}; /* #6.5(1) */
+	uint8_t tagged_int_union_exp_payload2[] = {0xC6, 0x02}; /* #6.6(2) */
+	struct TaggedIntUnion input;
+	uint8_t payload[10];
+	size_t out_len;
+
+	input.TaggedIntUnion_choice = TaggedIntUnion_tagged_one_c;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_TaggedIntUnion(payload,
+		sizeof(payload), &input, &out_len));
+	zassert_equal(sizeof(tagged_int_union_exp_payload1), out_len);
+	zassert_mem_equal(payload, tagged_int_union_exp_payload1, sizeof(tagged_int_union_exp_payload1));
+
+	input.TaggedIntUnion_choice = TaggedIntUnion_tagged_two_c;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_TaggedIntUnion(payload,
+		sizeof(payload), &input, &out_len));
+	zassert_equal(sizeof(tagged_int_union_exp_payload2), out_len);
+	zassert_mem_equal(payload, tagged_int_union_exp_payload2, sizeof(tagged_int_union_exp_payload2));
+}
+
+
 ZTEST(cbor_encode_test3, test_opt_float_then_int)
 {
 	struct OptFloatThenInt input_invalid = {

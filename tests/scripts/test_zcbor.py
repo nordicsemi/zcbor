@@ -1496,12 +1496,12 @@ class TestIntSize(PopenTest, TempdTest):
         lit_p_func = "encode" if mode == "encode" else "pexpect"
         result_var = "input" if mode == "encode" else "result"
         expected_output_code = [
-            f"zcbor_int8_{lit_func}(state, (INTMAX1_INT_8_MIN_VAL)",
-            f"zcbor_uint8_{lit_func}(state, (INTMAX1_INT_8_MAX_VAL)",
-            f"zcbor_uint8_{lit_func}(state, (INTMAX1_UINT_8_MAX_VAL)",
-            f"zcbor_int16_{lit_func}(state, (INTMAX1_INT_16_MIN_VAL)",
-            f"zcbor_uint16_{lit_func}(state, (INTMAX1_INT_16_MAX_VAL)",
-            f"zcbor_uint16_{lit_func}(state, (INTMAX1_UINT_16_MAX_VAL)",
+            f"zcbor_int32_{lit_func}(state, (INTMAX1_INT_8_MIN_VAL)",
+            f"zcbor_uint32_{lit_func}(state, (INTMAX1_INT_8_MAX_VAL)",
+            f"zcbor_uint32_{lit_func}(state, (INTMAX1_UINT_8_MAX_VAL)",
+            f"zcbor_int32_{lit_func}(state, (INTMAX1_INT_16_MIN_VAL)",
+            f"zcbor_uint32_{lit_func}(state, (INTMAX1_INT_16_MAX_VAL)",
+            f"zcbor_uint32_{lit_func}(state, (INTMAX1_UINT_16_MAX_VAL)",
             f"zcbor_int32_{lit_func}(state, (INTMAX1_INT_32_MIN_VAL)",
             f"zcbor_uint32_{lit_func}(state, (INTMAX1_INT_32_MAX_VAL)",
             f"zcbor_uint32_{lit_func}(state, (INTMAX1_UINT_32_MAX_VAL)",
@@ -1516,23 +1516,23 @@ class TestIntSize(PopenTest, TempdTest):
             f"zcbor_uint32_{mode}(state, (&(*{result_var}).Intmax2_UINT_32)",
             f"zcbor_int64_{mode}(state, (&(*{result_var}).Intmax2_INT_64)",
             f"zcbor_uint64_{mode}(state, (&(*{result_var}).Intmax2_UINT_64)",
-            f"&(*{result_var}).Intmax4_INT_8_MIN_count, ZCBOR_CUSTOM_CAST_FP(zcbor_int8_{lit_p_func}), state, (&(int8_t){{INTMAX4_INT_8_MIN_VAL}})",
-            f"&(*{result_var}).Intmax4_INT_8_MAX_count, ZCBOR_CUSTOM_CAST_FP(zcbor_uint8_{lit_p_func}), state, (&(uint8_t){{INTMAX4_INT_8_MAX_VAL}})",
-            f"&(*{result_var}).Intmax4_UINT_8_MAX_count, ZCBOR_CUSTOM_CAST_FP(zcbor_uint8_{lit_p_func}), state, (&(uint8_t){{INTMAX4_UINT_8_MAX_VAL}})",
-            f"&(*{result_var}).Intmax4_INT_16_MIN_count, ZCBOR_CUSTOM_CAST_FP(zcbor_int16_{lit_p_func}), state, (&(int16_t){{INTMAX4_INT_16_MIN_VAL}})",
-            f"&(*{result_var}).Intmax4_INT_16_MAX_count, ZCBOR_CUSTOM_CAST_FP(zcbor_uint16_{lit_p_func}), state, (&(uint16_t){{INTMAX4_INT_16_MAX_VAL}})",
-            f"&(*{result_var}).Intmax4_UINT_16_MAX_count, ZCBOR_CUSTOM_CAST_FP(zcbor_uint16_{lit_p_func}), state, (&(uint16_t){{INTMAX4_UINT_16_MAX_VAL}})",
+            f"&(*{result_var}).Intmax4_INT_8_MIN_count, ZCBOR_CUSTOM_CAST_FP(zcbor_int32_{lit_p_func}), state, (&(int32_t){{INTMAX4_INT_8_MIN_VAL}})",
+            f"&(*{result_var}).Intmax4_INT_8_MAX_count, ZCBOR_CUSTOM_CAST_FP(zcbor_uint32_{lit_p_func}), state, (&(uint32_t){{INTMAX4_INT_8_MAX_VAL}})",
+            f"&(*{result_var}).Intmax4_UINT_8_MAX_count, ZCBOR_CUSTOM_CAST_FP(zcbor_uint32_{lit_p_func}), state, (&(uint32_t){{INTMAX4_UINT_8_MAX_VAL}})",
+            f"&(*{result_var}).Intmax4_INT_16_MIN_count, ZCBOR_CUSTOM_CAST_FP(zcbor_int32_{lit_p_func}), state, (&(int32_t){{INTMAX4_INT_16_MIN_VAL}})",
+            f"&(*{result_var}).Intmax4_INT_16_MAX_count, ZCBOR_CUSTOM_CAST_FP(zcbor_uint32_{lit_p_func}), state, (&(uint32_t){{INTMAX4_INT_16_MAX_VAL}})",
+            f"&(*{result_var}).Intmax4_UINT_16_MAX_count, ZCBOR_CUSTOM_CAST_FP(zcbor_uint32_{lit_p_func}), state, (&(uint32_t){{INTMAX4_UINT_16_MAX_VAL}})",
             f"&(*{result_var}).Intmax4_INT_32_MIN_count, ZCBOR_CUSTOM_CAST_FP(zcbor_int32_{lit_p_func}), state, (&(int32_t){{INTMAX4_INT_32_MIN_VAL}})",
             f"&(*{result_var}).Intmax4_INT_32_MAX_count, ZCBOR_CUSTOM_CAST_FP(zcbor_uint32_{lit_p_func}), state, (&(uint32_t){{INTMAX4_INT_32_MAX_VAL}})",
             f"&(*{result_var}).Intmax4_UINT_32_MAX_count, ZCBOR_CUSTOM_CAST_FP(zcbor_uint32_{lit_p_func}), state, (&(uint32_t){{INTMAX4_UINT_32_MAX_VAL}})",
             f"&(*{result_var}).Intmax4_INT_64_MIN_count, ZCBOR_CUSTOM_CAST_FP(zcbor_int64_{lit_p_func}), state, (&(int64_t){{INTMAX4_INT_64_MIN_VAL}})",
             f"&(*{result_var}).Intmax4_INT_64_MAX_count, ZCBOR_CUSTOM_CAST_FP(zcbor_uint64_{lit_p_func}), state, (&(uint64_t){{INTMAX4_INT_64_MAX_VAL}})",
             f"&(*{result_var}).Intmax4_UINT_64_MAX_count, ZCBOR_CUSTOM_CAST_FP(zcbor_uint64_{lit_p_func}), state, (&(uint64_t){{INTMAX4_UINT_64_MAX_VAL}}),",
-            f"zcbor_int16_{lit_func}(state, (INTMAX5_INT_8_MIN_PLUS1_VAL))",
-            f"zcbor_uint8_{lit_func}(state, (INTMAX5_INT_8_MAX_PLUS1_VAL))",
-            f"zcbor_uint16_{lit_func}(state, (INTMAX5_UINT_8_MAX_PLUS1_VAL))",
+            f"zcbor_int32_{lit_func}(state, (INTMAX5_INT_8_MIN_PLUS1_VAL))",
+            f"zcbor_uint32_{lit_func}(state, (INTMAX5_INT_8_MAX_PLUS1_VAL))",
+            f"zcbor_uint32_{lit_func}(state, (INTMAX5_UINT_8_MAX_PLUS1_VAL))",
             f"zcbor_int32_{lit_func}(state, (INTMAX5_INT_16_MIN_PLUS1_VAL))",
-            f"zcbor_uint16_{lit_func}(state, (INTMAX5_INT_16_MAX_PLUS1_VAL))",
+            f"zcbor_uint32_{lit_func}(state, (INTMAX5_INT_16_MAX_PLUS1_VAL))",
             f"zcbor_uint32_{lit_func}(state, (INTMAX5_UINT_16_MAX_PLUS1_VAL))",
             f"zcbor_int64_{lit_func}(state, (INTMAX5_INT_32_MIN_PLUS1_VAL))",
             f"zcbor_uint32_{lit_func}(state, (INTMAX5_INT_32_MAX_PLUS1_VAL))",
@@ -1564,14 +1564,19 @@ class TestIntSize(PopenTest, TempdTest):
         for e in expected_output_types:
             self.assertIn(e, output_h_types, f"Expected '{e}' in output_h_types")
 
+        for n in expected_defines:
+            self.assertNotIn(f"#define {n}", output_h, f"Expected no '{n}' in output_h")
+
         if defines_arg == []:
             for n, v in expected_defines.items():
-                self.assertNotIn(f"#define {n} ({v})", output_h, f"Expected no '{e}' in output_h")
+                self.assertNotIn(
+                    f"#define {n} ({v})", output_h_types, f"Expected no '{n}' in output_h_types"
+                )
             for e in expected_output_code_lit:
                 self.assertIn(e, output_c, f"Expected '{e}' in output_c")
         else:
             for n, v in expected_defines.items():
-                self.assertIn(f"#define {n} ({v})", output_h, f"Expected '{e}' in output_h")
+                self.assertIn(f"#define {n} ({v})", output_h_types, f"Expected '{n}' in output_h_types")
             for e in expected_output_code:
                 self.assertIn(e, output_c, f"Expected '{e}' in output_c")
 
@@ -1582,6 +1587,49 @@ class TestIntSize(PopenTest, TempdTest):
             for defines_arg in ([], ["--defines"]):
                 for bit_size in (8, 16, 32, 64):
                     self.do_test_int_size(mode, defines_arg, bit_size)
+
+
+class TestDefines(PopenTest, TempdTest):
+    def test_shared_header_is_mode_independent(self):
+        """The shared type header must be identical for separate encode and decode runs."""
+        p_cddl = self.tempd / "shared.cddl"
+        p_types = self.tempd / "shared_types.h"
+        p_cddl.write_text(
+            "One = 1\n"
+            "Root = [items: [* uint], ? value: uint .default 5, outside: One,\n"
+            "        choice: ((one_choice: One) / (two_choice: 2))]\n",
+            encoding="utf-8",
+        )
+        common_args = [
+            "zcbor",
+            "code",
+            "--cddl",
+            p_cddl,
+            "-t",
+            "Root",
+            "--defines",
+            "--output-h-types",
+            p_types,
+        ]
+        type_headers = {}
+        for mode in ("encode", "decode"):
+            self.popen_test(
+                common_args
+                + [
+                    f"--{mode}",
+                    "--output-c",
+                    self.tempd / f"shared_{mode}.c",
+                    "--output-h",
+                    self.tempd / f"shared_{mode}.h",
+                ]
+            )
+            type_headers[mode] = p_types.read_text(encoding="utf-8")
+
+        self.assertEqual(type_headers["encode"], type_headers["decode"])
+        self.assertIn("#define ROOT_MAX_COUNT (4)", type_headers["encode"])
+        self.assertIn("#define ROOT_VALUE_DEFAULT_VAL (5)", type_headers["encode"])
+        self.assertIn("Root_choice_one_choice_c = ONE_UINT1_VAL", type_headers["encode"])
+        self.assertIn("Root_choice_two_choice_c = ROOT_CHOICE_TWO_CHOICE_VAL", type_headers["encode"])
 
 
 class TestCanonical(PopenTest):
@@ -2102,6 +2150,25 @@ class TestFuncPointer(PopenTest, TempdTest):
 
         check_file(output_c_d, "decode")
         check_file(output_c_e, "encode")
+
+    def test_func_pointer_no_struct_types(self):
+        """Test that ZCBOR_CUSTOM_CAST_FP is defined even when there are no struct types.
+
+        The enums of control groups must not be part of the macro, because enums are compatible
+        with integer types, so two of them would make the _Generic() ambiguous."""
+        p_cddl = self.tempd / "bits.cddl"
+        p_cddl.write_text(
+            "Bits1 = uint .bits flags1\nBits2 = uint .bits flags2\n"
+            "flags1 = &(a: 0)\nflags2 = &(b: 1)\n",
+            encoding="utf-8",
+        )
+        self.popen_test(
+            ["zcbor", "code", "--cddl", p_cddl, "-t", "Bits1", "Bits2", "-d", "-e"]
+            + ["--output-cmake", self.tempd / "bits.cmake"]
+        )
+        for mode in ("decode", "encode"):
+            output_c = (self.tempd / "src" / f"bits_{mode}.c").read_text(encoding="utf-8")
+            self.assertIn("#define ZCBOR_CUSTOM_CAST_FP(func) ZCBOR_CAST_FP(func)", output_c)
 
 
 class TestControlGroups(TestCase):

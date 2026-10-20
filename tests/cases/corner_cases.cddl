@@ -483,6 +483,9 @@ Tags = [
 	tag2: ((tag2_alt1: (#6.3456(bool), #6.1234(int))) / (tag2_alt2: #6.3456(bool))),
 ]
 
+; The members start with tags, so they can't be told apart by their integers.
+TaggedIntUnion = (tagged_one: #6.5(1)) / (tagged_two: #6.6(2))
+
 map1 = {"1": int}
 map2 = {"2": int}
 map3 = {"2": int, "3": int}

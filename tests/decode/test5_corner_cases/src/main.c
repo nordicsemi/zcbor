@@ -2890,6 +2890,33 @@ ZTEST(cbor_decode_test5, test_tags)
 }
 
 
+ZTEST(cbor_decode_test5, test_tagged_int_union)
+{
+	uint8_t tagged_int_union_payload1[] = {0xC5, 0x01}; /* #6.5(1) */
+	uint8_t tagged_int_union_payload2[] = {0xC6, 0x02}; /* #6.6(2) */
+	uint8_t tagged_int_union_payload3_inv[] = {0xC7, 0x01}; /* #6.7(1) */
+	uint8_t tagged_int_union_payload4_inv[] = {0x01}; /* 1 */
+
+	struct TaggedIntUnion result;
+	size_t num_decode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_TaggedIntUnion(tagged_int_union_payload1,
+		sizeof(tagged_int_union_payload1), &result, &num_decode), NULL);
+	zassert_equal(sizeof(tagged_int_union_payload1), num_decode, NULL);
+	zassert_equal(TaggedIntUnion_tagged_one_c, result.TaggedIntUnion_choice, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_TaggedIntUnion(tagged_int_union_payload2,
+		sizeof(tagged_int_union_payload2), &result, &num_decode), NULL);
+	zassert_equal(sizeof(tagged_int_union_payload2), num_decode, NULL);
+	zassert_equal(TaggedIntUnion_tagged_two_c, result.TaggedIntUnion_choice, NULL);
+
+	zassert_equal(ZCBOR_ERR_WRONG_VALUE, cbor_decode_TaggedIntUnion(tagged_int_union_payload3_inv,
+		sizeof(tagged_int_union_payload3_inv), &result, &num_decode), NULL);
+	zassert_equal(ZCBOR_ERR_WRONG_TYPE, cbor_decode_TaggedIntUnion(tagged_int_union_payload4_inv,
+		sizeof(tagged_int_union_payload4_inv), &result, &num_decode), NULL);
+}
+
+
 ZTEST(cbor_decode_test5, test_maps_optional_elem)
 {
 	uint8_t two_maps_payload1[] = {LIST(2),

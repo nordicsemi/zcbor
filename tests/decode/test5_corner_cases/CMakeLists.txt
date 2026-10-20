@@ -77,6 +77,7 @@ set(py_command
     OptUnion
     CountUnion
     Tags
+    TaggedIntUnion
     TwoMaps
     BstrMapUnion
     AmbigMap

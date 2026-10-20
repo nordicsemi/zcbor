@@ -1,0 +1,17 @@
+common:
+  platform_allow:
+    - native_sim
+    - native_sim/native/64
+    - mps2/an521/cpu0
+    - qemu_malta/qemu_malta/be
+  tags:
+    - zcbor
+    - encode
+    - decode
+    - defines
+    - test5
+
+tests:
+  zcbor.encode.test5_defines: {}
+  zcbor.encode.test5_defines.canonical:
+    extra_args: CANONICAL=ON
