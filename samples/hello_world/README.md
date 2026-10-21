@@ -8,15 +8,14 @@ This sample does not use the zcbor script tool.
 ### To build:
 
 ```
-mkdir build
-cmake . -Bbuild
-make -C build
+cmake -B build .
+cmake --build build
 ```
 
 ### To run:
 
 ```
-build/app
+./build/sample_hello_world
 ```
 
 ### Expected output:
