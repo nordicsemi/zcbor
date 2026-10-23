@@ -10,12 +10,13 @@
   This means that zcbor might e.g. apply labels to a different level of abstraction than it did previously.
   If you have problems, try adding parentheses to clarify the intention of the CDDL.
 
+* `zcbor_list_end_decode()` and `zcbor_map_end_decode()` no longer consume the backup when they fail (e.g. because a definite-length list/map has elements left).
+  The decoding is instead left in the same state as before the call.
+  If you need to leave the list/map after a failure, e.g. so an enclosing backup can be used to restore the state, call `zcbor_list_map_end_force_decode()` after the failed call.
 
-* For decoding, a number of `*_end_decode()` functions have gained a `force` parameter.
-  The argument controls whether the backup taken at the corresponding `*_start_decode()` should be consumed even if the `*_end_decode()` call fails.
-  The previous behavior was inconsistent, so neither `force==true` nor `force==false` directly corresponds to the previous behavior.
-  See the documentation of the parameter in zcbor_decode.h for more info.
-  Applies to the following functions: `zcbor_list_end_decode()`, `zcbor_map_end_decode()`, `zcbor_unordered_map_end_decode()`, and `zcbor_bstr_end_decode()`.
+* With `ZCBOR_CANONICAL`, `zcbor_list_end_encode()` and `zcbor_map_end_encode()` no longer consume the backup when they fail (e.g. because the final header doesn't fit in the payload).
+  The encoding is instead left in the same state as before the call, like without `ZCBOR_CANONICAL`.
+  If you need to leave the list/map after a failure, call `zcbor_list_map_end_force_encode()` after the failed call.
 
 * [Recommended] A new macro `ZCBOR_CAST_FP` has been added for casting function pointers for use in the zcbor API.
   The macro will first check that the function pointer has one of the supported signatures.

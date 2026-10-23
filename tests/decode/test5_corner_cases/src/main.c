@@ -2443,6 +2443,8 @@ ZTEST(cbor_decode_test5, test_map_union_prim_alias)
 ZTEST(cbor_decode_test5, test_empty_group)
 {
 	uint8_t empty_group_payload0[] = {LIST(3), 0, LIST(0), END MAP(0), END END};
+	uint8_t empty_group_payload1_inv[] = {LIST(3), 0, LIST(1), 0, END MAP(0), END END};
+	uint8_t empty_group_payload2_inv[] = {LIST(3), 0, LIST(0), END MAP(1), 0, 0, END END};
 
 	struct EmptyContainer result;
 	size_t num_decode;
@@ -2451,6 +2453,13 @@ ZTEST(cbor_decode_test5, test_empty_group)
 		sizeof(empty_group_payload0), &result, &num_decode), NULL);
 	zassert_equal(sizeof(empty_group_payload0), num_decode, NULL);
 	zassert_equal(0, result.Int);
+
+	int err = cbor_decode_EmptyContainer(empty_group_payload1_inv,
+		sizeof(empty_group_payload1_inv), &result, &num_decode);
+	zassert_equal(ARR_ERR1, err, "%s\n", zcbor_error_str(err));
+	err = cbor_decode_EmptyContainer(empty_group_payload2_inv,
+		sizeof(empty_group_payload2_inv), &result, &num_decode);
+	zassert_equal(ARR_ERR1, err, "%s\n", zcbor_error_str(err));
 }
 
 
@@ -2775,6 +2784,82 @@ ZTEST(cbor_decode_test5, test_union_default)
 	zassert_equal(UnionDefault_bar_noBar_c, result.bar.bar_choice, NULL); /* Not present, default value is reported. */
 	zassert_equal(UnionDefault_baz_BazB_c, result.baz.baz_choice, NULL);
 	zassert_equal(BazB_bstr_l_c, result.baz.BazB_choice, NULL);
+}
+
+
+/** This test checks that decoding an empty list/map from data with elements fails without
+ *  leaving the state behind, so that decoding can continue with the next alternative/element.
+ *  In empty_first_payload1, each of the empty lists/maps in EmptyFirst is tried on a list/map
+ *  with elements. In empty_first_payload2, the empty lists/maps are present. */
+ZTEST(cbor_decode_test5, test_empty_first)
+{
+	uint8_t empty_first_payload1[] = {LIST(9),
+		LIST(2), 1, 2, END
+		MAP(1), 3, 4, END
+		LIST(1), 0x61, 'a', END
+		MAP(1), 0x61, 'b', 5, END
+		LIST(0), END
+		LIST(0), END
+		LIST(1), 0xF5, END
+		MAP(0), END
+		MAP(1), 0xF4, 6, END
+		END
+	};
+	uint8_t empty_first_payload2[] = {LIST(8),
+		LIST(0), END
+		MAP(0), END
+		LIST(0), END
+		LIST(1), 0x61, 'a', END
+		MAP(0), END
+		MAP(1), 0x61, 'b', 5, END
+		LIST(1), 0xF5, END
+		MAP(1), 0xF4, 6, END
+		END
+	};
+	struct EmptyFirst result;
+	size_t num_decode;
+
+	int err = cbor_decode_EmptyFirst(empty_first_payload1,
+		sizeof(empty_first_payload1), &result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(empty_first_payload1), num_decode, NULL);
+
+	zassert_equal(ef_union_list_EFIntList_c, result.ef_union_list_choice, NULL);
+	zassert_equal(2, result.Int_count, NULL);
+	zassert_equal(1, result.Int[0], NULL);
+	zassert_equal(2, result.Int[1], NULL);
+	zassert_equal(ef_union_map_EFIntMap_c, result.ef_union_map_choice, NULL);
+	zassert_equal(1, result.intint_count, NULL);
+	zassert_equal(3, result.intint[0].intint_key, NULL);
+	zassert_equal(4, result.intint[0].intint, NULL);
+	zassert_false(result.ef_opt_list_present, NULL);
+	zassert_equal(1, result.tstr_count, NULL);
+	zassert_false(result.ef_opt_map_present, NULL);
+	zassert_equal(1, result.tstrint_count, NULL);
+	zassert_equal(5, result.tstrint[0].tstrint, NULL);
+	zassert_equal(2, result.ef_rep_list_count, NULL);
+	zassert_equal(1, result.Bool_count, NULL);
+	zassert_true(result.Bool[0], NULL);
+	zassert_equal(1, result.ef_rep_map_count, NULL);
+	zassert_equal(1, result.boolint_count, NULL);
+	zassert_false(result.boolint[0].boolint_key, NULL);
+	zassert_equal(6, result.boolint[0].boolint, NULL);
+
+	err = cbor_decode_EmptyFirst(empty_first_payload2,
+		sizeof(empty_first_payload2), &result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(empty_first_payload2), num_decode, NULL);
+
+	zassert_equal(ef_union_list_EFEmptyList_c, result.ef_union_list_choice, NULL);
+	zassert_equal(ef_union_map_EFEmptyMap_c, result.ef_union_map_choice, NULL);
+	zassert_true(result.ef_opt_list_present, NULL);
+	zassert_equal(1, result.tstr_count, NULL);
+	zassert_true(result.ef_opt_map_present, NULL);
+	zassert_equal(1, result.tstrint_count, NULL);
+	zassert_equal(0, result.ef_rep_list_count, NULL);
+	zassert_equal(1, result.Bool_count, NULL);
+	zassert_equal(0, result.ef_rep_map_count, NULL);
+	zassert_equal(1, result.boolint_count, NULL);
 }
 
 

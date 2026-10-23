@@ -265,26 +265,21 @@ bool zcbor_elem_processed(zcbor_state_t *state);
  * Check that the list/map had the correct number of elements, and restore the
  * previous element count from the backup.
  *
- * Use @ref zcbor_list_map_end_force_decode to forcibly consume the backup if
- * something has gone wrong.
- *
  * In all successful cases, the state is returned pointing to the byte/element
  * after the list/map in the payload.
  *
+ * If the call fails, the decoding is left in the same state as before the call.
+ * Use @ref zcbor_list_map_end_force_decode to forcibly consume the backup if
+ * something has gone wrong, e.g. after a failed call to this function.
+ *
  * @param[inout] state   The current state of the decoding.
- * @param[in] force  If true, forcibly consume the backup even on failure.
- *                   Note that this leaves the decoding in an undefined state,
- *                   and should only be used if another backup can be used
- *                   to restore the state to a valid state.
- *                   If false, the decoding is left in the same state as before
- *                   the call, if the call fails.
  *
  * @retval true   Everything ok.
  * @retval false  Element count not correct.
  */
-bool zcbor_list_end_decode(zcbor_state_t *state, bool force);
-bool zcbor_map_end_decode(zcbor_state_t *state, bool force);
-bool zcbor_unordered_map_end_decode(zcbor_state_t *state, bool force);
+bool zcbor_list_end_decode(zcbor_state_t *state);
+bool zcbor_map_end_decode(zcbor_state_t *state);
+bool zcbor_unordered_map_end_decode(zcbor_state_t *state);
 bool zcbor_list_map_end_force_decode(zcbor_state_t *state);
 
 /** Find whether the state is at the end of a list or map.
@@ -321,7 +316,7 @@ bool zcbor_any_skip(zcbor_state_t *state, void *unused);
  *                  state, ints, sizeof(ints[0]));
  *     res = res && zcbor_multi_decode(0, 2, &num_decode, zcbor_bstr_decode,
  *                  state, bstrs, sizeof(bstrs[0]));
- *     res = res && zcbor_list_end_decode(state, false);
+ *     res = res && zcbor_list_end_decode(state);
  *     // check res
  * @endcode
  *
@@ -442,15 +437,13 @@ bool zcbor_bstr_start_decode(zcbor_state_t *state, struct zcbor_string *result);
  *
  * Restore element count from backup.
  *
+ * If the call fails, the decoding is left in the same state as before the call.
+ * Use @ref zcbor_bstr_end_force_decode to forcibly consume the backup if
+ * something has gone wrong, e.g. after a failed call to this function.
+ *
  * @param[inout] state   The current state of the decoding.
- * @param[in] force  If true, forcibly consume the backup even on failure.
- *                   Note that this leaves the decoding in an undefined state,
- *                   and should only be used if the another backup can be used
- *                   to restore the state to a valid state.
- *                   If false, the decoding is left in the same state as before
- *                   the call, if the call fails.
  */
-bool zcbor_bstr_end_decode(zcbor_state_t *state, bool force);
+bool zcbor_bstr_end_decode(zcbor_state_t *state);
 bool zcbor_bstr_end_force_decode(zcbor_state_t *state);
 
 
