@@ -1660,10 +1660,11 @@ ZTEST(zcbor_unit_tests, test_error_str)
 	test_str(ZCBOR_ERR_NOT_IN_FRAGMENT);
 	test_str(ZCBOR_ERR_INSIDE_STRING);
 	test_str(ZCBOR_ERR_BACKUP_MISMATCH);
+	test_str(ZCBOR_ERR_MAX_DEPTH);
 	test_str(ZCBOR_ERR_UNKNOWN);
 	zassert_mem_equal(zcbor_error_str(-1), "ZCBOR_ERR_UNKNOWN", sizeof("ZCBOR_ERR_UNKNOWN"), NULL);
 	zassert_mem_equal(zcbor_error_str(-10), "ZCBOR_ERR_UNKNOWN", sizeof("ZCBOR_ERR_UNKNOWN"), NULL);
-	zassert_mem_equal(zcbor_error_str(ZCBOR_ERR_BACKUP_MISMATCH + 1), "ZCBOR_ERR_UNKNOWN", sizeof("ZCBOR_ERR_UNKNOWN"), NULL);
+	zassert_mem_equal(zcbor_error_str(ZCBOR_ERR_MAX_DEPTH + 1), "ZCBOR_ERR_UNKNOWN", sizeof("ZCBOR_ERR_UNKNOWN"), NULL);
 	zassert_mem_equal(zcbor_error_str(100000), "ZCBOR_ERR_UNKNOWN", sizeof("ZCBOR_ERR_UNKNOWN"), NULL);
 }
 
@@ -1746,6 +1747,173 @@ ZTEST(zcbor_unit_tests, test_any_skip_str_overflow)
 	bool ret = zcbor_any_skip(state_d, NULL);
 	zassert_false(ret, "err: %d\n", zcbor_peek_error(state_d));
 	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, zcbor_peek_error(state_d), NULL);
+}
+
+
+/* Write depth levels of nesting around a 0 into payload, and return the length. Each level is
+ * the head_len bytes in head (a list/map header, plus any tags and map key) before the inner
+ * level, plus a 0xFF break byte after it if the level has indefinite length. */
+static size_t nested_payload(uint8_t *payload, size_t depth, const uint8_t *head,
+		size_t head_len, bool indefinite)
+{
+	size_t len = 0;
+
+	for (size_t i = 0; i < depth; i++) {
+		memcpy(&payload[len], head, head_len);
+		len += head_len;
+	}
+	payload[len++] = 0x00;
+	if (indefinite) {
+		memset(&payload[len], 0xFF, depth);
+		len += depth;
+	}
+	return len;
+}
+
+
+/* zcbor_any_skip() fails instead of descending into lists/maps nested more than
+ * ZCBOR_MAX_SKIP_DEPTH levels deep. Tags are skipped without recursing, so they don't count. */
+ZTEST(zcbor_unit_tests, test_any_skip_max_depth)
+{
+	const struct {
+		const char *name;
+		uint8_t head[3];
+		size_t head_len;
+		bool indefinite;
+	} levels[] = {
+		{"list", {0x81}, 1, false}, /* LIST(1) */
+		{"map", {0xA1, 0x00}, 2, false}, /* MAP(1) with key 0 */
+		{"indefinite list", {0x9F}, 1, true},
+		{"indefinite map", {0xBF, 0x00}, 2, true}, /* with key 0 */
+		{"tagged list", {0xC1, 0xC2, 0x81}, 3, false}, /* #6.1(#6.2(LIST(1))) */
+	};
+	/* At most 3 bytes per level, plus the innermost 0. */
+	uint8_t payload[3 * (ZCBOR_MAX_SKIP_DEPTH + 1) + 1];
+	struct zcbor_dec_state_snapshot snap;
+	size_t len;
+	bool ret;
+
+	for (size_t i = 0; i < ARRAY_SIZE(levels); i++) {
+		len = nested_payload(payload, ZCBOR_MAX_SKIP_DEPTH, levels[i].head,
+				levels[i].head_len, levels[i].indefinite);
+		ZCBOR_STATE_D(state_d, 0, payload, len, 1, 0);
+		state_d->constant_state->enforce_canonical = false;
+
+		ret = zcbor_any_skip(state_d, NULL);
+		zassert_true(ret, "%s err: %s\n", levels[i].name,
+			zcbor_error_str(zcbor_peek_error(state_d)));
+		zassert_equal(payload + len, state_d->payload, "%s\n", levels[i].name);
+		zassert_equal(0, state_d->elem_count, "%s\n", levels[i].name);
+
+		len = nested_payload(payload, ZCBOR_MAX_SKIP_DEPTH + 1, levels[i].head,
+				levels[i].head_len, levels[i].indefinite);
+		ZCBOR_STATE_D(state_d2, 0, payload, len, 1, 0);
+		state_d2->constant_state->enforce_canonical = false;
+
+		zcbor_state_t state_before;
+
+		memcpy(&state_before, state_d2, sizeof(state_before));
+		dec_snapshot(state_d2, &snap);
+		zassert_false(zcbor_any_skip(state_d2, NULL), "%s\n", levels[i].name);
+		zassert_equal(ZCBOR_ERR_MAX_DEPTH, zcbor_peek_error(state_d2), "%s err: %s\n",
+			levels[i].name, zcbor_error_str(zcbor_peek_error(state_d2)));
+		dec_assert_unchanged(state_d2, &snap, levels[i].name);
+		zassert_mem_equal(&state_before, state_d2, sizeof(state_before), "%s\n",
+			levels[i].name);
+	}
+
+	/* The innermost list counts even when it is empty, i.e. has nothing to recurse into. */
+	len = nested_payload(payload, ZCBOR_MAX_SKIP_DEPTH, levels[0].head, levels[0].head_len,
+			false);
+	payload[len - 1] = 0x80; /* LIST(0) instead of the innermost 0 */
+	ZCBOR_STATE_D(state_d3, 0, payload, len, 1, 0);
+
+	zassert_false(zcbor_any_skip(state_d3, NULL), NULL);
+	zassert_equal(ZCBOR_ERR_MAX_DEPTH, zcbor_peek_error(state_d3), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d3)));
+
+	/* The depths of sibling lists don't add up.
+	 * LIST(2): [<ZCBOR_MAX_SKIP_DEPTH - 1 levels>, <ZCBOR_MAX_SKIP_DEPTH - 1 levels>] */
+	payload[0] = 0x82;
+	len = 1;
+	len += nested_payload(&payload[len], ZCBOR_MAX_SKIP_DEPTH - 1, levels[0].head,
+			levels[0].head_len, false);
+	len += nested_payload(&payload[len], ZCBOR_MAX_SKIP_DEPTH - 1, levels[0].head,
+			levels[0].head_len, false);
+	ZCBOR_STATE_D(state_d4, 0, payload, len, 1, 0);
+
+	ret = zcbor_any_skip(state_d4, NULL);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d4)));
+	zassert_equal(payload + len, state_d4->payload, NULL);
+}
+
+
+/* zcbor_unordered_map_search() and zcbor_unordered_map_end_decode() skip elements with
+ * zcbor_any_skip(), so they also fail on elements nested too deeply, and leave the state
+ * untouched. The depth is counted from the skipped element, so the map itself doesn't count. */
+ZTEST(zcbor_unit_tests, test_unordered_map_max_depth)
+{
+	const uint8_t list[] = {0x81}; /* LIST(1) */
+	uint8_t payload[ZCBOR_MAX_SKIP_DEPTH + 6];
+	struct zcbor_dec_state_snapshot snap;
+	size_t len;
+
+	/* MAP(2): {0: <ZCBOR_MAX_SKIP_DEPTH nested lists>, 1: 1}
+	 * Searching for key 1 skips the value of key 0. */
+	payload[0] = 0xA2;
+	payload[1] = 0x00;
+	len = 2 + nested_payload(&payload[2], ZCBOR_MAX_SKIP_DEPTH, list, sizeof(list), false);
+	payload[len++] = 0x01;
+	payload[len++] = 0x01;
+	ZCBOR_STATE_D(state_d, 2, payload, len, 1, 2);
+
+	zassert_true(zcbor_unordered_map_start_decode(state_d), NULL);
+	bool ret = zcbor_unordered_map_search(ZCBOR_CAST_FP(zcbor_int32_pexpect), state_d,
+		&(int32_t){1});
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+
+	/* Same, but one level deeper. */
+	len = 2 + nested_payload(&payload[2], ZCBOR_MAX_SKIP_DEPTH + 1, list, sizeof(list), false);
+	payload[len++] = 0x01;
+	payload[len++] = 0x01;
+	ZCBOR_STATE_D(state_d2, 2, payload, len, 1, 2);
+
+	zassert_true(zcbor_unordered_map_start_decode(state_d2), NULL);
+	dec_snapshot(state_d2, &snap);
+	zassert_false(zcbor_unordered_map_search(ZCBOR_CAST_FP(zcbor_int32_pexpect), state_d2,
+		&(int32_t){1}), NULL);
+	zassert_equal(ZCBOR_ERR_MAX_DEPTH, zcbor_peek_error(state_d2), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d2)));
+	dec_assert_unchanged(state_d2, &snap, "unordered_map_search");
+
+	/* MAP(2): {1: 1, 0: <ZCBOR_MAX_SKIP_DEPTH + 1 nested lists>}
+	 * The deep value can be decoded manually, but when the keys are searched for out of order,
+	 * zcbor_unordered_map_end_decode() must skip it to reach the end of the map. */
+	payload[1] = 0x01;
+	payload[2] = 0x01;
+	payload[3] = 0x00;
+	len = 4 + nested_payload(&payload[4], ZCBOR_MAX_SKIP_DEPTH + 1, list, sizeof(list), false);
+	ZCBOR_STATE_D(state_d3, ZCBOR_MAX_SKIP_DEPTH + 2, payload, len, 1, 2);
+
+	zassert_true(zcbor_unordered_map_start_decode(state_d3), NULL);
+	zassert_true(zcbor_unordered_map_search(ZCBOR_CAST_FP(zcbor_int32_pexpect), state_d3,
+		&(int32_t){0}), NULL);
+	for (size_t i = 0; i < ZCBOR_MAX_SKIP_DEPTH + 1; i++) {
+		zassert_true(zcbor_list_start_decode(state_d3), NULL);
+	}
+	zassert_true(zcbor_int32_expect(state_d3, 0), NULL);
+	for (size_t i = 0; i < ZCBOR_MAX_SKIP_DEPTH + 1; i++) {
+		zassert_true(zcbor_list_end_decode(state_d3), NULL);
+	}
+	zassert_true(zcbor_unordered_map_search(ZCBOR_CAST_FP(zcbor_int32_pexpect), state_d3,
+		&(int32_t){1}), NULL);
+	zassert_true(zcbor_int32_expect(state_d3, 1), NULL);
+
+	dec_snapshot(state_d3, &snap);
+	zassert_false(zcbor_unordered_map_end_decode(state_d3), NULL);
+	zassert_equal(ZCBOR_ERR_MAX_DEPTH, zcbor_peek_error(state_d3), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d3)));
+	dec_assert_unchanged(state_d3, &snap, "unordered_map_end");
 }
 
 

@@ -347,6 +347,7 @@ do { \
 #define ZCBOR_ERR_NOT_IN_FRAGMENT 27 ///! The action requires being inside a fragmented string, but we are currently not inside one.
 #define ZCBOR_ERR_INSIDE_STRING 28 ///! Currently encoding/decoding a non-CBOR-encoded string, so cannot use most zcbor encoding/decoding functions
 #define ZCBOR_ERR_BACKUP_MISMATCH 29 ///! An encoding or decoding action unexpectedly changed the active backup count. The zcbor state is likely corrupted.
+#define ZCBOR_ERR_MAX_DEPTH 30 ///! Lists/maps are nested too deeply to be skipped, see ZCBOR_MAX_SKIP_DEPTH.
 #define ZCBOR_ERR_UNKNOWN 31
 
 /** The largest possible elem_count. */

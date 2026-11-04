@@ -88,6 +88,10 @@ ZCBOR_STATE_D(decode_state, n, payload, payload_len, elem_count, n_flags);
 ZCBOR_STATE_E(encode_state, n, payload, payload_len, 0);
 ```
 
+The size of the `zcbor_state_t` object depends on configuration and architecture, but is around 50 bytes on 32 bit or 100 bytes on 64 bit architectures.
+The `ZCBOR_STATE_*()` macros declare a state array with `n` + 2 states (plus any flag states).
+The zcbor library generally uses a small, fixed amount of stack, except `zcbor_any_skip()`, which uses around 100 bytes on 32 bit or 200 bytes on 64 bit architectures per level of list/map nesting it skips (at most `ZCBOR_MAX_SKIP_DEPTH` levels).
+
 Fragmented payloads
 -------------------
 
@@ -129,6 +133,7 @@ Name                      | Description
 `ZCBOR_BIG_ENDIAN`        | All decoded values are returned as big-endian. The default is little-endian.
 `ZCBOR_MAP_SMART_SEARCH`  | Applies to decoding of unordered maps. When enabled, a flag is kept for each element in an array, ensuring it is not processed twice. If disabled, a count is kept for map as a whole. Enabling increases code size and memory usage, and requires the state variable to possess the memory necessary for the flags.
 `ZCBOR_FRAGMENTS`         | Enable functions for decoding and encoding byte and text strings in fragments.
+`ZCBOR_MAX_SKIP_DEPTH`    | The maximum nesting depth of lists and maps that `zcbor_any_skip()` will skip (default 8). Deeper nesting makes it fail with `ZCBOR_ERR_MAX_DEPTH`. This bounds the recursion, and thereby the stack usage, when skipping untrusted data. `zcbor_any_skip()` is also used when searching unordered maps, and for `any` in generated decoding code. Unlike the other options, this one takes a value, e.g. `ZCBOR_MAX_SKIP_DEPTH=16`.
 
 Canonical encoding
 ------------------
