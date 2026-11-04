@@ -296,7 +296,8 @@ bool zcbor_array_at_end(zcbor_state_t *state);
 /** Skip a single element, regardless of type and value.
  *
  * This means if the element is a map or list, this function will recursively
- * skip all its contents.
+ * skip all its contents, and fail if elements are missing, e.g. if an
+ * indefinite-length map has a key without a value (ZCBOR_ERR_MAP_MISALIGNED).
  * To bound the recursion, this function fails with ZCBOR_ERR_MAX_DEPTH if lists
  * and maps are nested more than ZCBOR_MAX_SKIP_DEPTH levels deep, counting the
  * element itself. E.g. if ZCBOR_MAX_SKIP_DEPTH is 2, [[1]] can be skipped, but
