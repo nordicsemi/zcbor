@@ -1,3 +1,11 @@
+# zcbor v. 0.9.2
+
+* `zcbor_any_skip()` now fails with `ZCBOR_ERR_MAX_DEPTH` instead of skipping lists and maps that are nested more than `ZCBOR_MAX_SKIP_DEPTH` (default 8) levels deep.
+  This bounds the recursion, which was previously only limited by the payload size.
+  The limit also applies to `zcbor_unordered_map_search()` and `zcbor_unordered_map_end_decode()`, which skip elements internally, and to `any` in generated decoding code.
+  If your data has deeper nesting in such places, define `ZCBOR_MAX_SKIP_DEPTH` to a higher value.
+
+
 # zcbor v. 0.9.0
 
 * `zcbor_simple_*()` functions have been removed to avoid confusion about their use.

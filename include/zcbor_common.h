@@ -285,6 +285,7 @@ do { \
 #define ZCBOR_ERR_MAP_FLAGS_NOT_AVAILABLE 20
 #define ZCBOR_ERR_INVALID_VALUE_ENCODING 21 ///! When ZCBOR_CANONICAL is defined, and the incoming data is not encoded with minimal length, or uses indefinite length array.
 #define ZCBOR_ERR_CONSTANT_STATE_MISSING 22
+#define ZCBOR_ERR_MAX_DEPTH 30 ///! Lists/maps are nested too deeply to be skipped, see ZCBOR_MAX_SKIP_DEPTH.
 #define ZCBOR_ERR_UNKNOWN 31
 
 /** The largest possible elem_count. */
