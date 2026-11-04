@@ -1109,6 +1109,124 @@ ZTEST(zcbor_unit_tests, test_any_skip)
 }
 
 
+/* zcbor_any_skip() fails if a list/map is missing elements, i.e. if there are fewer than its
+ * header says, or if an indefinite-length map has a key without a value. */
+ZTEST(zcbor_unit_tests, test_any_skip_elem_count)
+{
+	const struct {
+		const char *name;
+		uint8_t payload[7];
+		size_t len;
+		int err;
+	} cases[] = {
+		/* LIST(2): [1] */
+		{"list missing an element", {0x82, 0x01}, 2, ZCBOR_ERR_NO_PAYLOAD},
+		/* MAP(1): {1} */
+		{"map missing a value", {0xA1, 0x01}, 2, ZCBOR_ERR_NO_PAYLOAD},
+#ifndef ZCBOR_CANONICAL
+		/* LIST(_): [LIST(2): [1]] */
+		{"list ended by outer break", {0x9F, 0x82, 0x01, 0xFF}, 4, ZCBOR_ERR_ADDITIONAL_INVAL},
+		/* MAP(_): {1} */
+		{"indefinite map missing a value", {0xBF, 0x01, 0xFF}, 3, ZCBOR_ERR_MAP_MISALIGNED},
+		/* MAP(_): {1: 2, 3} */
+		{"indefinite map missing last value", {0xBF, 0x01, 0x02, 0x03, 0xFF}, 5,
+			ZCBOR_ERR_MAP_MISALIGNED},
+		/* LIST(1): [MAP(_): {1}] */
+		{"nested indefinite map missing a value", {0x81, 0xBF, 0x01, 0xFF}, 4,
+			ZCBOR_ERR_MAP_MISALIGNED},
+		/* MAP(_): {} */
+		{"empty indefinite map", {0xBF, 0xFF}, 2, ZCBOR_SUCCESS},
+		/* MAP(_): {1: 2} */
+		{"indefinite map", {0xBF, 0x01, 0x02, 0xFF}, 4, ZCBOR_SUCCESS},
+		/* MAP(_): {1: MAP(_): {2: 3}} */
+		{"indefinite map in indefinite map", {0xBF, 0x01, 0xBF, 0x02, 0x03, 0xFF, 0xFF}, 7,
+			ZCBOR_SUCCESS},
+#endif
+	};
+	struct zcbor_dec_state_snapshot snap;
+
+	for (size_t i = 0; i < ZCBOR_ARRAY_SIZE(cases); i++) {
+		ZCBOR_STATE_D(state_d, 0, cases[i].payload, cases[i].len, 1, 0);
+
+		if (cases[i].err == ZCBOR_SUCCESS) {
+			bool ret = zcbor_any_skip(state_d, NULL);
+			zassert_true(ret, "%s err: %s\n", cases[i].name,
+				zcbor_error_str(zcbor_peek_error(state_d)));
+			zassert_equal(cases[i].payload + cases[i].len, state_d->payload, "%s\n",
+				cases[i].name);
+		} else {
+			zcbor_state_t state_before;
+
+			memcpy(&state_before, state_d, sizeof(state_before));
+			dec_snapshot(state_d, &snap);
+			zassert_false(zcbor_any_skip(state_d, NULL), "%s\n", cases[i].name);
+			zassert_equal(cases[i].err, zcbor_peek_error(state_d), "%s err: %s\n",
+				cases[i].name, zcbor_error_str(zcbor_peek_error(state_d)));
+			dec_assert_unchanged(state_d, &snap, cases[i].name);
+			zassert_mem_equal(&state_before, state_d, sizeof(state_before), "%s\n",
+				cases[i].name);
+		}
+	}
+
+	/* LIST(0x100000001): [0] */
+	const uint8_t long_list[] = {0x9B, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00};
+	ZCBOR_STATE_D(state_d2, 0, long_list, sizeof(long_list), 1, 0);
+
+	zassert_false(zcbor_any_skip(state_d2, NULL), NULL);
+#if SIZE_MAX == UINT32_MAX
+	/* The count doesn't fit in size_t, so it must not be truncated to 1. */
+	zassert_equal(ZCBOR_ERR_INT_SIZE, zcbor_peek_error(state_d2), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d2)));
+#else
+	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, zcbor_peek_error(state_d2), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d2)));
+#endif
+}
+
+
+/* After skipping nested lists/maps, the state must be back in the list zcbor_any_skip() was
+ * called in, both for indefinite and definite length lists.
+ * At the end of the list, zcbor_any_skip() must fail, and leave the end to the caller. */
+ZTEST(zcbor_unit_tests, test_any_skip_in_list)
+{
+#ifdef ZCBOR_CANONICAL
+	printf("Skip on canonical builds.\n");
+#else
+	/* LIST(_): [LIST(2): [1, 2], MAP(_): {3: 4}, 5] */
+	uint8_t payload1[] = {0x9F, 0x82, 0x01, 0x02, 0xBF, 0x03, 0x04, 0xFF, 0x05, 0xFF};
+	/* LIST(2): [LIST(_): [1], 2], 3 */
+	uint8_t payload2[] = {0x82, 0x9F, 0x01, 0xFF, 0x02, 0x03};
+	ZCBOR_STATE_D(state_d, 1, payload1, sizeof(payload1), 1, 0);
+	ZCBOR_STATE_D(state_d2, 1, payload2, sizeof(payload2), 2, 0);
+
+	zassert_true(zcbor_list_start_decode(state_d), NULL);
+	bool ret = zcbor_any_skip(state_d, NULL);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+	ret = zcbor_any_skip(state_d, NULL);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+	zassert_true(zcbor_int32_expect(state_d, 5), NULL);
+	zassert_false(zcbor_any_skip(state_d, NULL), NULL);
+	zassert_equal(ZCBOR_ERR_ADDITIONAL_INVAL, zcbor_pop_error(state_d), NULL);
+	zassert_equal(payload1 + sizeof(payload1) - 1, state_d->payload, NULL);
+	ret = zcbor_list_end_decode(state_d);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+	zassert_equal(payload1 + sizeof(payload1), state_d->payload, NULL);
+
+	zassert_true(zcbor_list_start_decode(state_d2), NULL);
+	ret = zcbor_any_skip(state_d2, NULL);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d2)));
+	zassert_equal(1, state_d2->elem_count, NULL);
+	zassert_true(zcbor_int32_expect(state_d2, 2), NULL);
+	zassert_false(zcbor_any_skip(state_d2, NULL), NULL);
+	zassert_equal(ZCBOR_ERR_LOW_ELEM_COUNT, zcbor_pop_error(state_d2), NULL);
+	ret = zcbor_list_end_decode(state_d2);
+	zassert_true(ret, "err: %s\n", zcbor_error_str(zcbor_peek_error(state_d2)));
+	zassert_true(zcbor_int32_expect(state_d2, 3), NULL);
+	zassert_equal(payload2 + sizeof(payload2), state_d2->payload, NULL);
+#endif
+}
+
+
 /* Write depth levels of nesting around a 0 into payload, and return the length. Each level is
  * the head_len bytes in head (a list/map header, plus any tags and map key) before the inner
  * level, plus a 0xFF break byte after it if the level has indefinite length. */

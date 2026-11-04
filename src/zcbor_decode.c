@@ -1463,6 +1463,7 @@ static bool any_skip(zcbor_state_t *state, size_t depth)
 			value *= 2;
 			/* fallthrough */
 		case ZCBOR_MAJOR_TYPE_LIST:
+			ZCBOR_ERR_IF(value > SIZE_MAX, ZCBOR_ERR_INT_SIZE);
 			ZCBOR_ERR_IF(depth >= ZCBOR_MAX_SKIP_DEPTH, ZCBOR_ERR_MAX_DEPTH);
 			if (indefinite_length_array) {
 				state_copy.payload++;
@@ -1475,8 +1476,15 @@ static bool any_skip(zcbor_state_t *state, size_t depth)
 					ZCBOR_FAIL();
 				}
 			}
-			if (indefinite_length_array && !array_end_expect(&state_copy)) {
-				ZCBOR_FAIL();
+			if (indefinite_length_array) {
+				size_t num_elems = ZCBOR_LARGE_ELEM_COUNT - state_copy.elem_count;
+
+				/* An odd number of map elements means a key without a value. */
+				ZCBOR_ERR_IF((major_type == ZCBOR_MAJOR_TYPE_MAP) && (num_elems & 1),
+					ZCBOR_ERR_MAP_MISALIGNED);
+				if (!array_end_expect(&state_copy)) {
+					ZCBOR_FAIL();
+				}
 			}
 			break;
 		default:
