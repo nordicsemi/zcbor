@@ -98,6 +98,7 @@ Name                      | Description
 `ZCBOR_STOP_ON_ERROR`     | Enable the `stop_on_error` functionality. This makes all functions abort their execution if called when an error has already happened.
 `ZCBOR_BIG_ENDIAN`        | All decoded values are returned as big-endian. The default is little-endian.
 `ZCBOR_MAP_SMART_SEARCH`  | Applies to decoding of unordered maps. When enabled, a flag is kept for each element in an array, ensuring it is not processed twice. If disabled, a count is kept for map as a whole. Enabling increases code size and memory usage, and requires the state variable to possess the memory necessary for the flags.
+`ZCBOR_MAX_SKIP_DEPTH`    | The maximum nesting depth of lists and maps that `zcbor_any_skip()` will skip (default 8). Deeper nesting makes it fail with `ZCBOR_ERR_MAX_DEPTH`. This bounds the recursion, and thereby the stack usage, when skipping untrusted data. `zcbor_any_skip()` is also used when searching unordered maps, and for `any` in generated decoding code. Unlike the other options, this one takes a value, e.g. `ZCBOR_MAX_SKIP_DEPTH=16`.
 
 
 Python script and module

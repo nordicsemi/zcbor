@@ -24,6 +24,10 @@ if (MAP_SMART_SEARCH)
   zephyr_compile_definitions(ZCBOR_MAP_SMART_SEARCH)
 endif()
 
+if (DEFINED MAX_SKIP_DEPTH)
+  zephyr_compile_definitions(ZCBOR_MAX_SKIP_DEPTH=${MAX_SKIP_DEPTH})
+endif()
+
 zephyr_compile_options(-Werror)
 
 if (CONFIG_64BIT)
