@@ -15,3 +15,5 @@ tests:
     extra_args: MAP_SMART_SEARCH=ON
   zcbor.unit.test1.canonical:
     extra_args: CANONICAL=ON
+  zcbor.unit.test1.max_skip_depth:
+    extra_args: MAX_SKIP_DEPTH=16

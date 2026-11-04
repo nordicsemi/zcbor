@@ -18,6 +18,11 @@
   The encoding is instead left in the same state as before the call, like without `ZCBOR_CANONICAL`.
   If you need to leave the list/map after a failure, call `zcbor_list_map_end_force_encode()` after the failed call.
 
+* `zcbor_any_skip()` now fails with `ZCBOR_ERR_MAX_DEPTH` instead of skipping lists and maps that are nested more than `ZCBOR_MAX_SKIP_DEPTH` (default 8) levels deep.
+  This bounds the recursion, which was previously only limited by the payload size.
+  The limit also applies to `zcbor_unordered_map_search()` and `zcbor_unordered_map_end_decode()`, which skip elements internally, and to `any` in generated decoding code.
+  If your data has deeper nesting in such places, define `ZCBOR_MAX_SKIP_DEPTH` to a higher value.
+
 * [Recommended] A new macro `ZCBOR_CAST_FP` has been added for casting function pointers for use in the zcbor API.
   The macro will first check that the function pointer has one of the supported signatures.
   You are recommended to use it on any function pointer that is passed as an argument to a zcbor function.

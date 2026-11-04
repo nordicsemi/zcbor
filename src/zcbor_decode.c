@@ -1368,6 +1368,9 @@ bool zcbor_unordered_map_end_decode(zcbor_state_t *state)
 
 	ZCBOR_ERR_IF(err_not_processed, ZCBOR_ERR_ELEMS_NOT_PROCESSED);
 
+	uint8_t const *payload_bak = state->payload;
+	size_t elem_count_bak = state->elem_count;
+
 	while (!zcbor_array_at_end(state)) {
 		if (!zcbor_any_skip(state, NULL)) {
 			/* Shouldn't really come here, because all map elements should have been
@@ -1375,10 +1378,15 @@ bool zcbor_unordered_map_end_decode(zcbor_state_t *state)
 			 * If the first pass of the map was not finished, the current function
 			 * should have errored earlier.
 			 * If we got here, an element was successfully decoded earlier using some
-			 * function, but then failed now in zcbor_any_skip().
+			 * function, but then failed now in zcbor_any_skip(). This is expected if
+			 * the element is nested deeper than ZCBOR_MAX_SKIP_DEPTH, otherwise the
+			 * state is inconsistent.
 			 */
 			zcbor_log("Could not move to end of map. zcbor_any_skip() returned %d\n", zcbor_peek_error(state));
-			ZCBOR_ERR(ZCBOR_ERR_BAD_STATE);
+			state->payload = payload_bak;
+			state->elem_count = elem_count_bak;
+			ZCBOR_ERR_IF(zcbor_peek_error(state) != ZCBOR_ERR_MAX_DEPTH, ZCBOR_ERR_BAD_STATE);
+			ZCBOR_FAIL();
 		}
 	}
 
@@ -1754,13 +1762,9 @@ bool zcbor_float_pexpect(zcbor_state_t *state, double *expected)
 }
 
 
-bool zcbor_any_skip(zcbor_state_t *state, void *result)
+static bool any_skip(zcbor_state_t *state, size_t depth)
 {
-	ZCBOR_PRINT_FUNC_NAME();
 	INITIAL_CHECKS();
-	zcbor_assert_state(result == NULL,
-			"'any' type cannot be returned, only skipped.\r\n");
-	(void)result;
 
 	zcbor_major_type_t major_type = ZCBOR_MAJOR_TYPE(*state->payload);
 	uint64_t value = 0; /* In case of indefinite_length_array. */
@@ -1799,13 +1803,14 @@ bool zcbor_any_skip(zcbor_state_t *state, void *result)
 			value *= 2;
 			/* fallthrough */
 		case ZCBOR_MAJOR_TYPE_LIST:
+			ZCBOR_ERR_IF(depth >= ZCBOR_MAX_SKIP_DEPTH, ZCBOR_ERR_MAX_DEPTH);
 			if (indefinite_length_array) {
 				value = ZCBOR_LARGE_ELEM_COUNT;
 			}
 			state_copy.elem_count = (size_t)value;
 			state_copy.decode_state.indefinite_length_array = indefinite_length_array;
 			while (!zcbor_array_at_end(&state_copy)) {
-				if (!zcbor_any_skip(&state_copy, NULL)) {
+				if (!any_skip(&state_copy, depth + 1)) {
 					ZCBOR_FAIL();
 				}
 			}
@@ -1822,6 +1827,18 @@ bool zcbor_any_skip(zcbor_state_t *state, void *result)
 	state->elem_count--;
 
 	return true;
+}
+
+
+bool zcbor_any_skip(zcbor_state_t *state, void *result)
+{
+	ZCBOR_PRINT_FUNC_NAME();
+	ZCBOR_CHECK_NULL(state);
+	zcbor_assert_state(result == NULL,
+			"'any' type cannot be returned, only skipped.\r\n");
+	(void)result;
+
+	return any_skip(state, 0);
 }
 
 
