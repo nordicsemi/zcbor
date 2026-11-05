@@ -333,7 +333,7 @@ jobs:
     - name: Setup Python
       uses: actions/setup-python@v6
       with:
-        python-version: "3.x"
+        python-version: "3.14"  # Because of issues with some packages in 3.15.
 
     - name: Checkout Zephyr
       run: |
