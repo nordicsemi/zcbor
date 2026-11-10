@@ -1927,8 +1927,8 @@ static bool multi_decode_backup(size_t min_decode,
 	ZCBOR_CHECK_ERROR();
 
 	for (size_t i = 0; i < max_decode; i++) {
-		uint8_t const *payload_bak;
-		size_t elem_count_bak;
+		uint8_t const *payload_bak = NULL;
+		size_t elem_count_bak = 0;
 		size_t backup_num_outer = zcbor_get_backup_num(state);
 
 		if (backup) {
