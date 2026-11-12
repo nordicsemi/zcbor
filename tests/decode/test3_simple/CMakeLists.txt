@@ -21,6 +21,7 @@ set(py_command_pet
   --output-cmake ${PROJECT_BINARY_DIR}/pet.cmake
   -t Pet
   -d
+  -e  # For ../../fuzz/fuzz_pet.c
   ${bit_arg}
   --short-names
   --file-header "Copyright (c) 2020 Nordic Semiconductor ASA\n\nSPDX-License-Identifier: Apache-2.0"

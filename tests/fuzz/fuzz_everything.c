@@ -5,6 +5,7 @@
  */
 
 #include "everything_decode.h"
+#include "everything_encode.h"
 #include "main_entry.h"
 
 bool fuzz_one_input(const uint8_t *data, size_t size)
@@ -17,5 +18,6 @@ bool fuzz_one_input(const uint8_t *data, size_t size)
 		return false;
 	}
 
+	FUZZ_ROUNDTRIP(EverythingList, &result, size);
 	return true;
 }
