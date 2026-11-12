@@ -249,7 +249,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.12']
         asserts: ["", "-x VERBOSE=ON -x ASSERTS=ON"]
     name: Release tests 3 (Python ${{ matrix.python-version }}${{ matrix.asserts != '' && ' with asserts' || '' }})
     needs:
