@@ -12,7 +12,8 @@ bool fuzz_one_input(const uint8_t *data, size_t size)
 	size_t payload_len_out = 0;
 	static struct EverythingList result;
 
-	if (cbor_decode_EverythingList(data, size, &result, &payload_len_out) != ZCBOR_SUCCESS) {
+	if (fuzz_check_err(cbor_decode_EverythingList(data, size, &result, &payload_len_out))
+			!= ZCBOR_SUCCESS) {
 		return false;
 	}
 
