@@ -69,12 +69,13 @@ elseif (TEST_CASE STREQUAL manifest12)
   target_sources(fuzz_target PRIVATE fuzz_manifest12.c)
 
 elseif (TEST_CASE STREQUAL everything)
+  # The --default-max-qty and 64 bit integers are needed for the examples to decode.
   fuzz_code(everything CDDL ${CASES_DIR}/everything.cddl
-    ARGS -t EverythingUnion -d)
+    ARGS -t EverythingList -d --default-max-qty 32 --default-bit-size 64)
   foreach(n RANGE 0 1)
     fuzz_seed(input${n} CDDL ${CASES_DIR}/everything.cddl
-      ARGS -t EverythingUnion --input ${CASES_DIR}/everything_example${n}.yaml
-        --yaml-compatibility)
+      ARGS -t EverythingList --input ${CASES_DIR}/everything_example${n}.yaml
+        --yaml-compatibility --default-max-qty 32)
   endforeach()
   target_sources(fuzz_target PRIVATE fuzz_everything.c)
 
