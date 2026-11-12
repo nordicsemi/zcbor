@@ -178,7 +178,7 @@ class LinkTester:
         "https://pypi.org/project/zcbor/",
         "https://docs.zephyrproject.org/latest/kconfig.html#CONFIG_ZCBOR",
         "https://datatracker.ietf.org/doc/html/rfc9165",
-        "https://docs.zephyrproject.org/latest/getting_started/index.html",
+        "https://docs.zephyrproject.org/latest/develop/getting_started/index.html",
         "https://datatracker.ietf.org/doc/html/rfc9090",
         "https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml",
         "https://github.com/nrfconnect/sdk-nrf/blob/main/subsys/mgmt/fmfu/src/fmfu_mgmt.c",

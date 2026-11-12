@@ -344,7 +344,7 @@ Running tests
 
 The tests for the generated code are based on the Zephyr ztest library.
 These tests can be found in [tests/decode](tests/decode) and [tests/encode](tests/encode).
-To set up the environment to run the ztest tests, follow [Zephyr's Getting Started Guide](https://docs.zephyrproject.org/latest/getting_started/index.html), or see the workflow in the [`.github`](.github) directory.
+To set up the environment to run the ztest tests, follow [Zephyr's Getting Started Guide](https://docs.zephyrproject.org/latest/develop/getting_started/index.html), or see the workflow in the [`.github`](.github) directory.
 
 Tests for `convert` and `verify` are implemented with the unittest module.
 These tests can be found in [tests/scripts/test_zcbor.py](tests/scripts/test_zcbor.py).
