@@ -7,9 +7,14 @@ on:
  workflow_dispatch:
   inputs:
     fuzz-tests:
-      description: 'Run fuzz tests (1 hour)'
+      description: 'Run fuzz tests ("full": 1 hour total, "short": 30 seconds per test case)'
       required: true
-      default: "false"
+      type: choice
+      options:
+        - "none"
+        - "short"
+        - "full"
+      default: "none"
 
 concurrency:
   group: run-tests-${{ github.ref }}
@@ -194,7 +199,10 @@ jobs:
     - merge-test-2
     - merge-test-2-win
     - merge-test-3
-    if: "(github.event_name == 'workflow_dispatch' && github.event.inputs.fuzz-tests == 'true') || (github.event_name == 'pull_request' && startswith(github.head_ref, 'release/'))"
+    if: "(github.event_name == 'workflow_dispatch' && github.event.inputs.fuzz-tests != 'none') || (github.event_name == 'pull_request' && startswith(github.head_ref, 'release/'))"
+    env:
+      # Empty unless a short run was requested, in which case each test case runs this long.
+      FUZZ_SHORT_SECONDS: ${{ github.event.inputs.fuzz-tests == 'short' && '30' || '' }}
     steps:
     - name: Checkout the code
       uses: actions/checkout@v5
@@ -213,30 +221,49 @@ jobs:
     - name: Run everything fuzz tests
       working-directory: tests/fuzz
       run: |
-        ./test-afl.sh 2400 64 everything
+        ./test-afl.sh ${FUZZ_SHORT_SECONDS:-1200} 64 everything
+
+    - name: Run everything fuzz tests (canonical)
+      working-directory: tests/fuzz
+      run: |
+        ./test-afl.sh ${FUZZ_SHORT_SECONDS:-400} 64 everything -DCANONICAL=ON
 
     - name: Run manifest12 fuzz tests
       working-directory: tests/fuzz
       run: |
-        ./test-afl.sh 800 64 manifest12
+        ./test-afl.sh ${FUZZ_SHORT_SECONDS:-600} 64 manifest12
+
+    - name: Run manifest14 (unordered maps) fuzz tests
+      working-directory: tests/fuzz
+      run: |
+        ./test-afl.sh ${FUZZ_SHORT_SECONDS:-800} 64 manifest14
+
+    - name: Run fragments fuzz tests
+      working-directory: tests/fuzz
+      run: |
+        ./test-afl.sh ${FUZZ_SHORT_SECONDS:-400} 64 fragments
 
     - name: Run pet fuzz tests
       working-directory: tests/fuzz
       run: |
-        ./test-afl.sh 400 64 pet
+        ./test-afl.sh ${FUZZ_SHORT_SECONDS:-200} 64 pet
 
     - name: Rename fuzz failures
       if: ${{ failure() }}
-      working-directory: tests/fuzz/build-afl/output/default/crashes/
+      working-directory: tests/fuzz
       run: |
-        for i in ./* ; do mv "$i" "${i//:/_}_1"; done
+        # Does nothing if afl-fuzz didn't get to create its output directory.
+        shopt -s nullglob
+        for i in build-afl/output/*/crashes/* build-afl/output/*/hangs/* ; do mv "$i" "${i//:/_}_1"; done
 
     - name: Upload fuzz failures
       if: ${{ failure() }}
       uses: actions/upload-artifact@v4
       with:
         name: fuzz-failures
-        path: tests/fuzz/build-afl/output/default/crashes/
+        path: |
+          tests/fuzz/build-afl/output/*/crashes/
+          tests/fuzz/build-afl/output/*/hangs/
 
     - name: Upload release files
       uses: actions/upload-artifact@v4
