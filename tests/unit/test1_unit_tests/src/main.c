@@ -2695,6 +2695,45 @@ ZTEST(zcbor_unit_tests, test_start_decode_exit_map_fail)
 	zassert_true(zcbor_int32_expect(state_d3, 1), NULL);
 	zassert_true(zcbor_map_end_decode(state_d3), NULL);
 }
+
+
+/* Test that zcbor_unordered_map_start_decode() exits the backup taken by
+ * zcbor_map_start_decode() when the map has too many elements for the available map flags.
+ * The leftover backup used to make enclosing calls like zcbor_multi_decode() fail with
+ * ZCBOR_ERR_BACKUP_MISMATCH. */
+ZTEST(zcbor_unit_tests, test_unordered_map_start_decode_flags_fail)
+{
+	/* A list containing a map that claims 65535 key/value pairs. Only the map header needs
+	 * to be present, since zcbor_unordered_map_start_decode() fails before reading further. */
+	uint8_t payload[] = {0x81, 0xB9, 0xFF, 0xFF};
+	struct zcbor_dec_state_snapshot snap;
+
+	ZCBOR_STATE_D(state_d, 2, payload, sizeof(payload), 1, 8);
+	size_t current_backup = state_d->constant_state->current_backup;
+
+	zassert_equal(state_d->constant_state->current_backup, current_backup, NULL);
+	zassert_true(zcbor_list_start_decode(state_d), NULL);
+	zassert_equal(state_d->constant_state->current_backup, current_backup + 1, NULL);
+	dec_snapshot(state_d, &snap);
+	zassert_false(zcbor_unordered_map_start_decode(state_d), NULL);
+	zassert_equal(ZCBOR_ERR_MAP_FLAGS_NOT_AVAILABLE, zcbor_pop_error(state_d), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d)));
+	dec_assert_unchanged(state_d, &snap, "unordered_map_start flags not available");
+	zassert_equal(state_d->constant_state->current_backup, current_backup + 1, NULL);
+
+	/* The same with stop_on_error, which makes zcbor_process_backup() refuse to run while the
+	 * error from allocate_map_flags() is registered. */
+	state_d->constant_state->stop_on_error = true;
+	zassert_false(zcbor_unordered_map_start_decode(state_d), NULL);
+	zassert_equal(ZCBOR_ERR_MAP_FLAGS_NOT_AVAILABLE, zcbor_pop_error(state_d), "err: %s\n",
+		zcbor_error_str(zcbor_peek_error(state_d)));
+	dec_assert_unchanged(state_d, &snap, "unordered_map_start flags not available, stop_on_error");
+	zassert_equal(state_d->constant_state->current_backup, current_backup + 1, NULL);
+
+	/* The list's backup must be the current one, so ending the list works. */
+	zassert_true(zcbor_list_map_end_force_decode(state_d), NULL);
+	zassert_equal(state_d->constant_state->current_backup, current_backup, NULL);
+}
 #endif
 
 

@@ -1027,7 +1027,15 @@ bool zcbor_unordered_map_start_decode(zcbor_state_t *state)
 	if (!state->decode_state.counting_map_elems) {
 		size_t old_flags = update_map_elem_count(state, state->elem_count);
 #ifdef ZCBOR_MAP_SMART_SEARCH
-		ZCBOR_FAIL_IF(!allocate_map_flags(state, old_flags));
+		if (!allocate_map_flags(state, old_flags)) {
+			/* Exit the backup taken by zcbor_map_start_decode(), so the state is
+			 * left as it was before the call. */
+			bool backup_exited = false;
+
+			exit_backup(state, true, &backup_exited);
+			ZCBOR_FAIL_IF(!backup_exited);
+			FAIL_RESTORE();
+		}
 #endif
 		(void)old_flags;
 	}
