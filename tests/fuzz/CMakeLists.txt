@@ -10,6 +10,7 @@ project(zcbor_fuzz C)
 
 set(TEST_CASE "pet" CACHE STRING
   "Test case (pet, manifest12, or everything)")
+option(CANONICAL "Build with ZCBOR_CANONICAL" OFF)
 
 set(CASES_DIR ${CMAKE_CURRENT_LIST_DIR}/../cases)
 set(SEED_DIR ${PROJECT_BINARY_DIR}/fuzz_input)
@@ -18,6 +19,9 @@ file(MAKE_DIRECTORY ${SEED_DIR})
 
 # Makes zcbor_assert()s fail with ZCBOR_ERR_ASSERTION, which the test cases report as crashes.
 add_compile_definitions(ZCBOR_ASSERTS)
+if (CANONICAL)
+  add_compile_definitions(ZCBOR_CANONICAL)
+endif()
 
 add_executable(fuzz_target main_entry.c fuzz_common.c)
 target_compile_options(fuzz_target PRIVATE -Wall -Werror)
