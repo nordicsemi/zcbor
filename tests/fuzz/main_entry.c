@@ -58,6 +58,7 @@ int main(void)
 	while (__AFL_LOOP(1000)) {
 		AFL_READ_AND_EXECUTE;
 	}
+	(void)ret;
 	return 0;
 	#else
 		AFL_READ_AND_EXECUTE;

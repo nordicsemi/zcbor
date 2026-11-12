@@ -6,95 +6,77 @@
 
 cmake_minimum_required(VERSION 3.13.1)
 
-project(zcbor_fuzz)
+project(zcbor_fuzz C)
+
+set(TEST_CASE "pet" CACHE STRING
+  "Test case (pet, manifest12, or everything)")
+
+set(CASES_DIR ${CMAKE_CURRENT_LIST_DIR}/../cases)
+set(SEED_DIR ${PROJECT_BINARY_DIR}/fuzz_input)
+file(REMOVE_RECURSE ${SEED_DIR})
+file(MAKE_DIRECTORY ${SEED_DIR})
 
 add_executable(fuzz_target main_entry.c)
+target_compile_options(fuzz_target PRIVATE -Wall -Werror)
 
-target_compile_options(fuzz_target PUBLIC -Werror)
+# Generate code from CDDL, and link it into fuzz_target.
+#   NAME:  Name of the generated library and files.
+#   CDDL:  CDDL files.
+#   ARGS:  Other arguments to "zcbor code", e.g. the entry types.
+function(fuzz_code NAME)
+  cmake_parse_arguments(ARG "" "" "CDDL;ARGS" ${ARGN})
+  set(cddl_args)
+  foreach(cddl ${ARG_CDDL})
+    list(APPEND cddl_args -c ${cddl})
+  endforeach()
+  execute_process(
+    COMMAND zcbor code ${cddl_args} ${ARG_ARGS} --output-cmake ${PROJECT_BINARY_DIR}/${NAME}.cmake
+    )
+  include(${PROJECT_BINARY_DIR}/${NAME}.cmake)
+  target_link_libraries(fuzz_target PRIVATE ${NAME})
+endfunction()
 
-file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/fuzz_input)
+# Convert an example to CBOR and place it in the seed corpus.
+#   CDDL:  CDDL files.
+#   ARGS:  Other arguments to "zcbor convert", e.g. the entry type and input file.
+function(fuzz_seed NAME)
+  cmake_parse_arguments(ARG "" "" "CDDL;ARGS" ${ARGN})
+  set(cddl_args)
+  foreach(cddl ${ARG_CDDL})
+    list(APPEND cddl_args --cddl ${cddl})
+  endforeach()
+  execute_process(
+    COMMAND zcbor convert ${cddl_args} ${ARG_ARGS}
+      --output ${SEED_DIR}/${NAME}.cbor --output-as cbor
+    )
+endfunction()
 
-set(TEST_CASE "pet"  CACHE STRING  "Test case (pet or manifest12)")
+if (TEST_CASE STREQUAL pet)
+  fuzz_code(pet CDDL ${CASES_DIR}/pet.cddl ARGS -t Pet -d)
+  fuzz_seed(input0 CDDL ${CASES_DIR}/pet.cddl
+    ARGS -t Pet --input ${CASES_DIR}/pet0.yaml --yaml-compatibility)
+  target_sources(fuzz_target PRIVATE fuzz_pet.c)
 
-if (${TEST_CASE} STREQUAL pet)
-    execute_process(
-        COMMAND zcbor
-        code
-        -c ${CMAKE_CURRENT_LIST_DIR}/../cases/pet.cddl
-        --output-cmake ${PROJECT_BINARY_DIR}/pet.cmake
-        -t Pet
-        -d
-        )
+elseif (TEST_CASE STREQUAL manifest12)
+  fuzz_code(manifest12 CDDL ${CASES_DIR}/manifest12.cddl
+    ARGS -t SUIT_Envelope_Tagged SUIT_Command_Sequence SUIT_Envelope -d)
+  foreach(n RANGE 0 5)
+    fuzz_seed(input${n} CDDL ${CASES_DIR}/manifest12.cddl
+      ARGS -t SUIT_Envelope_Tagged --input ${CASES_DIR}/manifest12_example${n}.cborhex
+        --default-max-qty 16)
+  endforeach()
+  target_sources(fuzz_target PRIVATE fuzz_manifest12.c)
 
-    execute_process(
-        COMMAND python3 ${CMAKE_CURRENT_LIST_DIR}/../../zcbor/zcbor.py
-        convert
-        --cddl ${CMAKE_CURRENT_LIST_DIR}/../cases/pet.cddl
-        --input ${CMAKE_CURRENT_LIST_DIR}/../cases/pet0.yaml
-        -t Pet
-        --yaml-compatibility
-        --output ${PROJECT_BINARY_DIR}/fuzz_input/input0.cbor
-        --output-as cbor
-        )
-
-    target_sources(fuzz_target PRIVATE ${CMAKE_CURRENT_LIST_DIR}/fuzz_pet.c)
-    include(${PROJECT_BINARY_DIR}/pet.cmake)
-    target_link_libraries(fuzz_target PRIVATE pet)
-
-elseif (${TEST_CASE} STREQUAL manifest12)
-    execute_process(
-        COMMAND zcbor
-        code
-        -c ${CMAKE_CURRENT_LIST_DIR}/../cases/manifest12.cddl
-        --output-cmake ${PROJECT_BINARY_DIR}/manifest12.cmake
-        -t SUIT_Envelope_Tagged SUIT_Command_Sequence SUIT_Envelope
-        -d
-        )
-
-    foreach(n RANGE 0 5)
-        execute_process(
-        COMMAND python3 ${CMAKE_CURRENT_LIST_DIR}/../../zcbor/zcbor.py
-        convert
-        --cddl ${CMAKE_CURRENT_LIST_DIR}/../cases/manifest12.cddl
-        --default-max-qty 16
-        --input ${CMAKE_CURRENT_LIST_DIR}/../cases/manifest12_example${n}.cborhex
-        -t SUIT_Envelope_Tagged
-        --output ${PROJECT_BINARY_DIR}/fuzz_input/input${n}.cbor
-        --output-as cbor
-        )
-    endforeach()
-
-    target_sources(fuzz_target PRIVATE fuzz_manifest12.c)
-    include(${PROJECT_BINARY_DIR}/manifest12.cmake)
-    target_link_libraries(fuzz_target PRIVATE manifest12)
-
-elseif (${TEST_CASE} STREQUAL everything)
-    execute_process(
-        COMMAND zcbor
-        code
-        -c ${CMAKE_CURRENT_LIST_DIR}/../cases/everything.cddl
-        --output-cmake ${PROJECT_BINARY_DIR}/everything.cmake
-        -t EverythingUnion
-        -d
-        )
-
-    foreach(n RANGE 0 1)
-        execute_process(
-        COMMAND python3 ${CMAKE_CURRENT_LIST_DIR}/../../zcbor/zcbor.py
-        convert
-        --cddl ${CMAKE_CURRENT_LIST_DIR}/../cases/everything.cddl
-        --input ${CMAKE_CURRENT_LIST_DIR}/../cases/everything_example${n}.yaml
-        --yaml-compatibility
-        -t EverythingUnion
-        --output ${PROJECT_BINARY_DIR}/fuzz_input/input${n}.cbor
-        --output-as cbor
-        )
-    endforeach()
-
-    target_sources(fuzz_target PRIVATE fuzz_everything.c)
-    include(${PROJECT_BINARY_DIR}/everything.cmake)
-    target_link_libraries(fuzz_target PRIVATE everything)
+elseif (TEST_CASE STREQUAL everything)
+  fuzz_code(everything CDDL ${CASES_DIR}/everything.cddl
+    ARGS -t EverythingUnion -d)
+  foreach(n RANGE 0 1)
+    fuzz_seed(input${n} CDDL ${CASES_DIR}/everything.cddl
+      ARGS -t EverythingUnion --input ${CASES_DIR}/everything_example${n}.yaml
+        --yaml-compatibility)
+  endforeach()
+  target_sources(fuzz_target PRIVATE fuzz_everything.c)
 
 else()
-    message(FATAL_ERROR "Invalid test case")
+  message(FATAL_ERROR "Invalid test case: ${TEST_CASE}")
 endif()
