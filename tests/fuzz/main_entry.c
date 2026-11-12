@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2021 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 #include "main_entry.h"
 #include <stdlib.h>
@@ -6,10 +11,11 @@
 
 
 #ifdef LIBFUZZER
-	int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
-		(void) fuzz_one_input(data, size);
-		return 0;
-	}
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+{
+	(void) fuzz_one_input(data, size);
+	return 0;
+}
 #else
 
 #ifndef AFL_MAX_SIZE
@@ -18,8 +24,8 @@
 
 static uint8_t tmp_buffer[AFL_MAX_SIZE];
 
-static size_t afl_read(uint8_t **data) {
-
+static size_t afl_read(uint8_t **data)
+{
 	ptrdiff_t size = read(0, tmp_buffer, AFL_MAX_SIZE);
 	if (size <= 0) {
 		return 0;
@@ -42,7 +48,8 @@ static size_t afl_read(uint8_t **data) {
 		free(data);                         \
 	} while (0)
 
-int main(void) {
+int main(void)
+{
 	size_t size;
 	uint8_t *data = NULL;
 	bool ret;
