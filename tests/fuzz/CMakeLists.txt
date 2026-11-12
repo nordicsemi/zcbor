@@ -9,7 +9,7 @@ cmake_minimum_required(VERSION 3.20)
 project(zcbor_fuzz C)
 
 set(TEST_CASE "pet" CACHE STRING
-  "Test case (pet, manifest12, or everything)")
+  "Test case (pet, manifest12, manifest14, or everything)")
 option(CANONICAL "Build with ZCBOR_CANONICAL" OFF)
 
 set(CASES_DIR ${CMAKE_CURRENT_LIST_DIR}/../cases)
@@ -76,6 +76,18 @@ elseif (TEST_CASE STREQUAL manifest12)
         --default-max-qty 16)
   endforeach()
   target_sources(fuzz_target PRIVATE fuzz_manifest12.c)
+
+elseif (TEST_CASE STREQUAL manifest14)
+  # Same arguments as tests/decode/test9_manifest14.
+  set(manifest14_cddl ${CASES_DIR}/manifest14.cddl ${CASES_DIR}/cose.cddl)
+  fuzz_code(manifest14 CDDL ${manifest14_cddl}
+    ARGS -t SUIT_Envelope_Tagged SUIT_Envelope SUIT_Manifest SUIT_Command_Sequence
+      SUIT_Common_Sequence -d --unordered-maps --default-max-qty 4)
+  foreach(n RANGE 0 5)
+    fuzz_seed(input${n} CDDL ${manifest14_cddl}
+      ARGS -t SUIT_Envelope_Tagged --input ${CASES_DIR}/manifest14_example${n}.cborhex)
+  endforeach()
+  target_sources(fuzz_target PRIVATE fuzz_manifest14.c)
 
 elseif (TEST_CASE STREQUAL everything)
   # The --default-max-qty and 64 bit integers are needed for the examples to decode.
