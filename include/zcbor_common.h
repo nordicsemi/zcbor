@@ -22,7 +22,7 @@ extern "C" {
 
 #define ZCBOR_VERSION_MAJOR 0
 #define ZCBOR_VERSION_MINOR 9
-#define ZCBOR_VERSION_BUGFIX 1
+#define ZCBOR_VERSION_BUGFIX 2
 
 /** The version string with dots and not prefix. */
 #define ZCBOR_VERSION_STR   ZCBOR_STRINGIFY(ZCBOR_VERSION_MAJOR) \

@@ -1,3 +1,31 @@
+# zcbor v. 0.9.2 (2026-11-12)
+
+This is a bugfix release on top of 0.9.1.
+See the [migration guide](MIGRATION_GUIDE.md) for the resulting behavior change.
+
+Any new bugs, requests, or missing features should be reported as [Github issues](https://github.com/NordicSemiconductor/zcbor/issues).
+
+## Bugfixes:
+
+ * zcbor_decode: Limit recursion depth in `zcbor_any_skip()`. Fail with the new `ZCBOR_ERR_MAX_DEPTH` when nesting exceeds `ZCBOR_MAX_SKIP_DEPTH` (default 8, can be overridden in the build).
+ * zcbor_decode: Fix infinite loop in `zcbor_unordered_map_end_decode()` when `zcbor_any_skip()` fails.
+ * zcbor_decode: Add missing checks to `zcbor_any_skip()`
+   * Fail with `ZCBOR_ERR_MAP_MISALIGNED` if an indefinite-length map has a key without a value.
+   * Fail with `ZCBOR_ERR_INT_SIZE` when list/map element counts or string lengths don't fit in `size_t`.
+ * zcbor_decode: Fix `zcbor_any_skip()` not catching a string that is longer than the remaining payload.
+ * requirements: Pin `cbor2` to `<6.0.0`, since cbor2 6.x is not supported by zcbor 0.9.x.
+ * README: Update the link to Zephyr's Getting Started Guide.
+
+## Other changes to run tests:
+
+ * Run tests on Zephyr v4.4.2 (SDK 1.0.1):
+   * Use `native_sim` instead of `native_posix`, write lists in `testcase.yaml` as YAML lists, and remove or rename Kconfig options that are deprecated or no longer in Zephyr (`CONFIG_STD_C11`, `CONFIG_CPLUSPLUS` -> `CONFIG_CPP`).
+   * Only run twister tests on Python 3.12, as required by Zephyr.
+   * Run CI on Ubuntu 24.04 instead of 22.04, installing `qemu-system-arm`/`qemu-system-mips` instead of the removed `qemu` package.
+   * Fix printf format strings in `zassert` calls, which Zephyr now checks.
+ * Don't check the Wikipedia link in the docs tests, since it returns 403 to GitHub Actions.
+
+
 # zcbor v. 0.9.1 (2024-10-17)
 
 Any new bugs, requests, or missing features should be reported as [Github issues](https://github.com/NordicSemiconductor/zcbor/issues).
