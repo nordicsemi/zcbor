@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-cmake_minimum_required(VERSION 3.13.1)
+cmake_minimum_required(VERSION 3.20)
 
 project(zcbor_fuzz C)
 
@@ -31,6 +31,7 @@ function(fuzz_code NAME)
   endforeach()
   execute_process(
     COMMAND zcbor code ${cddl_args} ${ARG_ARGS} --output-cmake ${PROJECT_BINARY_DIR}/${NAME}.cmake
+    COMMAND_ERROR_IS_FATAL ANY
     )
   include(${PROJECT_BINARY_DIR}/${NAME}.cmake)
   target_link_libraries(fuzz_target PRIVATE ${NAME})
@@ -48,6 +49,7 @@ function(fuzz_seed NAME)
   execute_process(
     COMMAND zcbor convert ${cddl_args} ${ARG_ARGS}
       --output ${SEED_DIR}/${NAME}.cbor --output-as cbor
+    COMMAND_ERROR_IS_FATAL ANY
     )
 endfunction()
 
