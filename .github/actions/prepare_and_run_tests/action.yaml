@@ -44,6 +44,7 @@ runs:
       shell: sh
       run: |
         export ZEPHYR_BASE=$(pwd)/../zephyr-clone
+        pip3 install -U -r $ZEPHYR_BASE/scripts/requirements-base.txt
         pip3 install -U -r $ZEPHYR_BASE/scripts/requirements-build-test.txt
         pip3 install -U -r $ZEPHYR_BASE/scripts/requirements-run-test.txt
 
