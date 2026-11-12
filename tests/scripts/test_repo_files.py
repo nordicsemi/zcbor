@@ -125,6 +125,10 @@ class TestSamples(TestCase):
 
 
 class TestDocs(TestCase):
+    urls_never_check = {
+        "https://en.wikipedia.org/wiki/CBOR",  # Returns 403 for runs on GitHub Actions
+    }
+
     def __init__(self, *args, **kwargs):
         """Overridden to get base URL for relative links from remote tracking branch."""
         super(TestDocs, self).__init__(*args, **kwargs)
@@ -174,6 +178,8 @@ class TestDocs(TestCase):
             # Github sometimes need the filename for anchor (#) links to work, so add it:
             m = m if not m.startswith("#") else path.name + m
             link = self.base_url + relative_path + m if "http" not in m else m
+            if link in self.urls_never_check:
+                continue
             threads.append(t := Thread(target=self.check_code, args=(link, codes), daemon=True))
             t.start()
         for t in threads:
