@@ -11,6 +11,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/** Implemented by each test case.
+ *
+ * @retval true   If the input was decoded successfully.
+ * @retval false  If the input was rejected.
+ */
 bool fuzz_one_input(const uint8_t *data, size_t size);
 
 #endif /* MAIN_ENTRY_H__ */
