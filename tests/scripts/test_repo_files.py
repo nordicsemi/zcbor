@@ -191,7 +191,11 @@ class LinkTester:
         super(LinkTester, self).__init__()
         self.repo_info = GitRepoInfo()
         self.link_regex = compile(r"\[.*?\]\((?P<link>.*?)\)")
-        self.check_all = ("release/" in self.repo_info.current_branch) or (force_check_all)
+        self.check_all = (
+            ("release/" in self.repo_info.current_branch)
+            or (os.environ.get("GITHUB_EVENT_NAME") in ("schedule", "workflow_dispatch"))
+            or (force_check_all)
+        )
 
     @staticmethod
     def _get_relative_path(file_path: Path) -> str:
@@ -455,7 +459,9 @@ class TestDocs(TestCase, LinkTester):
 
     def test_known_good_urls(self) -> None:
         if not self.check_all:
-            self.skipTest("Skipping known good URL tests (not on main or release branch).")
+            self.skipTest(
+                "Skipping known good URL tests (not on release branch or scheduled/manual run)."
+            )
         ext_urls = (sum(self.extract_links(fp)[0:2], []) for fp, _ in self.files_to_check)
         all_urls = set(sum(ext_urls, []))
         unused_urls = self.known_good_urls - all_urls
