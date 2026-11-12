@@ -10,13 +10,19 @@
 bool fuzz_one_input(const uint8_t *data, size_t size)
 {
     size_t payload_len_out = 0;
-    struct SUIT_Envelope result;
-    struct SUIT_Envelope result2;
-    struct SUIT_Command_Sequence command_seq;
+    /* The structs are large because of --default-max-qty, so keep them off the stack. */
+    static struct SUIT_Envelope result;
+    static struct SUIT_Envelope result2;
+    static struct SUIT_Command_Sequence command_seq;
 
+    /* Try both entry points. The seeds are untagged, and an input fails quickly with the
+     * entry point it doesn't match. */
     int ret = cbor_decode_SUIT_Envelope_Tagged(data, size,
                                &result,
                                &payload_len_out);
+    if (ret != ZCBOR_SUCCESS) {
+        ret = cbor_decode_SUIT_Envelope(data, size, &result, &payload_len_out);
+    }
     if (ret != ZCBOR_SUCCESS) {
         return false;
     }
