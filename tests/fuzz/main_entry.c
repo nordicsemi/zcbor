@@ -24,9 +24,14 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 
 static uint8_t tmp_buffer[AFL_MAX_SIZE];
 
+/* Read the input into tmp_buffer, then copy it into a heap buffer of exactly the input's size.
+ * Reads past the end of the input then go outside the heap buffer, where ASan detects them,
+ * instead of into the rest of tmp_buffer. */
 static size_t afl_read(uint8_t **data)
 {
-	ptrdiff_t size = read(0, tmp_buffer, AFL_MAX_SIZE);
+	ssize_t size = read(0, tmp_buffer, AFL_MAX_SIZE);
+
+	*data = NULL;
 	if (size <= 0) {
 		return 0;
 	}
