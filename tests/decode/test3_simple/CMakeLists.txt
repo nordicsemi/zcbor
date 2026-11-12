@@ -11,7 +11,8 @@ project(test3_simple)
 include(../../cmake/test_template.cmake)
 
 target_sources(app PRIVATE
-  ../../fuzz/fuzz_pet.c)
+  ../../fuzz/fuzz_pet.c
+  ../../fuzz/fuzz_common.c)
 
 set(py_command_pet
   zcbor

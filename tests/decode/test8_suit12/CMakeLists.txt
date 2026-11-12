@@ -31,6 +31,7 @@ execute_process(
 
 target_sources(app PRIVATE
   ../../fuzz/fuzz_manifest12.c
+  ../../fuzz/fuzz_common.c
   )
 
 include(${PROJECT_BINARY_DIR}/manifest12.cmake)

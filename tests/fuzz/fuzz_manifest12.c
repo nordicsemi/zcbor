@@ -19,8 +19,8 @@ static void decode_command_sequence(bool present, const struct zcbor_string *seq
 	size_t payload_len_out;
 
 	if (present) {
-		(void)cbor_decode_SUIT_Command_Sequence(seq->value, seq->len,
-				&command_seq, &payload_len_out);
+		(void)fuzz_check_err(cbor_decode_SUIT_Command_Sequence(seq->value, seq->len,
+				&command_seq, &payload_len_out));
 	}
 }
 
@@ -57,10 +57,10 @@ bool fuzz_one_input(const uint8_t *data, size_t size)
 
 	/* Try both entry points. The seeds are untagged, and an input fails quickly with the
 	 * entry point it doesn't match. */
-	if ((cbor_decode_SUIT_Envelope_Tagged(data, size, &envelope,
-				&payload_len_out) != ZCBOR_SUCCESS)
-		&& (cbor_decode_SUIT_Envelope(data, size, &envelope,
-				&payload_len_out) != ZCBOR_SUCCESS)) {
+	if ((fuzz_check_err(cbor_decode_SUIT_Envelope_Tagged(data, size, &envelope,
+				&payload_len_out)) != ZCBOR_SUCCESS)
+		&& (fuzz_check_err(cbor_decode_SUIT_Envelope(data, size, &envelope,
+				&payload_len_out)) != ZCBOR_SUCCESS)) {
 		return false;
 	}
 
@@ -75,8 +75,8 @@ bool fuzz_one_input(const uint8_t *data, size_t size)
 			.SUIT_Envelope_suit_integrated_dependency_key[i]
 			.SUIT_Envelope_suit_integrated_dependency_key;
 
-		(void)cbor_decode_SUIT_Envelope(dep->value, dep->len, &dependency,
-				&payload_len_out);
+		(void)fuzz_check_err(cbor_decode_SUIT_Envelope(dep->value, dep->len, &dependency,
+				&payload_len_out));
 	}
 
 	return true;

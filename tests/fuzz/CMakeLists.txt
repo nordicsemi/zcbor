@@ -16,7 +16,10 @@ set(SEED_DIR ${PROJECT_BINARY_DIR}/fuzz_input)
 file(REMOVE_RECURSE ${SEED_DIR})
 file(MAKE_DIRECTORY ${SEED_DIR})
 
-add_executable(fuzz_target main_entry.c)
+# Makes zcbor_assert()s fail with ZCBOR_ERR_ASSERTION, which the test cases report as crashes.
+add_compile_definitions(ZCBOR_ASSERTS)
+
+add_executable(fuzz_target main_entry.c fuzz_common.c)
 target_compile_options(fuzz_target PRIVATE -Wall -Werror)
 
 # Generate code from CDDL, and link it into fuzz_target.
