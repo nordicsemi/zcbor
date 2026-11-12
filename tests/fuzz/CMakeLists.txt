@@ -9,10 +9,13 @@ cmake_minimum_required(VERSION 3.20)
 project(zcbor_fuzz C)
 
 set(TEST_CASE "pet" CACHE STRING
-  "Test case (pet, manifest12, manifest14, or everything)")
+  "Test case (pet, manifest12, manifest14, everything, or fragments)")
 option(CANONICAL "Build with ZCBOR_CANONICAL" OFF)
 
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
 set(CASES_DIR ${CMAKE_CURRENT_LIST_DIR}/../cases)
+set(ZCBOR_DIR ${CMAKE_CURRENT_LIST_DIR}/../..)
 set(SEED_DIR ${PROJECT_BINARY_DIR}/fuzz_input)
 file(REMOVE_RECURSE ${SEED_DIR})
 file(MAKE_DIRECTORY ${SEED_DIR})
@@ -60,6 +63,16 @@ function(fuzz_seed NAME)
     )
 endfunction()
 
+# Write a hex string to the seed corpus as binary.
+function(fuzz_seed_hex NAME HEX)
+  execute_process(
+    COMMAND ${Python3_EXECUTABLE} -c
+      "import sys; open(sys.argv[1], 'wb').write(bytes.fromhex(sys.argv[2]))"
+      ${SEED_DIR}/${NAME}.cbor ${HEX}
+    COMMAND_ERROR_IS_FATAL ANY
+    )
+endfunction()
+
 if (TEST_CASE STREQUAL pet)
   fuzz_code(pet CDDL ${CASES_DIR}/pet.cddl ARGS -t Pet -d -e)
   fuzz_seed(input0 CDDL ${CASES_DIR}/pet.cddl
@@ -99,6 +112,29 @@ elseif (TEST_CASE STREQUAL everything)
         --yaml-compatibility --default-max-qty 32)
   endforeach()
   target_sources(fuzz_target PRIVATE fuzz_everything.c)
+
+elseif (TEST_CASE STREQUAL fragments)
+  # The fragmented string API is used directly, without generated code.
+  target_sources(fuzz_target PRIVATE
+    fuzz_fragments.c
+    ${ZCBOR_DIR}/src/zcbor_common.c
+    ${ZCBOR_DIR}/src/zcbor_decode.c
+    ${ZCBOR_DIR}/src/zcbor_print.c
+    )
+  target_include_directories(fuzz_target PRIVATE ${ZCBOR_DIR}/include)
+  target_compile_definitions(fuzz_target PRIVATE ZCBOR_FRAGMENTS)
+
+  # The first byte is the configuration, see fuzz_fragments.c.
+  # Sections of 8 bytes. A sequence of strings and other elements.
+  string(CONCAT seed0
+    07782a48656c6c6f2c20776f726c64212054686973206973206120667261676d656e74656420737472696e672e
+    182a5828000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021222324252627
+    824101616160)
+  fuzz_seed_hex(input0 ${seed0})
+  # Sections of 3 bytes, split after headers and strings. A bstr containing a CBOR sequence.
+  fuzz_seed_hex(input1 e257182a6b48656c6c6f20576f726c6482f5f6440102030460)
+  # Sections of 1 byte, split after headers. A sequence of short strings and a map.
+  fuzz_seed_hex(input2 20436162636378797a40a10102)
 
 else()
   message(FATAL_ERROR "Invalid test case: ${TEST_CASE}")
