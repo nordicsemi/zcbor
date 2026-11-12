@@ -57,7 +57,7 @@ function(fuzz_seed NAME)
 endfunction()
 
 if (TEST_CASE STREQUAL pet)
-  fuzz_code(pet CDDL ${CASES_DIR}/pet.cddl ARGS -t Pet -d)
+  fuzz_code(pet CDDL ${CASES_DIR}/pet.cddl ARGS -t Pet -d -e)
   fuzz_seed(input0 CDDL ${CASES_DIR}/pet.cddl
     ARGS -t Pet --input ${CASES_DIR}/pet0.yaml --yaml-compatibility)
   target_sources(fuzz_target PRIVATE fuzz_pet.c)
@@ -76,7 +76,7 @@ elseif (TEST_CASE STREQUAL manifest12)
 elseif (TEST_CASE STREQUAL everything)
   # The --default-max-qty and 64 bit integers are needed for the examples to decode.
   fuzz_code(everything CDDL ${CASES_DIR}/everything.cddl
-    ARGS -t EverythingList -d --default-max-qty 32 --default-bit-size 64)
+    ARGS -t EverythingList -d -e --default-max-qty 32 --default-bit-size 64)
   foreach(n RANGE 0 1)
     fuzz_seed(input${n} CDDL ${CASES_DIR}/everything.cddl
       ARGS -t EverythingList --input ${CASES_DIR}/everything_example${n}.yaml
