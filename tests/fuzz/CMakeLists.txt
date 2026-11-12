@@ -58,11 +58,12 @@ if (TEST_CASE STREQUAL pet)
   target_sources(fuzz_target PRIVATE fuzz_pet.c)
 
 elseif (TEST_CASE STREQUAL manifest12)
+  # The --default-max-qty is needed for the examples to decode.
   fuzz_code(manifest12 CDDL ${CASES_DIR}/manifest12.cddl
-    ARGS -t SUIT_Envelope_Tagged SUIT_Command_Sequence SUIT_Envelope -d)
+    ARGS -t SUIT_Envelope_Tagged SUIT_Command_Sequence SUIT_Envelope -d --default-max-qty 16)
   foreach(n RANGE 0 5)
     fuzz_seed(input${n} CDDL ${CASES_DIR}/manifest12.cddl
-      ARGS -t SUIT_Envelope_Tagged --input ${CASES_DIR}/manifest12_example${n}.cborhex
+      ARGS -t SUIT_Envelope --input ${CASES_DIR}/manifest12_example${n}.cborhex
         --default-max-qty 16)
   endforeach()
   target_sources(fuzz_target PRIVATE fuzz_manifest12.c)
