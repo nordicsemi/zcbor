@@ -74,8 +74,9 @@ jobs:
         $client.DownloadFile("https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v$env:ZEPHYR_SDK_VERSION/zephyr-sdk-${env:ZEPHYR_SDK_VERSION}_windows-x86_64_minimal.7z", "$pwd\zephyr-sdk-${env:ZEPHYR_SDK_VERSION}_windows-x86_64_minimal.7z")
         7z x $pwd\zephyr-sdk-${env:ZEPHYR_SDK_VERSION}_windows-x86_64_minimal.7z
         Rename-Item -Path zephyr-sdk-${env:ZEPHYR_SDK_VERSION} -NewName zephyr-sdk
-        cd zephyr-sdk
-        $client.DownloadFile("https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v$env:ZEPHYR_SDK_VERSION/toolchain_windows-x86_64_arm-zephyr-eabi.7z", "$pwd\toolchain_windows-x86_64_arm-zephyr-eabi.7z")
+        New-Item -ItemType Directory -Path zephyr-sdk\gnu
+        cd zephyr-sdk\gnu
+        $client.DownloadFile("https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v$env:ZEPHYR_SDK_VERSION/toolchain_gnu_windows-x86_64_arm-zephyr-eabi.7z", "$pwd\toolchain_windows-x86_64_arm-zephyr-eabi.7z")
         7z x $pwd\toolchain_windows-x86_64_arm-zephyr-eabi.7z
 
     - name: Run Twister

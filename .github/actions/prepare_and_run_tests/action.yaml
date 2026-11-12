@@ -62,18 +62,20 @@ runs:
       shell: sh
       run: |
         sudo apt install qemu qemu-system-arm
-        wget -nv https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v$ZEPHYR_SDK_VERSION/toolchain_linux-x86_64_arm-zephyr-eabi.tar.xz
+        wget -nv https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v$ZEPHYR_SDK_VERSION/toolchain_gnu_linux-x86_64_arm-zephyr-eabi.tar.xz
         wget -nv -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v$ZEPHYR_SDK_VERSION/sha256.sum | shasum --check --ignore-missing
-        tar -xf toolchain_linux-x86_64_arm-zephyr-eabi.tar.xz -C zephyr-sdk
+        mkdir -p zephyr-sdk/gnu
+        tar -xf toolchain_gnu_linux-x86_64_arm-zephyr-eabi.tar.xz -C zephyr-sdk/gnu
 
     - name: Install Zephyr SDK (MIPS)
       if: ${{ inputs.zephyr_toolchain == 'zephyr' && contains(inputs.zephyr_toolchain_arch, 'mips') }}
       shell: sh
       run: |
         sudo apt install qemu qemu-system-mips
-        wget -nv https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v$ZEPHYR_SDK_VERSION/toolchain_linux-x86_64_mips-zephyr-elf.tar.xz
+        wget -nv https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v$ZEPHYR_SDK_VERSION/toolchain_gnu_linux-x86_64_mips-zephyr-elf.tar.xz
         wget -nv -O - https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v$ZEPHYR_SDK_VERSION/sha256.sum | shasum --check --ignore-missing
-        tar -xf toolchain_linux-x86_64_mips-zephyr-elf.tar.xz -C zephyr-sdk
+        mkdir -p zephyr-sdk/gnu
+        tar -xf toolchain_gnu_linux-x86_64_mips-zephyr-elf.tar.xz -C zephyr-sdk/gnu
 
     - name: Run Twister
       working-directory: tests
