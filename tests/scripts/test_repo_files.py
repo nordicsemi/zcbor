@@ -172,7 +172,6 @@ class LinkTester:
         "https://github.com/zephyrproject-rtos/zephyr/blob/main/subsys/mgmt/mcumgr/grp/img_mgmt/src/img_mgmt.c",
         "https://github.com/nrfconnect/sdk-nrfxlib/blob/main/nrf_rpc/nrf_rpc_cbor.c",
         "https://github.com/nordicsemi/zcbor",
-        "https://github.com/NordicSemiconductor/zcbor",
         "https://pypi.org/project/cbor2/",
         "https://github.com/zephyrproject-rtos/zephyr/blob/v3.6.0/doc/releases/migration-guide-3.6.rst",
         "https://pypi.org/project/zcbor/",
