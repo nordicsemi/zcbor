@@ -2111,11 +2111,16 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
             key_res = self._handle_key(self._iter_next(it_copy), do_decode)
             return it_copy, key_res
         if self.tags:
+            # A tagged element is always a single CBOR object (the tag). Fail here if the tag is
+            # missing, since the OTHER and UNION cases below don't check this element's tags.
             it, it_copy = tee(it)
-            maybe_tag = next(it_copy)
-            if isinstance(maybe_tag, CBORTag):
-                tag_res = self._decode_single_obj(maybe_tag, do_decode)
-                return it_copy, tag_res
+            maybe_tag = self._iter_next(it_copy)
+            self._decode_assert(
+                isinstance(maybe_tag, CBORTag),
+                lambda: f"Expected tags ({self.tags}), but none present.",
+            )
+            tag_res = self._decode_single_obj(maybe_tag, do_decode)
+            return it_copy, tag_res
         if self.type == "OTHER" and self.key is None:
             return self.my_types[self.value]._decode_full(it, do_decode)
         elif self.type == "GROUP":
