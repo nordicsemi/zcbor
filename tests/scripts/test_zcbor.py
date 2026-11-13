@@ -63,6 +63,8 @@ p_VERSION = Path(p_root, "zcbor", "VERSION")
 class TestManifest(TestCase):
     """Class for testing examples against CDDL for various versions of the SUIT manifest spec."""
 
+    entry_type = "SUIT_Envelope_Tagged"
+
     def decode_file(self, data_path, *cddl_paths):
         data = bytes.fromhex(data_path.read_text(encoding="utf-8").replace("\n", ""))
         self.decode_string(data, *cddl_paths)
@@ -70,11 +72,17 @@ class TestManifest(TestCase):
     def decode_string(self, data_string, *cddl_paths):
         cddl_str = " ".join((Path(p).read_text(encoding="utf-8") for p in cddl_paths))
         self.my_types = zcbor.DataTranslator.from_cddl(cddl_string=cddl_str, default_max_qty=16).my_types
-        cddl = self.my_types["SUIT_Envelope_Tagged"]
+        cddl = self.my_types[self.entry_type]
         self.decoded = cddl.decode_str(data_string)
 
 
-class TestEx0Manifest12(TestManifest):
+class TestManifest12(TestManifest):
+    """The manifest12 examples are untagged, so they are SUIT_Envelope, not SUIT_Envelope_Tagged."""
+
+    entry_type = "SUIT_Envelope"
+
+
+class TestEx0Manifest12(TestManifest12):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.decode_file(p_test_vectors12[0], p_manifest12)
@@ -131,7 +139,7 @@ class TestEx0Manifest12(TestManifest):
         )
 
 
-class TestEx0InvManifest12(TestManifest):
+class TestEx0InvManifest12(TestManifest12):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -140,7 +148,7 @@ class TestEx0InvManifest12(TestManifest):
             self.decode_file(p_test_vectors12[0], p_manifest12, p_manifest12)
 
 
-class TestEx1Manifest12(TestManifest):
+class TestEx1Manifest12(TestManifest12):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.decode_file(p_test_vectors12[1], p_manifest12)
@@ -158,7 +166,7 @@ class TestEx1Manifest12(TestManifest):
         )
 
 
-class TestEx2Manifest12(TestManifest):
+class TestEx2Manifest12(TestManifest12):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.decode_file(p_test_vectors12[2], p_manifest12)
@@ -199,7 +207,7 @@ class TestEx2Manifest12(TestManifest):
         )
 
 
-class TestEx3Manifest12(TestManifest):
+class TestEx3Manifest12(TestManifest12):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.decode_file(p_test_vectors12[3], p_manifest12)
@@ -229,7 +237,7 @@ class TestEx3Manifest12(TestManifest):
         )
 
 
-class TestEx4Manifest12(TestManifest):
+class TestEx4Manifest12(TestManifest12):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.decode_file(p_test_vectors12[4], p_manifest12)
@@ -251,7 +259,7 @@ class TestEx4Manifest12(TestManifest):
         )
 
 
-class TestEx5Manifest12(TestManifest):
+class TestEx5Manifest12(TestManifest12):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.decode_file(p_test_vectors12[5], p_manifest12)
@@ -950,7 +958,7 @@ class CLI_Test(PopenTest):
             "--input",
             str(input),
             "-t",
-            "SUIT_Envelope_Tagged",
+            "SUIT_Envelope",  # The manifest12 examples are untagged.
             "--yaml-compatibility",
         ]
 
@@ -2254,6 +2262,119 @@ class TestIntValidation(PopenTest, TempdTest):
         self.popen_test(args + ["yaml"], b"[-3]", exp_retcode=1)
         self.popen_test(args + ["yaml"], b"[true]", exp_retcode=1)
         self.popen_test(args + ["cborhex"], b"8122", exp_retcode=1)  # [-3]
+
+
+class TestTagValidation(PopenTest):
+    cddl = """
+        Bar = [uint]
+        Baz = tstr
+        Foo = #6.48(Bar)
+        Direct = #6.48([uint])
+        InList = [#6.48(Bar), uint]
+        InMap = {1 => #6.48(Bar)}
+        TaggedUnion = #6.48(Bar / Baz)
+        UnionOfTagged = [#6.48(Bar) // #6.49(Baz)]
+        OptionalLast = [uint, ?#6.48(uint)]
+        RepeatedLast = [uint, *Foo]
+    """
+
+    def setUp(self):
+        self.my_types = zcbor.DataTranslator.from_cddl(
+            cddl_string=self.cddl, default_max_qty=16
+        ).my_types
+        return super().setUp()
+
+    def assert_valid(self, type_name, *objs):
+        for obj in objs:
+            with self.subTest(type_name=type_name, obj=obj):
+                self.assertTrue(self.my_types[type_name].validate_obj(obj))
+
+    def assert_invalid(self, type_name, *objs):
+        for obj in objs:
+            with self.subTest(type_name=type_name, obj=obj):
+                with self.assertRaises(zcbor.CddlValidationError):
+                    self.my_types[type_name].validate_obj(obj)
+
+    def test_tag_missing(self):
+        self.assert_invalid("Foo", [1])
+        self.assert_invalid("Direct", [1])
+        self.assert_invalid("InList", [[1], 2])
+        self.assert_invalid("InMap", {1: [1]})
+        self.assert_invalid("TaggedUnion", [1], "a")
+        self.assert_invalid("UnionOfTagged", [[1]], ["a"])
+        self.assert_invalid("OptionalLast", [1, 2])
+
+    def test_tag_wrong(self):
+        T = cbor2.CBORTag
+        self.assert_invalid("Foo", T(49, [1]), T(48, T(48, [1])), T(49, T(48, [1])))
+        self.assert_invalid("Direct", T(49, [1]))
+        self.assert_invalid("InList", [T(49, [1]), 2])
+        self.assert_invalid("InMap", {1: T(49, [1])})
+        self.assert_invalid("TaggedUnion", T(49, [1]), T(49, "a"))
+        self.assert_invalid("UnionOfTagged", [T(49, [1])], [T(48, "a")])
+
+    def test_tag_correct(self):
+        T = cbor2.CBORTag
+        self.assert_valid("Foo", T(48, [1]))
+        self.assert_valid("Direct", T(48, [1]))
+        self.assert_valid("InList", [T(48, [1]), 2])
+        self.assert_valid("InMap", {1: T(48, [1])})
+        self.assert_valid("TaggedUnion", T(48, [1]), T(48, "a"))
+        self.assert_valid("UnionOfTagged", [T(48, [1])], [T(49, "a")])
+        self.assert_valid("OptionalLast", [1], [1, T(48, 2)])
+        self.assert_valid("RepeatedLast", [1], [1, T(48, [2])], [1, T(48, [2]), T(48, [3])])
+
+    def test_tag_cli(self):
+        args = ["zcbor", "validate", "-c", str(p_manifest12), "--default-max-qty", "16"]
+        args += ["--yaml-compatibility", "-i", "-", "--input-as"]
+        untagged = p_test_vectors12[0].read_text(encoding="utf-8").replace("\n", "").strip()
+        untagged_yaml, _ = self.popen_test(
+            [
+                "zcbor",
+                "convert",
+                "-c",
+                str(p_manifest12),
+                "--default-max-qty",
+                "16",
+                "-t",
+                "SUIT_Envelope",
+                "--yaml-compatibility",
+                "-i",
+                str(p_test_vectors12[0]),
+                "-o",
+                "-",
+                "--output-as",
+                "yaml",
+            ]
+        )
+        tagged_yaml = safe_dump({"zcbor_tag": 48, "zcbor_tag_val": safe_load(untagged_yaml)})
+        wrong_tag_yaml = safe_dump({"zcbor_tag": 49, "zcbor_tag_val": safe_load(untagged_yaml)})
+
+        for type_name, valid, invalid in (
+            (
+                "SUIT_Envelope",
+                (("cborhex", untagged), ("yaml", untagged_yaml)),
+                (("cborhex", "d830" + untagged), ("yaml", tagged_yaml)),
+            ),
+            (
+                "SUIT_Envelope_Tagged",
+                (("cborhex", "d830" + untagged), ("yaml", tagged_yaml)),
+                (
+                    ("cborhex", untagged),
+                    ("cborhex", "d831" + untagged),
+                    ("yaml", untagged_yaml),
+                    ("yaml", wrong_tag_yaml),
+                ),
+            ),
+        ):
+            for exp_retcode, inputs in ((0, valid), (1, invalid)):
+                for input_as, data in inputs:
+                    with self.subTest(type_name=type_name, input_as=input_as, data=data[:30]):
+                        if isinstance(data, str):
+                            data = data.encode("utf-8")
+                        self.popen_test(
+                            args + [input_as, "-t", type_name], data, exp_retcode=exp_retcode
+                        )
 
 
 def cp_from_cddl(cddl):
