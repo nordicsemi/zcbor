@@ -271,6 +271,53 @@ jobs:
         name: zcbor-release-${{ env.ZCBOR_VERSION }}
         path: dist/*
 
+  release-test-2-libfuzzer:
+    runs-on: ubuntu-24.04
+    name: Release test 2 - Fuzz (libFuzzer)
+    needs:
+    - merge-test-1
+    - merge-test-2
+    - merge-test-2-win
+    - merge-test-3
+    if: "(github.event_name == 'workflow_dispatch' && github.event.inputs.fuzz-tests != 'none') || (github.event_name == 'pull_request' && startswith(github.head_ref, 'release/'))"
+    env:
+      # How long each test case runs.
+      FUZZ_SECONDS: ${{ github.event.inputs.fuzz-tests == 'short' && '30' || '60' }}
+    steps:
+    - name: Checkout the code
+      uses: actions/checkout@v5
+
+    - name: Install zcbor
+      uses: ./.github/actions/install_zcbor
+
+    - name: Install packages
+      run: |
+        sudo apt update
+        sudo apt install -y clang libclang-rt-dev
+
+    - name: Run libFuzzer fuzz tests
+      working-directory: tests/fuzz
+      run: |
+        set -e
+        ./test-libfuzzer.sh ${FUZZ_SECONDS} everything
+        ./test-libfuzzer.sh ${FUZZ_SECONDS} everything -DCANONICAL=ON
+        ./test-libfuzzer.sh ${FUZZ_SECONDS} manifest12
+        ./test-libfuzzer.sh ${FUZZ_SECONDS} manifest14
+        ./test-libfuzzer.sh ${FUZZ_SECONDS} fragments
+        ./test-libfuzzer.sh ${FUZZ_SECONDS} pet
+
+    - name: Upload fuzz failures
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: libfuzzer-failures
+        path: |
+          tests/fuzz/build-libfuzzer/crash-*
+          tests/fuzz/build-libfuzzer/leak-*
+          tests/fuzz/build-libfuzzer/timeout-*
+          tests/fuzz/build-libfuzzer/oom-*
+        if-no-files-found: ignore
+
   release-test-3:
     runs-on: ubuntu-24.04
     strategy:
