@@ -218,6 +218,11 @@ jobs:
         sudo apt update
         sudo apt install -y afl++
 
+    - name: Write core dumps to files, so AFL++ detects all crashes
+      run: |
+        echo core | sudo tee /proc/sys/kernel/core_pattern
+        echo "FUZZ_STRICT=1" >> $GITHUB_ENV
+
     - name: Run everything fuzz tests
       working-directory: tests/fuzz
       run: |

@@ -38,3 +38,7 @@ An input that runs for more than 10 seconds is a hang (`timeout-*`).
 Failing inputs are placed in `build-afl/output/default/crashes/` and `build-afl/output/default/hangs/`.
 The script also fails if `afl-fuzz` fails, e.g. because a seed crashes or hangs, or if the target was run fewer than 1000 times.
 Set `FUZZ_NO_SANITIZERS=1` to build without sanitizers, e.g. for 32 bit builds when the 32 bit sanitizer runtimes are not installed.
+
+If core dumps are piped to a handler (`/proc/sys/kernel/core_pattern` starts with `|`, e.g. with apport or systemd-coredump), AFL++ can miss crashes or save them as hangs.
+The script sets `AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1` so AFL++ runs anyway, since hangs fail the test too.
+Set `FUZZ_STRICT=1` to let AFL++ refuse to run in this case instead, as CI does after running `echo core | sudo tee /proc/sys/kernel/core_pattern`.
