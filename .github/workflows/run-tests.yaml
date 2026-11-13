@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ZEPHYR_REV: 59659ed7cbf3b84b4b62d3a7b904f2b8167a1cef
+  ZEPHYR_REV: 291d9ddba6ff6e8474c8eb88f565e8a929175581
 
 jobs:
   check-for-changes:
