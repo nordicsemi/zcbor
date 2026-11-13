@@ -2086,6 +2086,78 @@ class TestCodeGeneration(TestCase):
         self.assertEqual(res.value, "bar")
 
 
+class TestRecursion(PopenTest, TempdTest):
+    requirement = (
+        "A recursive type must be an entry type (-t/--entry-types), and the recursion must go via a "
+        "bstr .cbor."
+    )
+
+    def zcbor_code(self, cddl_string, entry_type_names, mode, exp_retcode=0):
+        """Run 'zcbor code' on cddl_string, and return the output."""
+        p_cddl = self.tempd / "recursion.cddl"
+        p_cddl.write_text(cddl_string, encoding="utf-8")
+        # fmt: off
+        stdout, stderr = self.popen_test(
+            [
+                "zcbor", "code", "--cddl", p_cddl, f"--{mode}", "-t", *entry_type_names,
+                "--output-c", self.tempd / "recursion.c", "--output-h", self.tempd / "recursion.h",
+            ],
+            exp_retcode=exp_retcode,
+        )
+        # fmt: on
+        return stdout.decode("utf-8") + stderr.decode("utf-8")
+
+    def test_recursive_type_not_entry_type(self):
+        for cddl_string, entry_type_names, cycle in (
+            ("Root = [A]\nA = [uint, ? B]\nB = bstr .cbor A", ["Root"], "A -> B -> A"),
+            ("A = [uint, ? B]\nB = [A]", ["A"], "A -> B -> A"),
+            ("Root = [A]\nA = [A]", ["Root"], "A -> A"),
+            # Recursive types behind a bstr .cbor that isn't recursive itself.
+            ("Root = [bstr .cbor A]\nA = [A]", ["Root"], "A -> A"),
+            ("Root = bstr .cbor A\nA = bstr .cbor A", ["Root"], "A -> A"),
+            ("Root = bstr .cbor A\nA = bstr .cborseq A", ["Root"], "A -> A"),
+            # Recursion that doesn't go via a list, map or bstr.
+            ("Root = [A]\nA = B / uint\nB = A", ["Root"], "A -> B -> A"),
+            ("Root = A\nA = #6.1(A)", ["Root", "A"], "A -> A"),
+            ("Root = [A]\nA = (uint, A)", ["Root", "A"], "A -> A"),
+            ("X = Y\nY = X", ["X"], "X -> Y -> X"),
+            # Recursion via a key.
+            ("Root = [A]\nA = {A => uint}", ["Root"], "A -> A"),
+            ("Root = {A}\nA = (A => uint)", ["Root"], "A -> A"),
+        ):
+            for mode in ("decode", "encode"):
+                with self.subTest(cddl_string=cddl_string, mode=mode):
+                    output = self.zcbor_code(cddl_string, entry_type_names, mode, exp_retcode=1)
+                    self.assertIn(
+                        f"Unsupported recursion in the CDDL ({cycle}). {self.requirement}\n", output
+                    )
+                    self.assertNotIn("Traceback", output)
+
+    def test_recursive_type_is_entry_type(self):
+        for cddl_string, entry_type_names in (
+            ("Root = [A]\nA = [uint, ? B]\nB = bstr .cbor A", ["Root", "A"]),
+            ("A = [bstr .cbor A]", ["A"]),
+            # The type name of Y (and thereby X) is needed while following X and Z.
+            ("Y = [X]\nX = [uint, ? Z]\nZ = bstr .cbor Y", ["Y"]),
+            # The bstr .cbor refers to the entry type via an alias.
+            ("X = bstr .cbor Y\nY = X", ["X"]),
+        ):
+            for mode in ("decode", "encode"):
+                with self.subTest(cddl_string=cddl_string, mode=mode):
+                    self.zcbor_code(cddl_string, entry_type_names, mode)
+
+    def test_recursion_validate(self):
+        p_cddl = self.tempd / "recursion.cddl"
+        p_cddl.write_text("Root = A\nA = B / uint\nB = A", encoding="utf-8")
+        p_data = self.tempd / "data.cbor"
+        p_data.write_bytes(cbor2.dumps(5))
+        stdout, stderr = self.popen_test(
+            ["zcbor", "validate", "--cddl", p_cddl, "-t", "Root", "-i", p_data], exp_retcode=1
+        )
+        self.assertEqual(b"Unsupported recursion in the CDDL (A -> B -> A).\n", stdout)
+        self.assertEqual(b"", stderr)
+
+
 class TestUnicodeEscape(TestCase):
     def test_unicode_escape0(self):
         expected = "Domino's 🁳 + ⌘"

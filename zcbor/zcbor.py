@@ -44,6 +44,7 @@ from pathlib import Path, PurePosixPath
 from shutil import copyfile
 import sys
 from textwrap import wrap, indent
+from traceback import walk_tb
 from codecs import decode as codec_decode
 from math import prod
 import struct
@@ -2676,9 +2677,10 @@ class CodeGenerator(CddlXcoder):
     def is_cbor(self):
         """Whether to include a "cbor" variable for this element."""
         res = (
-            (self.full_type_name() is not None)
-            and not self.is_entry_type()
+            # Check whether this is an entry type first, since full_type_name() follows entry types.
+            not self.is_entry_type()
             and ((self.type != "OTHER") or self.my_types[self.value].is_cbor())
+            and (self.full_type_name() is not None)
         )
         return res
 
@@ -4987,9 +4989,33 @@ def process_convert(args):
     write_data(args, cddl, cbor_str)
 
 
+def recursion_cycle(exc):
+    """Return the types that the RecursionError exc recursed through, e.g. "A -> B -> A", or None."""
+    # The types that OTHER elements refer to in the most frequent method, i.e. one per recursion level.
+    frames = [(f.f_code, f.f_locals.get("self")) for f, _ in walk_tb(exc.__traceback__)]
+    others = [(c, e.value) for c, e in frames if isinstance(e, CddlParser) and e.type == "OTHER"]
+    codes = [c for c, _ in others]
+    top = max(set(codes), key=codes.count, default=None)
+    names = [name for c, name in others if c is top]
+    q = len(names) // 4
+    for p in range(1, q + 1):
+        if names[q : 2 * q] == names[q + p : 2 * q + p]:
+            cycle = min(names[q + i : q + i + p] for i in range(p))
+            return " -> ".join(cycle + cycle[:1])
+
+
 def main():
     args = parse_args()
-    args.process(args)
+    try:
+        args.process(args)
+    except RecursionError as e:
+        cycle = recursion_cycle(e)
+        msg = f"Unsupported recursion in the CDDL{f' ({cycle})' if cycle else ''}."
+        if args.process is process_code:
+            msg += " A recursive type must be an entry type (-t/--entry-types), and the recursion "
+            msg += "must go via a bstr .cbor."
+        print(msg)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
