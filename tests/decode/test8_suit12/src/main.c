@@ -5,8 +5,15 @@
  */
 
 
+#include <string.h>
 #include <zephyr/ztest.h>
 #include "manifest12_decode.h"
+#include <manifest12_example0.h>
+#include <manifest12_example1.h>
+#include <manifest12_example2.h>
+#include <manifest12_example3.h>
+#include <manifest12_example4.h>
+#include <manifest12_example5.h>
 
 /* Test vector discovered via fuzzing with AFL. */
 uint8_t crash_vector0[] = {
@@ -857,6 +864,73 @@ ZTEST(cbor_decode_test8, test_manifest12_crash22)
 ZTEST(cbor_decode_test8, test_manifest12_crash23)
 {
 	FUZZ(crash_vector23);
+}
+
+/* Shared by the tests below to save RAM (it's ~185 KB with --default-max-qty 8).
+ * Each use clears it first. */
+static struct SUIT_Envelope envelope;
+
+static void decode_example(const uint8_t *example, size_t example_len, uint32_t exp_seq_num)
+{
+	size_t out_len;
+
+	memset(&envelope, 0, sizeof(envelope));
+	zassert_equal(ZCBOR_SUCCESS,
+		cbor_decode_SUIT_Envelope(example, example_len, &envelope, &out_len), NULL);
+	zassert_equal(example_len, out_len, NULL);
+	zassert_equal(exp_seq_num, envelope.SUIT_Envelope_suit_manifest_cbor
+		.SUIT_Manifest_suit_manifest_sequence_number, NULL);
+	zassert_equal(32, envelope.SUIT_Envelope_suit_authentication_wrapper_cbor
+		.SUIT_Authentication_SUIT_Digest_bstr_cbor.SUIT_Digest_suit_digest_bytes.len, NULL);
+}
+
+ZTEST(cbor_decode_test8, test_manifest12_examples)
+{
+	decode_example(manifest12_example0, sizeof(manifest12_example0), 0);
+	decode_example(manifest12_example1, sizeof(manifest12_example1), 1);
+	decode_example(manifest12_example2, sizeof(manifest12_example2), 2);
+	decode_example(manifest12_example3, sizeof(manifest12_example3), 3);
+	decode_example(manifest12_example4, sizeof(manifest12_example4), 4);
+	decode_example(manifest12_example5, sizeof(manifest12_example5), 5);
+}
+
+/* Swap the order of the two members of the envelope in example0
+ * (suit-authentication-wrapper and suit-manifest). This only decodes with --unordered-maps. */
+ZTEST(cbor_decode_test8, test_manifest12_example0_reordered)
+{
+	uint8_t reordered[sizeof(manifest12_example0)];
+	size_t out_len;
+
+	memset(&envelope, 0, sizeof(envelope));
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_SUIT_Envelope(manifest12_example0,
+		sizeof(manifest12_example0), &envelope, &out_len), NULL);
+	zassert_equal(0xa2, manifest12_example0[0], NULL); /* Map with 2 members. */
+	zassert_false(envelope.SUIT_Envelope_suit_delegation_present, NULL);
+	zassert_equal(0, envelope.SUIT_Envelope_suit_integrated_payload_key_count, NULL);
+	zassert_equal(0, envelope.SUIT_Envelope_suit_integrated_dependency_key_count, NULL);
+	zassert_equal(0, envelope.SUIT_Envelope_intbstr_count, NULL);
+
+	const uint8_t *auth_start = &manifest12_example0[1];
+	const uint8_t *manifest_start = envelope.SUIT_Envelope_suit_authentication_wrapper.value
+		+ envelope.SUIT_Envelope_suit_authentication_wrapper.len;
+	const uint8_t *end = &manifest12_example0[sizeof(manifest12_example0)];
+	size_t auth_len = manifest_start - auth_start;
+	size_t manifest_len = end - manifest_start;
+
+	zassert_equal(end, envelope.SUIT_Envelope_suit_manifest.value
+		+ envelope.SUIT_Envelope_suit_manifest.len, NULL);
+	zassert_equal(0x03, *manifest_start, NULL); /* suit-manifest key */
+
+	reordered[0] = manifest12_example0[0];
+	memcpy(&reordered[1], manifest_start, manifest_len);
+	memcpy(&reordered[1 + manifest_len], auth_start, auth_len);
+
+#ifdef UNORDERED_MAPS
+	decode_example(reordered, sizeof(reordered), 0);
+#else
+	zassert_not_equal(ZCBOR_SUCCESS, cbor_decode_SUIT_Envelope(reordered,
+		sizeof(reordered), &envelope, &out_len), NULL);
+#endif
 }
 
 ZTEST_SUITE(cbor_decode_test8, NULL, NULL, NULL, NULL, NULL);
