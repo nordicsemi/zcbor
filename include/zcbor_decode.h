@@ -485,8 +485,9 @@ bool zcbor_tstr_fragments_start_decode(zcbor_state_t *state);
  * contains CBOR data that will be decoded directly with other zcbor_*() functions.
  *
  * A state backup is created to keep track of the element count and original payload_end.
- * After calling this, you can decode elements using other zcbor functions,
- * then update the payload with @ref zcbor_update_state.
+ * After calling this, you can decode elements using other zcbor functions, then update the
+ * payload with @ref zcbor_update_state. Before updating, @ref zcbor_str_fragment_decode
+ * gives the raw bytes of the bstr decoded in this section, e.g. for hashing them.
  * Repeat until the string is fully decoded, then call @ref zcbor_str_fragments_end_decode.
  * When the current payload section contains the end of the string,
  * payload_end is set to the end of the string, so there is no risk of decoding past the end.
@@ -503,15 +504,26 @@ bool zcbor_cbor_bstr_fragments_start_decode(zcbor_state_t *state);
  * For non-cbor-encoded strings (started with @ref zcbor_bstr_fragments_start_decode
  * or @ref zcbor_tstr_fragments_start_decode): Consumes bytes from the payload until
  * either the end of the payload or the end of the string.
+ * If the current payload section is used up, the fragment is empty. An empty fragment
+ * succeeds, so use @ref zcbor_payload_at_end to detect when to call @ref zcbor_update_state.
  *
  * For cbor-encoded strings (started with @ref zcbor_cbor_bstr_fragments_start_decode):
  * No bytes are consumed from the payload. Instead, this function reports the part of
  * the current payload section that has already been decoded via other zcbor functions.
  * Any such call to this function will have no memory of previous calls to this function,
  * so the returned fragment always starts at the same point until the payload is updated.
+ * To get all of a section's decoded part, call this just before @ref zcbor_update_state (or
+ * before @ref zcbor_str_fragments_end_decode for the last section).
+ *
+ * @note While a non-cbor-encoded fragmented string is open inside a cbor-encoded string, this
+ *       function returns the inner string's fragment, not the cbor-encoded string's.
  *
  * @param[inout] state     The current state of the decoding.
  * @param[out]   fragment  The resulting string fragment.
+ *
+ * @retval true   If a fragment was retrieved (it can be empty).
+ * @retval false  If not inside a fragmented string, if the state is invalid, or if an error
+ *                is already stored and stop_on_error is set.
  */
 bool zcbor_str_fragment_decode(zcbor_state_t *state, struct zcbor_string_fragment *fragment);
 

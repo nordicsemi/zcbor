@@ -1024,7 +1024,7 @@ ZTEST(zcbor_unit_tests, test_nested_fragments)
 	uint8_t lorem[] = "Lorem ipsum dolor sit amet";
 	struct zcbor_string lorem_str = {.value = lorem, .len = sizeof(lorem) - 1};
 	struct zcbor_string lorem_str_exp = {.value = lorem, .len = sizeof(lorem) - 1};
-	struct zcbor_string_fragment output_frags[3];
+	struct zcbor_string_fragment output_frags[4];
 	struct zcbor_string_fragment output_frags_bstr;
 	uint8_t output_string[30];
 	size_t output_str_len = sizeof(output_string);
@@ -1203,19 +1203,27 @@ ZTEST(zcbor_unit_tests, test_nested_fragments)
 		zassert_false(zcbor_tstr_fragments_start_decode(state_d));
 		zassert_error(ZCBOR_ERR_INSIDE_STRING, state_d);
 	zassert_true(zcbor_str_fragment_decode(state_d, &output_frags[0]));
-		zassert_false(zcbor_str_fragment_decode(state_d, &output_frags[1]));
-		zassert_error(ZCBOR_ERR_NO_PAYLOAD, state_d);
+	zassert_true(zcbor_payload_at_end(state_d));
+	/* The section is used up, so this gives an empty fragment. */
+	zassert_true(zcbor_str_fragment_decode(state_d, &output_frags[1]));
+	zassert_equal(0, output_frags[1].fragment.len);
+	zassert_equal(output_frags[0].fragment.len, output_frags[1].offset);
+	zassert_equal(lorem_str_exp.len, output_frags[1].total_len);
+	zassert_false(zcbor_is_last_fragment(&output_frags[1]));
 	test_offset_and_remainder(state_d, state_d->str_total_len);
 	zcbor_update_state(state_d, payload_frag3, sizeof(payload_frag3));
 
 	/* payload_frag3 */
-	zassert_true(zcbor_str_fragment_decode(state_d, &output_frags[1]));
+	zassert_true(zcbor_str_fragment_decode(state_d, &output_frags[2]));
 	zcbor_update_state(state_d, payload_frag4, sizeof(payload_frag4));
 
 	/* payload_frag4 */
-	zassert_true(zcbor_str_fragment_decode(state_d, &output_frags[2]));
-	zassert_true(zcbor_validate_string_fragments(output_frags, 3));
-	zassert_true(zcbor_splice_string_fragments(output_frags, 3, output_string, &output_str_len));
+	zassert_true(zcbor_str_fragment_decode(state_d, &output_frags[3]));
+	zassert_true(zcbor_is_last_fragment(&output_frags[3]));
+	/* The empty fragment doesn't affect validation or splicing. */
+	zassert_true(zcbor_validate_string_fragments(output_frags, 4));
+	zassert_true(zcbor_splice_string_fragments(output_frags, 4, output_string, &output_str_len));
+	zassert_equal(lorem_str_exp.len, output_str_len);
 	zassert_mem_equal(output_string, lorem, sizeof(lorem) - 1);
 	zassert_true(zcbor_str_fragments_end_decode(state_d));
 	zassert_true(zcbor_str_fragments_end_decode(state_d));
@@ -1223,6 +1231,138 @@ ZTEST(zcbor_unit_tests, test_nested_fragments)
 	zassert_true(zcbor_list_end_decode(state_d), NULL);
 	test_offset_and_remainder(state_d, state_d->str_total_len_cbor);
 	zassert_true(zcbor_str_fragments_end_decode(state_d));
+}
+
+
+/** A CBOR-encoded bstr (containing the CBOR sequence 1, 2, 3, 4) is split over two payload
+ * sections. When a section is used up, zcbor_str_fragment_decode() gives the part of the bstr
+ * that was decoded in that section, so the fragments cover the whole bstr.
+ * The second section continues after the bstr, so its payload_end is first clamped to the end of
+ * the bstr.
+ */
+ZTEST(zcbor_unit_tests, test_cbor_bstr_fragments_at_section_end)
+{
+	uint8_t section1[] = {0x44, 0x01, 0x02};
+	int dummy_sep; // To separate payload sections
+	uint8_t section2[] = {0x03, 0x04, 0x05};
+	uint8_t exp_content[] = {0x01, 0x02, 0x03, 0x04};
+	struct zcbor_string_fragment frags[2];
+	uint8_t spliced[sizeof(exp_content) + 1];
+	size_t spliced_len = sizeof(spliced);
+	bool ret;
+
+	(void)dummy_sep;
+
+	ZCBOR_STATE_D(state_d, 1, section1, sizeof(section1), 2, 0);
+
+	zassert_true(zcbor_cbor_bstr_fragments_start_decode(state_d));
+	zassert_true(zcbor_uint32_expect(state_d, 1));
+	zassert_true(zcbor_uint32_expect(state_d, 2));
+	zassert_true(zcbor_payload_at_end(state_d));
+	ret = zcbor_str_fragment_decode(state_d, &frags[0]);
+	zassert_true(ret, "err %s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+	zassert_equal_ptr(&section1[1], frags[0].fragment.value);
+	zassert_equal(2, frags[0].fragment.len);
+	zassert_equal(0, frags[0].offset);
+	zassert_equal(4, frags[0].total_len);
+	zassert_false(zcbor_is_last_fragment(&frags[0]));
+	zcbor_update_state(state_d, section2, sizeof(section2));
+
+	zassert_true(zcbor_uint32_expect(state_d, 3));
+	zassert_true(zcbor_uint32_expect(state_d, 4));
+	zassert_true(zcbor_payload_at_end(state_d)); // payload_end is clamped to the end of the bstr.
+	ret = zcbor_str_fragment_decode(state_d, &frags[1]);
+	zassert_true(ret, "err %s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+	zassert_equal_ptr(&section2[0], frags[1].fragment.value);
+	zassert_equal(2, frags[1].fragment.len);
+	zassert_equal(2, frags[1].offset);
+	zassert_equal(4, frags[1].total_len);
+	zassert_true(zcbor_is_last_fragment(&frags[1]));
+	zassert_true(zcbor_str_fragments_end_decode(state_d));
+
+	/* The element after the bstr. */
+	zassert_true(zcbor_uint32_expect(state_d, 5));
+	zassert_true(zcbor_payload_at_end(state_d));
+
+	zassert_true(zcbor_validate_string_fragments(frags, 2));
+	zassert_true(zcbor_splice_string_fragments(frags, 2, spliced, &spliced_len));
+	zassert_equal(sizeof(exp_content), spliced_len);
+	zassert_mem_equal(exp_content, spliced, sizeof(exp_content));
+}
+
+
+/** An empty tstr as the last byte of the payload gets a single empty fragment, which is the last
+ * fragment.
+ */
+ZTEST(zcbor_unit_tests, test_empty_str_fragment_at_payload_end)
+{
+	uint8_t payload[] = {0x01, 0x60};
+	struct zcbor_string_fragment frag;
+	uint8_t spliced[1];
+	size_t spliced_len = sizeof(spliced);
+	bool ret;
+
+	ZCBOR_STATE_D(state_d, 0, payload, sizeof(payload), 2, 0);
+
+	zassert_true(zcbor_uint32_expect(state_d, 1));
+	zassert_true(zcbor_tstr_fragments_start_decode(state_d));
+	zassert_true(zcbor_payload_at_end(state_d));
+	ret = zcbor_str_fragment_decode(state_d, &frag);
+	zassert_true(ret, "err %s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+	zassert_equal(0, frag.fragment.len);
+	zassert_equal(0, frag.offset);
+	zassert_equal(0, frag.total_len);
+	zassert_true(zcbor_is_last_fragment(&frag));
+	zassert_true(zcbor_str_fragments_end_decode(state_d));
+	zassert_true(zcbor_payload_at_end(state_d));
+
+	zassert_true(zcbor_validate_string_fragments(&frag, 1));
+	zassert_true(zcbor_splice_string_fragments(&frag, 1, spliced, &spliced_len));
+	zassert_equal(0, spliced_len);
+}
+
+
+/** A tstr whose header ends exactly at the end of a payload section. The first fragment is empty,
+ * and the contents come in the next section.
+ */
+ZTEST(zcbor_unit_tests, test_str_header_at_section_end)
+{
+	uint8_t section1[] = {0x01, 0x63};
+	int dummy_sep; // To separate payload sections
+	uint8_t section2[] = {'a', 'b', 'c'};
+	struct zcbor_string_fragment frags[2];
+	uint8_t spliced[4];
+	size_t spliced_len = sizeof(spliced);
+	bool ret;
+
+	(void)dummy_sep;
+
+	ZCBOR_STATE_D(state_d, 0, section1, sizeof(section1), 2, 0);
+
+	zassert_true(zcbor_uint32_expect(state_d, 1));
+	zassert_true(zcbor_tstr_fragments_start_decode(state_d));
+	zassert_true(zcbor_payload_at_end(state_d));
+	ret = zcbor_str_fragment_decode(state_d, &frags[0]);
+	zassert_true(ret, "err %s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+	zassert_equal(0, frags[0].fragment.len);
+	zassert_equal(0, frags[0].offset);
+	zassert_equal(3, frags[0].total_len);
+	zassert_false(zcbor_is_last_fragment(&frags[0]));
+	zcbor_update_state(state_d, section2, sizeof(section2));
+
+	zassert_true(zcbor_str_fragment_decode(state_d, &frags[1]));
+	zassert_equal_ptr(&section2[0], frags[1].fragment.value);
+	zassert_equal(3, frags[1].fragment.len);
+	zassert_equal(0, frags[1].offset);
+	zassert_equal(3, frags[1].total_len);
+	zassert_true(zcbor_is_last_fragment(&frags[1]));
+	zassert_true(zcbor_str_fragments_end_decode(state_d));
+	zassert_true(zcbor_payload_at_end(state_d));
+
+	zassert_true(zcbor_validate_string_fragments(frags, 2));
+	zassert_true(zcbor_splice_string_fragments(frags, 2, spliced, &spliced_len));
+	zassert_equal(3, spliced_len);
+	zassert_mem_equal("abc", spliced, 3);
 }
 
 
