@@ -1840,6 +1840,12 @@ static bool any_skip(zcbor_state_t *state, size_t depth)
 				}
 			}
 			break;
+		case ZCBOR_MAJOR_TYPE_SIMPLE:
+			/* Reject simple values 0-31 encoded in a following byte, like
+			 * zcbor_simple_decode() does. Ref: RFC8949 sec 3.3 */
+			ZCBOR_ERR_IF((ZCBOR_ADDITIONAL(*state_copy.payload_bak) == ZCBOR_VALUE_IS_1_BYTE)
+				&& (value < 32), ZCBOR_ERR_INVALID_VALUE_ENCODING);
+			break;
 		default:
 			/* Do nothing */
 			break;

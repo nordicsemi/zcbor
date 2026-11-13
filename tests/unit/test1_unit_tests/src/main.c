@@ -2138,6 +2138,51 @@ ZTEST(zcbor_unit_tests, test_any_skip_str_overflow)
 }
 
 
+/* zcbor_any_skip() rejects simple values 0-31 encoded in a following byte (0xF8 0x00-0x1F),
+ * like zcbor_simple_decode(), also when tagged or nested. */
+ZTEST(zcbor_unit_tests, test_any_skip_simple)
+{
+	struct {
+		const char *name;
+		uint8_t payload[4];
+		size_t len;
+		bool valid;
+	} cases[] = {
+		{"simple(0) 1 byte", {0xE0}, 1, true},
+		{"simple(19) 1 byte", {0xF3}, 1, true},
+		{"simple(0) 2 bytes", {0xF8, 0x00}, 2, false},
+		{"simple(23) 2 bytes", {0xF8, 0x17}, 2, false},
+		{"simple(24) 2 bytes", {0xF8, 0x18}, 2, false},
+		{"simple(31) 2 bytes", {0xF8, 0x1F}, 2, false},
+		{"simple(32) 2 bytes", {0xF8, 0x20}, 2, true},
+		{"simple(255) 2 bytes", {0xF8, 0xFF}, 2, true},
+		{"tagged simple(16) 2 bytes", {0xC1, 0xF8, 0x10}, 3, false},
+		{"list with simple(16) 2 bytes", {0x81, 0xF8, 0x10}, 3, false},
+		{"map key simple(16) 2 bytes", {0xA1, 0xF8, 0x10, 0x00}, 4, false},
+	};
+
+	for (size_t i = 0; i < ZCBOR_ARRAY_SIZE(cases); i++) {
+		ZCBOR_STATE_D(state_d, 0, cases[i].payload, cases[i].len, 1, 0);
+		bool ret = zcbor_any_skip(state_d, NULL);
+
+		if (cases[i].valid) {
+			zassert_true(ret, "%s: err: %s\n", cases[i].name,
+				zcbor_error_str(zcbor_peek_error(state_d)));
+			zassert_equal_ptr(state_d->payload, &cases[i].payload[cases[i].len],
+				"%s\n", cases[i].name);
+			zassert_equal(state_d->elem_count, 0, "%s\n", cases[i].name);
+		} else {
+			zassert_false(ret, "%s\n", cases[i].name);
+			zassert_equal(ZCBOR_ERR_INVALID_VALUE_ENCODING, zcbor_peek_error(state_d),
+				"%s: err: %s\n", cases[i].name,
+				zcbor_error_str(zcbor_peek_error(state_d)));
+			zassert_equal_ptr(state_d->payload, cases[i].payload, "%s\n", cases[i].name);
+			zassert_equal(state_d->elem_count, 1, "%s\n", cases[i].name);
+		}
+	}
+}
+
+
 /* zcbor_any_skip() fails if a list/map is missing elements, i.e. if there are fewer than its
  * header says, or if an indefinite-length map has a key without a value. */
 ZTEST(zcbor_unit_tests, test_any_skip_elem_count)
