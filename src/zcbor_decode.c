@@ -49,11 +49,12 @@ static bool initial_checks_w_frags(zcbor_state_t *state)
 	return true;
 }
 
+/* No payload check, since the payload can be used up when retrieving a fragment, e.g. at the end
+ * of a payload section. */
 #define INITIAL_CHECKS_INSIDE_FRAG_STR() \
 do {\
-	if (!initial_checks(state)) { \
-		ZCBOR_FAIL(); \
-	} \
+	ZCBOR_CHECK_NULL(state); \
+	ZCBOR_CHECK_ERROR(); \
 } while(0)
 
 #define INITIAL_CHECKS() \
