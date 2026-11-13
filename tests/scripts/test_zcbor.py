@@ -56,7 +56,6 @@ p_yaml_float_compat_cddl = Path(p_cases, "yaml_float_compatibility.cddl")
 p_yaml_float_compat_yaml = Path(p_cases, "yaml_float_compatibility.yaml")
 p_pet_cddl = Path(p_cases, "pet.cddl")
 p_README = Path(p_root, "README.md")
-p_prelude = Path(p_root, "zcbor", "prelude.cddl")
 p_VERSION = Path(p_root, "zcbor", "VERSION")
 
 
@@ -1161,9 +1160,8 @@ class CornerCaseTest(TestCase):
         super().__init__(*args, **kwargs)
         try:
             self.cddl_res = zcbor.DataTranslator.from_cddl(
-                cddl_string=p_prelude.read_text(encoding="utf-8")
-                + "\n"
-                + p_corner_cases.read_text(encoding="utf-8"),
+                cddl_string=p_corner_cases.read_text(encoding="utf-8"),
+                prelude=True,
                 default_max_qty=16,
             )
         except zcbor.CddlParsingError as e:
@@ -1353,9 +1351,8 @@ class TestFloatYamlCompat(TestCase):
         super().__init__(*args, **kwargs)
         try:
             self.cddl_res = zcbor.DataTranslator.from_cddl(
-                cddl_string=p_prelude.read_text(encoding="utf-8")
-                + "\n"
-                + p_yaml_float_compat_cddl.read_text(encoding="utf-8"),
+                cddl_string=p_yaml_float_compat_cddl.read_text(encoding="utf-8"),
+                prelude=True,
                 default_max_qty=16,
             )
         except zcbor.CddlParsingError as e:
@@ -2090,9 +2087,8 @@ class TestUnicodeEscape(TestCase):
     def test_unicode_escape0(self):
         expected = "Domino's 🁳 + ⌘"
         cddl_res = zcbor.DataTranslator.from_cddl(
-            cddl_string=p_prelude.read_text(encoding="utf-8")
-            + "\n"
-            + p_corner_cases.read_text(encoding="utf-8"),
+            cddl_string=p_corner_cases.read_text(encoding="utf-8"),
+            prelude=True,
             default_max_qty=16,
         )
         cddl = cddl_res.my_types["UnicodeEscapeTstr"]
@@ -2219,6 +2215,31 @@ class TestControlGroups(TestCase):
         self.assertEqual(8, cddl.decode_str_yaml("8"))
         with self.assertRaises(zcbor.CddlValidationError):
             cddl.decode_str_yaml("1")
+
+
+class TestPrelude(PopenTest, TempdTest):
+    cddl = "T = tdate"
+
+    def test_prelude_api(self):
+        with self.assertRaises(zcbor.CddlParsingError):
+            zcbor.DataTranslator.from_cddl(cddl_string=self.cddl)
+        my_types = zcbor.DataTranslator.from_cddl(cddl_string=self.cddl, prelude=True).my_types
+        my_types["T"].validate_obj(cbor2.CBORTag(0, "2020-02-20T12:00:00Z"))
+        with self.assertRaises(zcbor.CddlValidationError):
+            my_types["T"].validate_obj("2020-02-20T12:00:00Z")
+        cddl_res = zcbor.CodeGenerator.from_cddl(
+            cddl_string=self.cddl, prelude=True, mode="decode", entry_type_names=["T"]
+        )
+        self.assertIn("tdate", cddl_res.my_types)
+
+    def test_prelude_cli(self):
+        p_cddl = self.tempd / "tdate.cddl"
+        p_cddl.write_text(self.cddl, encoding="utf-8")
+        args = ["zcbor", "validate", "-c", str(p_cddl), "-t", "T", "-i", "-", "--input-as", "yaml"]
+        args += ["--yaml-compatibility"]
+        data = b'{zcbor_tag: 0, zcbor_tag_val: "2020-02-20T12:00:00Z"}'
+        self.popen_test(args, data)
+        self.popen_test(args + ["--no-prelude"], data, exp_retcode=1)
 
 
 class TestIntValidation(PopenTest, TempdTest):

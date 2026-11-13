@@ -581,7 +581,14 @@ class CddlParser:
             self.my_control_groups[name] = parsed
 
     @classmethod
-    def from_cddl(cddl_class, *, cddl_string, **kwargs):
+    def from_cddl(cddl_class, *, cddl_string, prelude=False, **kwargs):
+        """Parse all types in cddl_string.
+
+        If prelude is True, the standard CDDL prelude (zcbor/prelude.cddl) is appended to
+        cddl_string, like the CLI does by default.
+        """
+        if prelude:
+            cddl_string += linesep + PRELUDE_PATH.read_text(encoding="utf-8")
         type_strings = cddl_class.get_types(cddl_string)
 
         # Separate type_strings as keys in two dicts, one dict for strings that start with &( which
@@ -4761,9 +4768,6 @@ entire declaration is a single line.""",
 
     args = parser.parse_args()
 
-    if not args.no_prelude:
-        args.cddl.append(str(PRELUDE_PATH))
-
     if hasattr(args, "decode") and not args.decode and not args.encode:
         parser.error("Please specify at least one of --decode or --encode.")
 
@@ -4812,6 +4816,7 @@ def process_code(args):
             cddl_res[mode] = CodeGenerator.from_cddl(
                 mode=mode,
                 cddl_string=cddl_contents,
+                prelude=not args.no_prelude,
                 entry_type_names=args.entry_types,
                 add_defines=args.defines,
                 default_bit_size=args.default_bit_size,
@@ -4922,7 +4927,9 @@ def parse_cddl(args):
     cddl_contents = linesep.join((Path(c).read_text(encoding="utf-8") for c in args.cddl))
     try:
         cddl_res = DataTranslator.from_cddl(
-            cddl_string=cddl_contents, default_max_qty=args.default_max_qty
+            cddl_string=cddl_contents,
+            prelude=not args.no_prelude,
+            default_max_qty=args.default_max_qty,
         )
     except CddlParsingError as e:
         print(format_parsing_error(e))
