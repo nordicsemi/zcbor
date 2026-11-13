@@ -2221,6 +2221,59 @@ class TestControlGroups(TestCase):
             cddl.decode_str_yaml("1")
 
 
+class TestEmptyGroupInMap(PopenTest, TempdTest):
+    cddl_string = """
+        empty-group = ()
+        empty2 = empty-group
+        nested-empty = ((), empty-group)
+        keyed-group = ("a" => uint, empty-group)
+        Named = {empty-group,}
+        Named2 = {"a" => uint, empty-group}
+        Indirect = {empty2}
+        Nested = {nested-empty}
+        KeyedGroup = {keyed-group}
+        Inline = {()}
+        Inline2 = {"a" => uint, ()}
+        List = [empty-group, uint]
+    """
+    empty_types = ["Named", "Indirect", "Nested", "Inline"]
+    keyed_types = ["Named2", "KeyedGroup", "Inline2"]
+
+    def test_validate(self):
+        cddl_res = zcbor.DataTranslator.from_cddl(cddl_string=self.cddl_string)
+        for name in self.empty_types:
+            with self.subTest(name=name):
+                cddl = cddl_res.my_types[name]
+                self.assertEqual(bytes.fromhex("a0"), cddl.from_yaml("{}"))
+                with self.assertRaises(zcbor.CddlValidationError):
+                    cddl.from_yaml("{a: 1}")
+        for name in self.keyed_types:
+            with self.subTest(name=name):
+                cddl = cddl_res.my_types[name]
+                self.assertEqual(bytes.fromhex("a1616101"), cddl.from_yaml("{a: 1}"))
+                with self.assertRaises(zcbor.CddlValidationError):
+                    cddl.from_yaml("{}")
+        self.assertEqual(bytes.fromhex("8101"), cddl_res.my_types["List"].from_yaml("[1]"))
+
+    def test_code_generation(self):
+        cddl_path = self.tempd / "empty_group.cddl"
+        cddl_path.write_text(self.cddl_string, encoding="utf-8")
+        self.popen_test(
+            ["zcbor", "code", "-c", cddl_path, "-d", "-e", "--output-cmake", self.tempd / "eg.cmake"]
+            + ["-t"]
+            + self.empty_types
+            + self.keyed_types
+            + ["List"]
+        )
+
+    def test_list_member_key(self):
+        """Lists still accept empty groups, and still reject members with keys."""
+        cddl_res = cp_from_cddl("e = ()\ng = (e, e)\nfoo = [e, g, uint]")
+        self.assertEqual(3, len(cddl_res.my_types["foo"].value))
+        with self.assertRaisesRegex(zcbor.CddlParsingError, "List member\\(s\\) cannot have key"):
+            cp_from_cddl('e = ()\ng = ("a" => uint, e)\nfoo = [e, {g}, "b" => uint]')
+
+
 class TestIntValidation(PopenTest, TempdTest):
     def translator(self, cddl, type_name="T"):
         return zcbor.DataTranslator.from_cddl(cddl_string=cddl, default_max_qty=16).my_types[type_name]

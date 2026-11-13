@@ -1461,13 +1461,23 @@ class CddlParser:
         )
         return ret
 
+    def has_key_or_is_empty(self):
+        """Like has_key(), but also true for groups where all members are empty groups or have
+        keys, possibly via indirection. Empty groups add no entries, so they can be used in maps.
+        """
+        return (
+            self.has_key()
+            or (self.type == "OTHER" and self.my_types[self.value].has_key_or_is_empty())
+            or (self.type == "GROUP" and all(child.has_key_or_is_empty() for child in self.value))
+        )
+
     def is_valid_map_elem(self) -> tuple[bool, str]:
         """For checking whether this element meets the conditions for being a valid map element.
 
         This can be overridden by subclasses to further validate keys.
         Returns a tuple with the result and an error message.
         """
-        if not self.has_key():
+        if not self.has_key_or_is_empty():
             return False, f"Missing map key"
         return True, ""
 
@@ -1484,7 +1494,7 @@ class CddlParser:
                     "Map member(s) are invalid:\n"
                     + "\n".join([f"{str(c)}: {c.is_valid_map_elem()[1]}" for c in invalid_elems])
                 )
-            child_keys = [child for child in self.value if child not in invalid_elems]
+            child_keys = [child for child in self.value if child.has_key()]
             if self.type == "LIST" and child_keys:
                 raise CddlParsingError(
                     str(self)
