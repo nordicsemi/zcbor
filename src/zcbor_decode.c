@@ -768,6 +768,9 @@ static bool start_decode_fragments(zcbor_state_t *state,
 		state->frag_offset_cbor = new_offset;
 		state->str_total_len_cbor = string_hdr.len;
 		state->inside_cbor_bstr = true;
+		/* If the string ends in this payload section, don't decode past the end of it. */
+		state->payload_end = state->payload + MIN(
+			(size_t)state->payload_end - (size_t)state->payload, string_hdr.len);
 	} else {
 		state->frag_offset = new_offset;
 		state->str_total_len = string_hdr.len;

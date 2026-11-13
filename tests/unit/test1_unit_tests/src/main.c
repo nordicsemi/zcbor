@@ -1424,6 +1424,57 @@ ZTEST(zcbor_unit_tests, test_splice_fragments_null_value)
 }
 
 
+/* A CBOR-encoded bstr that is followed by more data in the same payload section.
+ * payload_end must be set to the end of the string (as with zcbor_bstr_start_decode()), so that
+ * zcbor_str_fragments_end_decode() succeeds, and nothing is decoded past the end of the string. */
+ZTEST(zcbor_unit_tests, test_cbor_bstr_fragments_payload_end_decode)
+{
+	/* bstr .cbor (1), followed by 2. */
+	const uint8_t payload1[] = {0x41, 0x01, 0x02};
+	/* bstr .cbor (<2-byte uint truncated by the end of the string>), followed by 0x20. */
+	const uint8_t payload2[] = {0x41, 0x18, 0x20};
+	uint32_t result;
+	bool ret;
+
+	ZCBOR_STATE_D(state_d, 1, payload1, sizeof(payload1), 2, 0);
+	ZCBOR_STATE_D(state_d2, 1, payload2, sizeof(payload2), 2, 0);
+
+	zassert_true(zcbor_cbor_bstr_fragments_start_decode(state_d));
+	zassert_equal_ptr(&payload1[2], state_d->payload_end);
+	zassert_true(zcbor_uint32_expect(state_d, 1));
+	ret = zcbor_str_fragments_end_decode(state_d);
+	zassert_true(ret, "%s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+	zassert_equal_ptr(&payload1[3], state_d->payload_end);
+	zassert_true(zcbor_uint32_expect(state_d, 2));
+	zassert_true(zcbor_payload_at_end(state_d));
+
+	zassert_true(zcbor_cbor_bstr_fragments_start_decode(state_d2));
+	zassert_false(zcbor_uint32_decode(state_d2, &result));
+	zassert_error(ZCBOR_ERR_NO_PAYLOAD, state_d2);
+}
+
+
+/* Encode counterpart of test_cbor_bstr_fragments_payload_end_decode. */
+ZTEST(zcbor_unit_tests, test_cbor_bstr_fragments_payload_end_encode)
+{
+	const uint8_t exp_payload[] = {0x41, 0x01, 0x02};
+	uint8_t payload[3] = {0};
+
+	ZCBOR_STATE_E(state_e, 1, payload, sizeof(payload), 0);
+
+	zassert_true(zcbor_cbor_bstr_fragments_start_encode(state_e, 1));
+	zassert_equal_ptr(&payload[2], state_e->payload_end);
+	zassert_false(zcbor_uint32_put(state_e, 0x20)); /* Too large for the string. */
+	zassert_error(ZCBOR_ERR_NO_PAYLOAD, state_e);
+	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, zcbor_pop_error(state_e));
+	zassert_true(zcbor_uint32_put(state_e, 1));
+	zassert_true(zcbor_str_fragments_end_encode(state_e));
+	zassert_equal_ptr(&payload[3], state_e->payload_end);
+	zassert_true(zcbor_uint32_put(state_e, 2));
+	zassert_mem_equal(exp_payload, payload, sizeof(payload));
+}
+
+
 ZTEST(zcbor_unit_tests, test_canonical_list)
 {
 #ifndef ZCBOR_CANONICAL
