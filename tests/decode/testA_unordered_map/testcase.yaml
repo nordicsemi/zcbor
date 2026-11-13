@@ -10,3 +10,4 @@ tests:
       - decode
       - unordered_map
       - testA
+    timeout: 180  # Because of the amount of output with VERBOSE=ON
