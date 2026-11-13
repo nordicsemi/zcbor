@@ -13,7 +13,7 @@ from urllib.error import HTTPError, URLError
 from subprocess import Popen, check_output, PIPE, run, CalledProcessError
 from shutil import rmtree
 from platform import python_version_tuple
-from sys import platform
+from sys import platform, executable
 from concurrent.futures import ThreadPoolExecutor
 import os
 from time import sleep
@@ -476,6 +476,16 @@ class TestDocs(TestCase, LinkTester):
         add_help = Popen(["python3", p_add_helptext, "--check"])
         add_help.communicate()
         self.assertEqual(0, add_help.returncode)
+
+
+class TestReadmePython(TestCase):
+    def test_python_example(self):
+        """Run the Python example in README.md, and check the output of the first print()."""
+        example = search(r"```python\n(.*?)```", p_readme.read_text(encoding="utf-8"), S)[1]
+        exp_out = search(r"print\(.*\)  # (.*)", example)[1]
+        res = run([executable, "-c", example], capture_output=True, text=True)
+        self.assertEqual(0, res.returncode, res.stderr)
+        self.assertEqual(exp_out, res.stdout.splitlines()[0])
 
 
 if __name__ == "__main__":
