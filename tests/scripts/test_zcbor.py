@@ -2102,6 +2102,63 @@ class TestCodeGeneration(TestCase):
         self.assertEqual(res.value, "bar")
 
 
+class TestDuplicateFuncName(PopenTest, TempdTest):
+    def render(self, cddl_string):
+        cddl_res = zcbor.CodeGenerator.from_cddl(
+            cddl_string=cddl_string, mode="decode", entry_type_names=["test"]
+        )
+        return zcbor.CodeRenderer(entry_types={"decode": [cddl_res.my_types["test"]]}, modes=["decode"])
+
+    def get_error(self, cddl_string):
+        with self.assertRaises(zcbor.CddlParsingError) as cm:
+            self.render(cddl_string)
+        return str(cm.exception)
+
+    def test_unlabeled_elements(self):
+        error = self.get_error('test = [{1 => "0", 2 => float}, {1 => "1", 2 => float}]')
+        self.assertIn(
+            "Two different elements get the same C function name decode_repeated_test_map. "
+            "Add labels (e.g. [a: {...}, b: {...}]) or rename a type",
+            error,
+        )
+
+        # Distinct labels fix the error.
+        self.render('test = [a: {1 => "0", 2 => float}, b: {1 => "1", 2 => float}]')
+
+    def test_same_label(self):
+        error = self.get_error("test = [x: [* uint], x: [* tstr]]")
+        self.assertIn("the same C function name decode_repeated_test_x.", error)
+
+    def test_type_names(self):
+        error = self.get_error(
+            "foo-bar = [uint, tstr]\nfoo_bar = [tstr, uint]\ntest = [foo-bar, foo_bar]"
+        )
+        self.assertIn("the same C function name decode_repeated_foo_bar.", error)
+
+    def test_cli(self):
+        cddl_path = self.tempd / "test.cddl"
+        cddl_path.write_text('test = [{1 => "0"}, {1 => "1"}]', encoding="utf-8")
+        stdout, _ = self.popen_test(
+            [
+                "zcbor",
+                "code",
+                "-c",
+                cddl_path,
+                "-e",
+                "-t",
+                "test",
+                "--output-cmake",
+                self.tempd / "x.cmake",
+            ],
+            exp_retcode=1,
+        )
+        self.assertIn(
+            "CDDL parsing error:\nTwo different elements get the same C function name "
+            "encode_test_map.",
+            stdout.decode("utf-8").replace("\r\n", "\n"),
+        )
+
+
 class TestUnicodeEscape(TestCase):
     def test_unicode_escape0(self):
         expected = "Domino's 🁳 + ⌘"
