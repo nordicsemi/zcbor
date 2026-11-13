@@ -589,8 +589,19 @@ class CddlParser:
             self.my_control_groups[name] = parsed
 
     @classmethod
-    def from_cddl(cddl_class, *, cddl_string, **kwargs):
-        type_strings = cddl_class.get_types(cddl_string)
+    def from_cddl(cddl_class, *, cddl_string, prelude=True, **kwargs):
+        """Parse all types in cddl_string.
+
+        By default, the standard CDDL prelude (zcbor/prelude.cddl) is appended to cddl_string,
+        like the CLI does. Pass prelude=False to leave it out, e.g. if cddl_string already
+        includes it.
+        """
+        prelude_names = ()
+        if prelude:
+            prelude_string = PRELUDE_PATH.read_text(encoding="utf-8")
+            prelude_names = cddl_class.get_types(prelude_string).keys()
+            cddl_string += linesep + prelude_string
+        type_strings = cddl_class.get_types(cddl_string, prelude_names=prelude_names)
 
         # Separate type_strings as keys in two dicts, one dict for strings that start with &( which
         # are special control operators for .bits, and one dict for all the regular types.
@@ -646,8 +657,11 @@ class CddlParser:
         return getrp(r"\\\n").sub(" ", instr)
 
     @classmethod
-    def get_types(cls, cddl_string):
-        """Returns a dict containing multiple typename=>string"""
+    def get_types(cls, cddl_string, prelude_names=()):
+        """Returns a dict containing multiple typename=>string
+
+        prelude_names are the types defined in the prelude, if it was appended to cddl_string.
+        They are used for giving a hint in the error message for duplicate types."""
         instr = cls.strip_comments(cddl_string)
         instr = cls.resolve_backslashes(instr)
         type_regex = (
@@ -665,7 +679,14 @@ class CddlParser:
                 result[key] = result[key].lstrip(slashes)  # strip from front
             else:
                 if key in result:
-                    raise CddlParsingError(f"Duplicate CDDL type found: {key}")
+                    hint = (
+                        f" ({key} is also defined in the CDDL prelude, which is included by "
+                        "default. Pass prelude=False (CLI: --no-prelude) if your CDDL already "
+                        "includes it.)"
+                        if key in prelude_names
+                        else ""
+                    )
+                    raise CddlParsingError(f"Duplicate CDDL type found: {key}{hint}")
                 result[key] = value
         return dict(result)
 
@@ -4874,9 +4895,6 @@ entire declaration is a single line.""",
 
     args = parser.parse_args()
 
-    if not args.no_prelude:
-        args.cddl.append(str(PRELUDE_PATH))
-
     if hasattr(args, "decode") and not args.decode and not args.encode:
         parser.error("Please specify at least one of --decode or --encode.")
 
@@ -4925,6 +4943,7 @@ def process_code(args):
             cddl_res[mode] = CodeGenerator.from_cddl(
                 mode=mode,
                 cddl_string=cddl_contents,
+                prelude=not args.no_prelude,
                 entry_type_names=args.entry_types,
                 add_defines=args.defines,
                 default_bit_size=args.default_bit_size,
@@ -5039,7 +5058,9 @@ def parse_cddl(args):
     cddl_contents = linesep.join((Path(c).read_text(encoding="utf-8") for c in args.cddl))
     try:
         cddl_res = DataTranslator.from_cddl(
-            cddl_string=cddl_contents, default_max_qty=args.default_max_qty
+            cddl_string=cddl_contents,
+            prelude=not args.no_prelude,
+            default_max_qty=args.default_max_qty,
         )
     except CddlParsingError as e:
         print(format_parsing_error(e))

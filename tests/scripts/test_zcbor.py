@@ -1162,9 +1162,7 @@ class CornerCaseTest(TestCase):
         super().__init__(*args, **kwargs)
         try:
             self.cddl_res = zcbor.DataTranslator.from_cddl(
-                cddl_string=p_prelude.read_text(encoding="utf-8")
-                + "\n"
-                + p_corner_cases.read_text(encoding="utf-8"),
+                cddl_string=p_corner_cases.read_text(encoding="utf-8"),
                 default_max_qty=16,
             )
         except zcbor.CddlParsingError as e:
@@ -1354,9 +1352,7 @@ class TestFloatYamlCompat(TestCase):
         super().__init__(*args, **kwargs)
         try:
             self.cddl_res = zcbor.DataTranslator.from_cddl(
-                cddl_string=p_prelude.read_text(encoding="utf-8")
-                + "\n"
-                + p_yaml_float_compat_cddl.read_text(encoding="utf-8"),
+                cddl_string=p_yaml_float_compat_cddl.read_text(encoding="utf-8"),
                 default_max_qty=16,
             )
         except zcbor.CddlParsingError as e:
@@ -1729,7 +1725,8 @@ class TestUnreachableChoiceWarning(PopenTest, TempdTest):
         self.assertEqual([], self.choice_warnings(cddl_str))
 
     def test_prelude(self):
-        self.assertEqual([], self.choice_warnings(p_prelude.read_text(encoding="utf-8")))
+        """The prelude, which from_cddl() includes by default, has no unreachable choices."""
+        self.assertEqual([], self.choice_warnings(""))
 
     def test_cli_warning(self):
         p_cddl = self.tempd / "choice.cddl"
@@ -2267,9 +2264,7 @@ class TestUnicodeEscape(TestCase):
     def test_unicode_escape0(self):
         expected = "Domino's 🁳 + ⌘"
         cddl_res = zcbor.DataTranslator.from_cddl(
-            cddl_string=p_prelude.read_text(encoding="utf-8")
-            + "\n"
-            + p_corner_cases.read_text(encoding="utf-8"),
+            cddl_string=p_corner_cases.read_text(encoding="utf-8"),
             default_max_qty=16,
         )
         cddl = cddl_res.my_types["UnicodeEscapeTstr"]
@@ -2482,6 +2477,60 @@ class TestEmptyGroupInMap(PopenTest, TempdTest):
         self.assertEqual(3, len(cddl_res.my_types["foo"].value))
         with self.assertRaisesRegex(zcbor.CddlParsingError, "List member\\(s\\) cannot have key"):
             cp_from_cddl('e = ()\ng = ("a" => uint, e)\nfoo = [e, {g}, "b" => uint]')
+
+
+class TestPrelude(PopenTest, TempdTest):
+    cddl = "T = tdate"
+
+    def test_prelude_api(self):
+        my_types = zcbor.DataTranslator.from_cddl(cddl_string=self.cddl).my_types
+        my_types["T"].validate_obj(cbor2.CBORTag(0, "2020-02-20T12:00:00Z"))
+        with self.assertRaises(zcbor.CddlValidationError):
+            my_types["T"].validate_obj("2020-02-20T12:00:00Z")
+        cddl_res = zcbor.CodeGenerator.from_cddl(
+            cddl_string=self.cddl, mode="decode", entry_type_names=["T"]
+        )
+        self.assertIn("tdate", cddl_res.my_types)
+        with self.assertRaises(zcbor.CddlParsingError):
+            zcbor.DataTranslator.from_cddl(cddl_string=self.cddl, prelude=False)
+        with self.assertRaises(zcbor.CddlParsingError):
+            zcbor.CodeGenerator.from_cddl(
+                cddl_string=self.cddl, prelude=False, mode="decode", entry_type_names=["T"]
+            )
+
+    def test_prelude_duplicate(self):
+        hint = (
+            " ({0} is also defined in the CDDL prelude, which is included by default. Pass "
+            "prelude=False (CLI: --no-prelude) if your CDDL already includes it.)"
+        )
+        cddl_with_prelude = self.cddl + "\n" + p_prelude.read_text(encoding="utf-8")
+        with self.assertRaises(zcbor.CddlParsingError) as e:
+            zcbor.DataTranslator.from_cddl(cddl_string=cddl_with_prelude)
+        self.assertEqual("Duplicate CDDL type found: bytes" + hint.format("bytes"), str(e.exception))
+        with self.assertRaises(zcbor.CddlParsingError) as e:
+            zcbor.CodeGenerator.from_cddl(cddl_string="text = bstr", mode="decode")
+        self.assertEqual("Duplicate CDDL type found: text" + hint.format("text"), str(e.exception))
+        self.assertIn(
+            "tdate",
+            zcbor.DataTranslator.from_cddl(cddl_string=cddl_with_prelude, prelude=False).my_types,
+        )
+        # No hint for types that aren't in the prelude.
+        with self.assertRaises(zcbor.CddlParsingError) as e:
+            zcbor.DataTranslator.from_cddl(cddl_string="foo = 1\nfoo = 2")
+        self.assertEqual("Duplicate CDDL type found: foo", str(e.exception))
+
+    def test_prelude_cli(self):
+        p_cddl = self.tempd / "tdate.cddl"
+        p_cddl.write_text(self.cddl, encoding="utf-8")
+        args = ["zcbor", "validate", "-c", str(p_cddl), "-t", "T", "-i", "-", "--input-as", "yaml"]
+        args += ["--yaml-compatibility"]
+        data = b'{zcbor_tag: 0, zcbor_tag_val: "2020-02-20T12:00:00Z"}'
+        self.popen_test(args, data)
+        self.popen_test(args + ["--no-prelude"], data, exp_retcode=1)
+        p_cddl.write_text(self.cddl + "\n" + p_prelude.read_text(encoding="utf-8"), encoding="utf-8")
+        stdout, _ = self.popen_test(args, data, exp_retcode=1)
+        self.assertIn(b"bytes is also defined in the CDDL prelude", stdout)
+        self.popen_test(args + ["--no-prelude"], data)
 
 
 class TestIntValidation(PopenTest, TempdTest):
@@ -3067,7 +3116,7 @@ class OtherTests(TestCase):
 
     def test_list_labels_matching_type_names(self):
         """In a list, "foo:" is a label, even when foo is a type. Also in the prelude."""
-        cddl = p_prelude.read_text(encoding="utf-8") + """
+        cddl = """
             m = uint
             e10 = uint
             foo = [m, e10: int, (m: int // e10: tstr)]
