@@ -1227,7 +1227,12 @@ ZTEST(zcbor_unit_tests, test_nested_fragments)
 	zassert_mem_equal(output_string, lorem, sizeof(lorem) - 1);
 	zassert_true(zcbor_str_fragments_end_decode(state_d));
 	zassert_true(zcbor_str_fragments_end_decode(state_d));
-		zassert_false(zcbor_str_fragment_decode(state_d, &output_frags_bstr));
+	/* Back in the outer CBOR-encoded bstr (inside the list), where only the end of the list
+	 * (if not canonical) remains. */
+	ret = zcbor_current_string_remainder(state_d, &remainder);
+	zassert_true(ret, "err %s\n", zcbor_error_str(zcbor_peek_error(state_d)));
+	zassert_equal(LEN_OFFS, remainder, "%zu != %zu\r\n", (size_t)LEN_OFFS, remainder);
+	zassert_equal(37 + LEN_OFFS, state_d->str_total_len_cbor);
 	zassert_true(zcbor_list_end_decode(state_d), NULL);
 	test_offset_and_remainder(state_d, state_d->str_total_len_cbor);
 	zassert_true(zcbor_str_fragments_end_decode(state_d));
@@ -1472,6 +1477,184 @@ ZTEST(zcbor_unit_tests, test_cbor_bstr_fragments_payload_end_encode)
 	zassert_equal_ptr(&payload[3], state_e->payload_end);
 	zassert_true(zcbor_uint32_put(state_e, 2));
 	zassert_mem_equal(exp_payload, payload, sizeof(payload));
+}
+
+
+/* bstr .cbor (1, bstr .cbor (2), 3, 5), followed by 4.
+ * I.e. CBOR-encoded bstrs nested directly in each other, without a list or map in between. */
+static const uint8_t nested_cbor_bstrs[] = {0x45, 0x01, 0x41, 0x02, 0x03, 0x05, 0x04};
+#define NESTED_OUTER_START 1 /* Index of the first byte of the outer string's contents. */
+#define NESTED_OUTER_LEN 5
+#define NESTED_INNER_END 4 /* Index of the first byte after the inner string. */
+#define NESTED_OUTER_END (NESTED_OUTER_START + NESTED_OUTER_LEN)
+
+/* Payload sections are parts of one buffer. Bit n of mask is set if a section starts at index n. */
+struct nested_sections {
+	const uint8_t *payload;
+	uint32_t mask;
+	size_t start;
+	size_t end;
+};
+
+static size_t nested_next_split(uint32_t mask, size_t from)
+{
+	for (size_t i = from + 1; i < sizeof(nested_cbor_bstrs); i++) {
+		if (mask & (1U << i)) {
+			return i;
+		}
+	}
+	return sizeof(nested_cbor_bstrs);
+}
+
+/* Move to the next payload section if the current section is used up. */
+static void nested_next_section(zcbor_state_t *state, struct nested_sections *s)
+{
+	if ((state->payload == &s->payload[s->end]) && (s->end < sizeof(nested_cbor_bstrs))) {
+		s->start = s->end;
+		s->end = nested_next_split(s->mask, s->start);
+		zcbor_update_state(state, &s->payload[s->start], s->end - s->start);
+	}
+}
+
+/* expr is evaluated before the error is retrieved for the message. */
+#define zassert_ok_mask(expr, state, mask) \
+do { \
+	bool ret_ = (expr); \
+	zassert_true(ret_, "mask 0x%x: %s: %s\n", mask, #expr, \
+		zcbor_error_str(zcbor_peek_error(state))); \
+} while (0)
+
+#define check_offset_and_remainder(state, exp_offset, exp_remainder, mask) \
+do { \
+	size_t offset_, remainder_; \
+	zassert_ok_mask(zcbor_current_string_offset(state, &offset_), state, mask); \
+	zassert_ok_mask(zcbor_current_string_remainder(state, &remainder_), state, mask); \
+	zassert_equal(exp_offset, offset_, "mask 0x%x: %zu != %zu\n", mask, \
+		(size_t)(exp_offset), offset_); \
+	zassert_equal(exp_remainder, remainder_, "mask 0x%x: %zu != %zu\n", mask, \
+		(size_t)(exp_remainder), remainder_); \
+} while (0)
+
+
+static void decode_nested_cbor_bstrs(uint32_t mask)
+{
+	struct nested_sections s = {.payload = nested_cbor_bstrs, .mask = mask, .start = 0};
+	struct zcbor_string_fragment frag;
+	size_t offset;
+
+	s.end = nested_next_split(mask, 0);
+
+	ZCBOR_STATE_D(state_d, 3, nested_cbor_bstrs, s.end, 2, 0);
+
+	zassert_ok_mask(zcbor_cbor_bstr_fragments_start_decode(state_d), state_d, mask);
+	check_offset_and_remainder(state_d, 0, NESTED_OUTER_LEN, mask);
+	zassert_equal_ptr(&nested_cbor_bstrs[MIN(NESTED_OUTER_END, s.end)], state_d->payload_end,
+		"mask 0x%x\n", mask);
+	nested_next_section(state_d, &s);
+	zassert_ok_mask(zcbor_uint32_expect(state_d, 1), state_d, mask);
+	nested_next_section(state_d, &s);
+	zassert_ok_mask(zcbor_cbor_bstr_fragments_start_decode(state_d), state_d, mask);
+	check_offset_and_remainder(state_d, 0, 1, mask);
+	zassert_equal_ptr(&nested_cbor_bstrs[MIN(NESTED_INNER_END, s.end)], state_d->payload_end,
+		"mask 0x%x\n", mask);
+	nested_next_section(state_d, &s);
+	zassert_ok_mask(zcbor_uint32_expect(state_d, 2), state_d, mask);
+	zassert_ok_mask(zcbor_str_fragments_end_decode(state_d), state_d, mask);
+
+	/* Back in the outer string. */
+	check_offset_and_remainder(state_d, 3, 2, mask);
+	zassert_equal_ptr(&nested_cbor_bstrs[MIN(NESTED_OUTER_END, s.end)], state_d->payload_end,
+		"mask 0x%x\n", mask);
+	nested_next_section(state_d, &s);
+	zassert_ok_mask(zcbor_uint32_expect(state_d, 3), state_d, mask);
+	nested_next_section(state_d, &s);
+	zassert_ok_mask(zcbor_str_fragment_decode(state_d, &frag), state_d, mask);
+
+	/* The outer string's fragment, i.e. from the start of the outer string or the current
+	 * payload section, to the current position. */
+	size_t frag_start = MAX(NESTED_OUTER_START, s.start);
+
+	zassert_equal_ptr(&nested_cbor_bstrs[frag_start], frag.fragment.value, "mask 0x%x\n", mask);
+	zassert_equal(5 - frag_start, frag.fragment.len, "mask 0x%x\n", mask);
+	zassert_equal(frag_start - NESTED_OUTER_START, frag.offset, "mask 0x%x\n", mask);
+	zassert_equal(NESTED_OUTER_LEN, frag.total_len, "mask 0x%x\n", mask);
+	zassert_ok_mask(zcbor_uint32_expect(state_d, 5), state_d, mask);
+	zassert_ok_mask(zcbor_str_fragments_end_decode(state_d), state_d, mask);
+
+	/* Back at the top level. */
+	zassert_equal_ptr(&nested_cbor_bstrs[s.end], state_d->payload_end, "mask 0x%x\n", mask);
+	zassert_false(zcbor_current_string_offset(state_d, &offset), "mask 0x%x\n", mask);
+	zassert_equal(ZCBOR_ERR_NOT_IN_FRAGMENT, zcbor_pop_error(state_d), "mask 0x%x\n", mask);
+	nested_next_section(state_d, &s);
+	zassert_ok_mask(zcbor_uint32_expect(state_d, 4), state_d, mask);
+	zassert_equal_ptr(&nested_cbor_bstrs[sizeof(nested_cbor_bstrs)], state_d->payload,
+		"mask 0x%x\n", mask);
+}
+
+
+/* Test nested CBOR-encoded bstrs without a list or map in between, both in a contiguous payload
+ * (mask 0) and split into payload sections at all possible places. */
+ZTEST(zcbor_unit_tests, test_nested_cbor_bstr_fragments_decode)
+{
+	for (uint32_t mask = 0; mask < (1U << sizeof(nested_cbor_bstrs)); mask += 2) {
+		decode_nested_cbor_bstrs(mask);
+	}
+}
+
+
+static void encode_nested_cbor_bstrs(uint32_t mask)
+{
+	uint8_t payload[sizeof(nested_cbor_bstrs)] = {0};
+	struct nested_sections s = {.payload = payload, .mask = mask, .start = 0};
+	size_t offset;
+
+	s.end = nested_next_split(mask, 0);
+
+	ZCBOR_STATE_E(state_e, 3, payload, s.end, 0);
+
+	zassert_ok_mask(zcbor_cbor_bstr_fragments_start_encode(state_e, NESTED_OUTER_LEN),
+		state_e, mask);
+	check_offset_and_remainder(state_e, 0, NESTED_OUTER_LEN, mask);
+	zassert_equal_ptr(&payload[MIN(NESTED_OUTER_END, s.end)], state_e->payload_end,
+		"mask 0x%x\n", mask);
+	nested_next_section(state_e, &s);
+	zassert_ok_mask(zcbor_uint32_put(state_e, 1), state_e, mask);
+	nested_next_section(state_e, &s);
+	zassert_ok_mask(zcbor_cbor_bstr_fragments_start_encode(state_e, 1), state_e, mask);
+	check_offset_and_remainder(state_e, 0, 1, mask);
+	zassert_equal_ptr(&payload[MIN(NESTED_INNER_END, s.end)], state_e->payload_end,
+		"mask 0x%x\n", mask);
+	nested_next_section(state_e, &s);
+	zassert_ok_mask(zcbor_uint32_put(state_e, 2), state_e, mask);
+	zassert_ok_mask(zcbor_str_fragments_end_encode(state_e), state_e, mask);
+
+	/* Back in the outer string. */
+	check_offset_and_remainder(state_e, 3, 2, mask);
+	zassert_equal_ptr(&payload[MIN(NESTED_OUTER_END, s.end)], state_e->payload_end,
+		"mask 0x%x\n", mask);
+	nested_next_section(state_e, &s);
+	zassert_ok_mask(zcbor_uint32_put(state_e, 3), state_e, mask);
+	nested_next_section(state_e, &s);
+	zassert_ok_mask(zcbor_uint32_put(state_e, 5), state_e, mask);
+	zassert_ok_mask(zcbor_str_fragments_end_encode(state_e), state_e, mask);
+
+	/* Back at the top level. */
+	zassert_equal_ptr(&payload[s.end], state_e->payload_end, "mask 0x%x\n", mask);
+	zassert_false(zcbor_current_string_offset(state_e, &offset), "mask 0x%x\n", mask);
+	zassert_equal(ZCBOR_ERR_NOT_IN_FRAGMENT, zcbor_pop_error(state_e), "mask 0x%x\n", mask);
+	nested_next_section(state_e, &s);
+	zassert_ok_mask(zcbor_uint32_put(state_e, 4), state_e, mask);
+	zassert_equal_ptr(&payload[sizeof(payload)], state_e->payload, "mask 0x%x\n", mask);
+	zassert_mem_equal(nested_cbor_bstrs, payload, sizeof(payload), "mask 0x%x\n", mask);
+}
+
+
+/* Encode counterpart of test_nested_cbor_bstr_fragments_decode. */
+ZTEST(zcbor_unit_tests, test_nested_cbor_bstr_fragments_encode)
+{
+	for (uint32_t mask = 0; mask < (1U << sizeof(nested_cbor_bstrs)); mask += 2) {
+		encode_nested_cbor_bstrs(mask);
+	}
 }
 
 
