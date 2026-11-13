@@ -9,3 +9,16 @@ tests:
       - zcbor
       - decode
       - test8
+  zcbor.decode.test8_suit12.unordered_maps:
+    platform_allow:
+      - native_sim
+      - native_sim/native/64
+      - mps2/an521/cpu0
+      - qemu_malta/qemu_malta/be
+    tags:
+      - zcbor
+      - decode
+      - test8
+      - unordered_map
+    extra_args:
+      - UNORDERED_MAPS=ON
