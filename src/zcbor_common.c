@@ -556,6 +556,53 @@ size_t zcbor_remaining_str_len(zcbor_state_t *state)
 }
 
 
+/* Prepare @p states for an entry function, after zcbor_new_state(). */
+static int entry_function_setup(zcbor_state_t *states)
+{
+	if (!states[0].constant_state) {
+		zcbor_log("Missing memory for constant state. n_states too low.\r\n");
+		return ZCBOR_ERR_CONSTANT_STATE_MISSING;
+	}
+
+	states[0].constant_state->manually_process_elem = true;
+
+	return ZCBOR_SUCCESS;
+}
+
+
+/* Turn the return value @p ret of an entry function's top-level function into an
+ * error code, and populate @p payload_len_out. */
+static int entry_function_result(zcbor_state_t *states, bool ret,
+	const uint8_t *payload, size_t payload_len, size_t *payload_len_out)
+{
+	bool backups_left = (states[0].constant_state->current_backup != 0);
+
+	if (backups_left) {
+		zcbor_log("Not all backups consumed.\r\n");
+	}
+
+	if (!ret) {
+		/* Report the error from the function even if backups are left over, since the
+		 * error is what explains why the processing stopped early. */
+		int err = zcbor_pop_error(&states[0]);
+
+		err = (err == ZCBOR_SUCCESS)
+			? (backups_left ? ZCBOR_ERR_BACKUP_MISMATCH : ZCBOR_ERR_UNKNOWN)
+			: err;
+		return err;
+	}
+
+	if (backups_left) {
+		return ZCBOR_ERR_BACKUP_MISMATCH;
+	}
+
+	if (payload_len_out != NULL) {
+		*payload_len_out = MIN(payload_len, (size_t)states[0].payload - (size_t)payload);
+	}
+	return ZCBOR_SUCCESS;
+}
+
+
 int zcbor_entry_function_with_elem_states(const uint8_t *payload, size_t payload_len,
 	void *result, size_t *payload_len_out, zcbor_state_t *states, zcbor_decoder_t func,
 	size_t n_states, size_t elem_count, size_t n_elem_states)
@@ -585,41 +632,34 @@ int zcbor_entry_function_with_elem_states(const uint8_t *payload, size_t payload
 
 	zcbor_new_state(states, n_states - n_elem_state_states, payload, payload_len, elem_count, flags,
 			n_elem_state_bytes);
+	int err = entry_function_setup(states);
 
-	if (!states[0].constant_state) {
-		zcbor_log("Missing memory for constant state. n_states too low.\r\n");
-		return ZCBOR_ERR_CONSTANT_STATE_MISSING;
-	}
-
-	states[0].constant_state->manually_process_elem = true;
-
-	bool ret = func(&states[0], result);
-	bool backups_left = (states[0].constant_state->current_backup != 0);
-
-	if (backups_left) {
-		zcbor_log("Not all backups consumed.\r\n");
-	}
-
-	if (!ret) {
-		/* Report the error from @p func even if backups are left over, since the
-		 * error is what explains why the decoding stopped early. */
-		int err = zcbor_pop_error(&states[0]);
-
-		err = (err == ZCBOR_SUCCESS)
-			? (backups_left ? ZCBOR_ERR_BACKUP_MISMATCH : ZCBOR_ERR_UNKNOWN)
-			: err;
+	if (err != ZCBOR_SUCCESS) {
 		return err;
 	}
 
-	if (backups_left) {
-		return ZCBOR_ERR_BACKUP_MISMATCH;
+	return entry_function_result(states, func(&states[0], result), payload, payload_len,
+			payload_len_out);
+}
+
+
+int zcbor_entry_function_encode(uint8_t *payload, size_t payload_len,
+	const void *input, size_t *payload_len_out, zcbor_state_t *states, zcbor_encoder_t func,
+	size_t n_states, size_t elem_count)
+{
+	if (states == NULL) {
+		return ZCBOR_ERR_BAD_ARG;
 	}
 
-	if (payload_len_out != NULL) {
-		*payload_len_out = MIN(payload_len,
-				(size_t)states[0].payload - (size_t)payload);
+	zcbor_new_state(states, n_states, payload, payload_len, elem_count, NULL, 0);
+	int err = entry_function_setup(states);
+
+	if (err != ZCBOR_SUCCESS) {
+		return err;
 	}
-	return ZCBOR_SUCCESS;
+
+	return entry_function_result(states, func(&states[0], input), payload, payload_len,
+			payload_len_out);
 }
 
 

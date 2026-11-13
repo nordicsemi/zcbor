@@ -68,7 +68,7 @@ static bool value_encode_len(zcbor_state_t *state, zcbor_major_type_t major_type
 	ZCBOR_CHECK_NULL(state);
 	ZCBOR_ERR_IF(input == NULL, ZCBOR_ERR_BAD_ARG);
 
-	uint8_t *u8_input  = (uint8_t *)input;
+	const uint8_t *u8_input = input;
 
 	if ((state->payload + 1 + input_len) > state->payload_end) {
 		ZCBOR_ERR(ZCBOR_ERR_NO_PAYLOAD);
@@ -113,7 +113,7 @@ static bool value_encode(zcbor_state_t *state, zcbor_major_type_t major_type,
 	const void *result = input;
 
 #ifdef ZCBOR_BIG_ENDIAN
-	result = (uint8_t *)input + input_len - (result_len ? result_len : 1);
+	result = (const uint8_t *)input + input_len - (result_len ? result_len : 1);
 #endif
 
 	return value_encode_len(state, major_type, result, result_len);

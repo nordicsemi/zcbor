@@ -678,6 +678,7 @@ ZTEST(zcbor_unit_tests, test_null_state)
 	zassert_false(zcbor_union_end_code(NULL), NULL);
 	zcbor_new_state(NULL, 2, dummy_payload, sizeof(dummy_payload), 0, NULL, 0);
 	zassert_equal(zcbor_entry_function_with_elem_states(dummy_payload, sizeof(dummy_payload), NULL, NULL, NULL, ZCBOR_CAST_FP(zcbor_int32_pexpect), 2, 0, 0), ZCBOR_ERR_BAD_ARG, NULL);
+	zassert_equal(zcbor_entry_function_encode(dummy_payload, sizeof(dummy_payload), NULL, NULL, NULL, ZCBOR_CAST_FP(zcbor_int32_encode), 2, 0), ZCBOR_ERR_BAD_ARG, NULL);
 	zcbor_update_state(NULL, dummy_payload, sizeof(dummy_payload));
 }
 
@@ -3896,6 +3897,38 @@ ZTEST(zcbor_unit_tests, test_entry_function)
 	zassert_equal(err, ZCBOR_SUCCESS, "err: %d\n", err);
 	zassert_equal(payload_len_out, 2, NULL);
 	zassert_equal(dummy_entry_func_result, 42, NULL);
+}
+
+
+ZTEST(zcbor_unit_tests, test_entry_function_encode)
+{
+	const uint32_t input = 42;
+	uint8_t payload[2];
+	size_t payload_len_out;
+	zcbor_state_t states[2];
+
+	int err = zcbor_entry_function_encode(payload, sizeof(payload), &input, &payload_len_out,
+			states, ZCBOR_CAST_FP(zcbor_uint32_encode), ZCBOR_ARRAY_SIZE(states), 0);
+	zassert_equal(err, ZCBOR_SUCCESS, "err: %s\n", zcbor_error_str(err));
+	zassert_equal(payload_len_out, 2, NULL);
+	zassert_mem_equal(payload, ((uint8_t []){0x18, 42}), 2, NULL);
+
+	/* Too small payload. */
+	err = zcbor_entry_function_encode(payload, 1, &input, &payload_len_out,
+			states, ZCBOR_CAST_FP(zcbor_uint32_encode), ZCBOR_ARRAY_SIZE(states), 0);
+	zassert_equal(err, ZCBOR_ERR_NO_PAYLOAD, "err: %s\n", zcbor_error_str(err));
+
+	/* Too few states for the constant state. */
+	err = zcbor_entry_function_encode(payload, sizeof(payload), &input, &payload_len_out,
+			states, ZCBOR_CAST_FP(zcbor_uint32_encode), 1, 0);
+	zassert_equal(err, ZCBOR_ERR_CONSTANT_STATE_MISSING, "err: %s\n", zcbor_error_str(err));
+
+	/* NULL states. payload_len_out is not written. */
+	payload_len_out = 0xAB;
+	err = zcbor_entry_function_encode(payload, sizeof(payload), &input, &payload_len_out,
+			NULL, ZCBOR_CAST_FP(zcbor_uint32_encode), ZCBOR_ARRAY_SIZE(states), 0);
+	zassert_equal(err, ZCBOR_ERR_BAD_ARG, "err: %s\n", zcbor_error_str(err));
+	zassert_equal(payload_len_out, 0xAB, NULL);
 }
 
 

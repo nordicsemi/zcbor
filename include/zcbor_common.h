@@ -455,6 +455,15 @@ int zcbor_entry_function_with_elem_states(const uint8_t *payload, size_t payload
  */
 #define zcbor_entry_function(...) zcbor_entry_function_with_elem_states(__VA_ARGS__, 0)
 
+/** Do boilerplate entry function procedure for encoding.
+ *
+ *  Equivalent to @ref zcbor_entry_function, but takes a const @p input and a
+ *  @ref zcbor_encoder_t, so that const input can be passed without a cast.
+ */
+int zcbor_entry_function_encode(uint8_t *payload, size_t payload_len,
+	const void *input, size_t *payload_len_out, zcbor_state_t *states, zcbor_encoder_t func,
+	size_t n_states, size_t elem_count);
+
 #ifdef ZCBOR_STOP_ON_ERROR
 /** Check stored error and fail if present, but only if stop_on_error is true.
  *
