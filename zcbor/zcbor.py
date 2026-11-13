@@ -4054,11 +4054,12 @@ and
                 if func_name not in func_names.keys():
                     func_names[func_name] = funcType
                     out_types.append(funcType)
-                elif func_name in func_names.keys():
-                    assert func_names[func_name][0] == func_xcode, (
-                        "Two elements share the function name %s, but their implementations are "
-                        + "not identical. Please change one or both names.\n\n%s\n\n%s"
-                    ) % (func_name, func_names[func_name][0], func_xcode)
+                elif func_names[func_name][0] != func_xcode:
+                    raise CddlParsingError(
+                        f"Two different elements get the same C function name {func_name}. "
+                        "Add labels (e.g. [a: {...}, b: {...}]) or rename a type to make the "
+                        "names distinct."
+                    )
 
         return out_types
 
@@ -4900,17 +4901,21 @@ def process_code(args):
         or Path(cmake_dir, "include", filenames + "_types.h")
     )
 
-    renderer = CodeRenderer(
-        entry_types={
-            mode: [cddl_res[mode].my_types[entry] for entry in args.entry_types] for mode in modes
-        },
-        modes=modes,
-        print_time=args.time_header,
-        default_max_qty=args.default_max_qty,
-        git_sha=git_sha,
-        file_header=args.file_header,
-        default_max_qty_define=default_max_qty_define,
-    )
+    try:
+        renderer = CodeRenderer(
+            entry_types={
+                mode: [cddl_res[mode].my_types[entry] for entry in args.entry_types] for mode in modes
+            },
+            modes=modes,
+            print_time=args.time_header,
+            default_max_qty=args.default_max_qty,
+            git_sha=git_sha,
+            file_header=args.file_header,
+            default_max_qty_define=default_max_qty_define,
+        )
+    except CddlParsingError as e:
+        print(format_parsing_error(e))
+        sys.exit(1)
 
     c_code_dir = C_SRC_PATH
     h_code_dir = C_INCLUDE_PATH
