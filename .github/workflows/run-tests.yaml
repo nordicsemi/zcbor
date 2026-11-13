@@ -58,7 +58,7 @@ jobs:
     if: "needs.check-for-changes.outputs.skip != 'true'"
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
 
     - name: Install zcbor
       uses: ./.github/actions/install_zcbor
@@ -88,10 +88,10 @@ jobs:
     if: "needs.check-for-changes.outputs.skip != 'true'"
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
 
     - name: Setup Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
         allow-prereleases: true
@@ -117,10 +117,10 @@ jobs:
     if: "needs.check-for-changes.outputs.skip != 'true'"
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
 
     - name: Setup Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: '3.x'
 
@@ -154,10 +154,10 @@ jobs:
     if: "needs.check-for-changes.outputs.skip != 'true'"
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
 
     - name: Setup Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: '3.x'
         check-latest: true
@@ -178,7 +178,7 @@ jobs:
     if: "(github.event_name == 'pull_request' && startswith(github.head_ref, 'release/'))"
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
 
     - name: Install zcbor
       uses: ./.github/actions/install_zcbor
@@ -205,7 +205,7 @@ jobs:
       FUZZ_SHORT_SECONDS: ${{ github.event.inputs.fuzz-tests == 'short' && '30' || '' }}
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
 
     - name: Read zcbor version
       run: echo "ZCBOR_VERSION=$(cat zcbor/VERSION)" >> $GITHUB_ENV
@@ -263,7 +263,7 @@ jobs:
 
     - name: Upload fuzz failures
       if: ${{ failure() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: fuzz-failures
         path: |
@@ -271,7 +271,7 @@ jobs:
           tests/fuzz/build-afl/output/*/hangs/
 
     - name: Upload release files
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: zcbor-release-${{ env.ZCBOR_VERSION }}
         path: dist/*
@@ -290,7 +290,7 @@ jobs:
       FUZZ_SECONDS: ${{ github.event.inputs.fuzz-tests == 'short' && '30' || '60' }}
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
 
     - name: Install zcbor
       uses: ./.github/actions/install_zcbor
@@ -313,7 +313,7 @@ jobs:
 
     - name: Upload fuzz failures
       if: ${{ failure() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: libfuzzer-failures
         path: |
@@ -338,10 +338,10 @@ jobs:
     if: "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && startswith(github.head_ref, 'release/'))"
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
 
     - name: Setup Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
         allow-prereleases: true
@@ -373,10 +373,10 @@ jobs:
     if: "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && startswith(github.head_ref, 'release/'))"
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
 
     - name: Setup Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
         allow-prereleases: true
@@ -407,10 +407,10 @@ jobs:
     if: "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && startswith(github.head_ref, 'release/'))"
     steps:
     - name: Checkout the code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
 
     - name: Setup Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: "3.14"  # Because of issues with some packages in 3.15.
 
