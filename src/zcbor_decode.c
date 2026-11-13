@@ -845,10 +845,11 @@ bool zcbor_str_fragments_end_decode(zcbor_state_t *state)
 	if (state->inside_frag_str) {
 		state->inside_frag_str = false;
 	} else {
+		/* This restores the state from the backup, including inside_cbor_bstr and the
+		 * fragment offset and length of the enclosing CBOR-encoded bstr, if any. */
 		if (!zcbor_bstr_end_decode(state)) {
 			ZCBOR_FAIL();
 		}
-		state->inside_cbor_bstr = false;
 	}
 
 	return true;
