@@ -19,6 +19,10 @@ import os
 from time import sleep
 from http import HTTPStatus
 from typing import List, Tuple, Optional
+from inspect import getsource
+from textwrap import dedent
+from contextlib import redirect_stdout
+from io import StringIO
 
 p_script = Path(__file__).absolute()
 p_script_dir = p_script.parent
@@ -476,6 +480,41 @@ class TestDocs(TestCase, LinkTester):
         add_help = Popen(["python3", p_add_helptext, "--check"])
         add_help.communicate()
         self.assertEqual(0, add_help.returncode)
+
+
+def readme_python_example():
+    import zcbor
+
+    cddl = """
+    Pet = {
+        "name" => text,
+        "toys" => [* toy: tstr],
+    }
+    """
+
+    # The standard CDDL prelude (zcbor/prelude.cddl), which defines e.g. text, number, and tdate,
+    # is included by default, like in the CLI. prelude=False leaves it out.
+    # default_max_qty is the maximum number of repetitions for e.g. "*" and "+".
+    types = zcbor.DataTranslator.from_cddl(cddl_string=cddl, default_max_qty=10)
+    pet = types.my_types["Pet"]
+
+    cbor = pet.from_json('{"name": "Rex", "toys": ["ball", "bone"]}')  # Validate and convert to CBOR
+    pet.validate_str(cbor)  # Raises zcbor.CddlValidationError if the data is invalid
+    decoded = pet.decode_str(cbor)  # Access the data via the names in the CDDL
+    print(decoded.name, decoded.toys.toy)  # Rex ['ball', 'bone']
+    print(pet.str_to_yaml(cbor))  # Convert to YAML
+
+
+class TestReadmePython(TestCase):
+    def test_python_example(self):
+        """Check that README.md contains the body of readme_python_example(), and run it."""
+        body = dedent(getsource(readme_python_example).split("\n", 1)[1])
+        readme = p_readme.read_text(encoding="utf-8")
+        self.assertIn(f"\n```python\n{body}```\n", readme, "README differs from readme_python_example()")
+        with redirect_stdout(StringIO()) as out:
+            readme_python_example()
+        exp_out = "Rex ['ball', 'bone']\nname: Rex\ntoys:\n- ball\n- bone\n\n"
+        self.assertEqual(exp_out, out.getvalue())
 
 
 if __name__ == "__main__":
