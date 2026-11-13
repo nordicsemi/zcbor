@@ -2189,6 +2189,73 @@ class TestControlGroups(TestCase):
             cddl.decode_str_yaml("1")
 
 
+class TestIntValidation(PopenTest, TempdTest):
+    def translator(self, cddl, type_name="T"):
+        return zcbor.DataTranslator.from_cddl(cddl_string=cddl, default_max_qty=16).my_types[type_name]
+
+    def assert_valid(self, cddl, *objs):
+        for obj in objs:
+            with self.subTest(cddl=cddl, obj=obj):
+                self.assertTrue(self.translator(cddl).validate_obj(obj))
+
+    def assert_invalid(self, cddl, *objs):
+        for obj in objs:
+            with self.subTest(cddl=cddl, obj=obj):
+                with self.assertRaises(zcbor.CddlValidationError):
+                    self.translator(cddl).validate_obj(obj)
+
+    def test_uint_rejects_negative(self):
+        self.assert_valid("T = [uint]", [0], [3])
+        self.assert_invalid("T = [uint]", [-1], [-3])
+        self.assert_invalid("T = [uint .size 1]", [-3])
+        self.assert_invalid("T = [uint .le 5]", [-3])
+        self.assert_invalid("T = {uint => tstr}", {-1: "a"})
+
+    def test_ints_reject_bool(self):
+        for cddl in ("T = [uint]", "T = [int]", "T = [nint]", "T = [-5..5]", "T = [0]", "T = [1]"):
+            self.assert_invalid(cddl, [True], [False])
+        self.assert_invalid("T = {uint => tstr}", {True: "a"})
+        self.assert_valid("T = [int]", [-3], [0], [3])
+        self.assert_valid("T = [0]", [0])
+        self.assert_valid("T = [1]", [1])
+
+    def test_bool_accepts_bool(self):
+        self.assert_valid("T = [bool]", [True], [False])
+        self.assert_valid("T = [true]", [True])
+        self.assert_valid("T = [any]", [True], [1], [-1])
+        self.assert_invalid("T = [bool]", [0], [1])
+
+    def test_int_wrong_type_errors(self):
+        for cddl, obj, exp_msg in (
+            ("T = uint", -3, "Wrong type (nint) of -3, expected uint"),
+            ("T = nint", 3, "Wrong type (uint) of 3, expected nint"),
+            ("T = uint", True, "Wrong type (bool) of True, expected uint"),
+            ("T = int", False, "Wrong type (bool) of False, expected int"),
+            ("T = nint", True, "Wrong type (bool) of True, expected nint"),
+        ):
+            with self.subTest(cddl=cddl, obj=obj):
+                with self.assertRaises(zcbor.CddlValidationError) as e:
+                    self.translator(cddl).validate_obj(obj)
+                self.assertIn(exp_msg, str(e.exception))
+
+    def test_uint_followed_by_nint(self):
+        cddl = "T = [+uint, +nint]"
+        self.assert_valid(cddl, [1, 2, -1], [0, -5, -6])
+        self.assert_invalid(cddl, [1, 2], [-1])
+        decoded = self.translator(cddl).decode_str(cbor2.dumps([1, 2, -1]))
+        self.assertEqual([1, 2], decoded.uint)
+        self.assertEqual([-1], decoded.nint)
+
+    def test_uint_rejects_negative_cli(self):
+        cddl_path = Path(self.tempd, "uint.cddl")
+        cddl_path.write_text("T = [uint]", encoding="utf-8")
+        args = ["zcbor", "validate", "-c", str(cddl_path), "-t", "T", "-i", "-", "--input-as"]
+        self.popen_test(args + ["yaml"], b"[3]")
+        self.popen_test(args + ["yaml"], b"[-3]", exp_retcode=1)
+        self.popen_test(args + ["yaml"], b"[true]", exp_retcode=1)
+        self.popen_test(args + ["cborhex"], b"8122", exp_retcode=1)  # [-3]
+
+
 def cp_from_cddl(cddl):
     return zcbor.CddlParser.from_cddl(cddl_string=cddl)
 
