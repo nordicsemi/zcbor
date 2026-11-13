@@ -1855,13 +1855,14 @@ class TestCanonical(PopenTest):
 
 
 class TestExceptions(TestCase):
-    def do_test_exception(self, cddl_string):
+    def do_test_exception(self, cddl_string, **kwargs):
         with self.assertRaises(zcbor.CddlParsingError) as cm:
             zcbor.CodeGenerator.from_cddl(
                 cddl_string=cddl_string,
                 mode="decode",
                 entry_type_names=["test"],
                 default_bit_size=32,
+                **kwargs,
             )
         return cm.exception
 
@@ -1964,9 +1965,86 @@ Cannot have .size before type
         exc = self.do_test_exception("foo = 1 => (2 => tstr)")
         self.assertEqual("Element already has key.", str(exc))
 
-    def test_unparsed(self):
+    def test_unknown_type(self):
         exc = self.do_test_exception("foo = bar")
-        self.assertEqual("bar has not been parsed.", str(exc))
+        self.assertEqual("Unknown type: bar", str(exc))
+        for cddl_string in (
+            "foo = [bar]",
+            "foo = [baz: bar]",
+            "foo = {baz: bar}",
+            "foo = {bar => uint}",
+            "foo = [baz: [qux: {quux: bar}]]",
+            "foo = bar / uint",
+            "foo = #6.0(bar)",
+            "foo = bstr .cbor bar",
+            "foo = bstr .size bar",
+            "foo = uint .gt bar",
+            "foo = [?baz: uint .default bar]",
+            "foo = 1..bar",
+            "foo = bar...1",
+            "foo = bstr .size (1..bar)",
+            "foo = 1..Max\nMax = bar",
+        ):
+            with self.subTest(cddl_string=cddl_string):
+                exc = self.do_test_exception(cddl_string)
+                self.assertEqual("Unknown type: bar", str(exc))
+
+    def test_unknown_prelude_type(self):
+        exc = self.do_test_exception("foo = {creation: tdate}", prelude=False)
+        self.assertEqual(
+            "Unknown type: tdate (tdate is defined in the CDDL prelude, which was left out with "
+            "--no-prelude or prelude=False)",
+            str(exc),
+        )
+        exc = self.do_test_exception("foo = {creation: tdate}\nbar = baz")
+        self.assertEqual("Unknown type: baz", str(exc))
+        for cddl_string in ("foo = 1..tdate", "foo = 1..Max\nMax = tdate"):
+            with self.subTest(cddl_string=cddl_string):
+                exc = self.do_test_exception(cddl_string, prelude=False)
+                self.assertIn("Unknown type: tdate (tdate is defined in the CDDL prelude", str(exc))
+
+    def test_control_group_as_type(self):
+        for cddl_string in (
+            "colors = &(red: 1, blue: 2)\nfoo = [c: colors]",
+            "colors = &(red: 1)\nfoo = {c: colors}",
+            "colors = &(red: 1)\nfoo = 1..colors",
+            "foo = 1..colors\ncolors = &(red: 1)",
+            "foo = 1..Max\nMax = colors\ncolors = &(red: 1)",
+        ):
+            with self.subTest(cddl_string=cddl_string):
+                exc = self.do_test_exception(cddl_string)
+                self.assertEqual(
+                    "colors is a choice from group (&(...)), which zcbor only supports with .bits, "
+                    "not as a type.",
+                    str(exc),
+                )
+
+    def test_unknown_bits(self):
+        exc = self.do_test_exception("foo = uint .bits bar")
+        self.assertEqual("Unknown control group: bar", str(exc))
+        exc = self.do_test_exception("bar = uint\nfoo = uint .bits bar")
+        self.assertEqual(".bits must reference a control group (&(...)), but bar is a type.", str(exc))
+
+    def test_unknown_type_in_control_group(self):
+        for cddl_string, name in (
+            ("test = uint\nflags = &(missing)", "missing"),
+            ("flags = &(missing)\ntest = uint .bits flags", "missing"),
+            ("test = uint\nflags = &(a: 1, b: x)", "x"),
+        ):
+            with self.subTest(cddl_string=cddl_string):
+                exc = self.do_test_exception(cddl_string)
+                self.assertEqual(f"Unknown type: {name}", str(exc))
+                self.assertIn(
+                    "while checking references in control group flags",
+                    zcbor.format_parsing_error(exc),
+                )
+
+    def test_unknown_entry_type(self):
+        with self.assertRaises(zcbor.CddlParsingError) as cm:
+            zcbor.CodeGenerator.from_cddl(
+                cddl_string="foo = uint", mode="decode", entry_type_names=["foo", "Nope"]
+            )
+        self.assertEqual("Unknown entry type: Nope", str(cm.exception))
 
     def test_ambiguous_any(self):
         exc = self.do_test_exception("foo = [*any, 1]")
@@ -2008,6 +2086,65 @@ Cannot have .size before type
         exc = self.do_test_exception("""three_to_four = (3..4)
                foo = ?int .default three_to_four""")
         self.assertEqual(".default cannot have: range.", str(exc))
+
+
+class TestUnknownTypeCLI(PopenTest, TempdTest):
+    def do_test_cli_error(self, cddl_string, cmd_args, exp_error):
+        cddl_path = self.tempd / "test.cddl"
+        cddl_path.write_text(cddl_string, encoding="utf-8")
+        input_path = self.tempd / "input.yaml"
+        input_path.write_text("0", encoding="utf-8")
+        cmds = {
+            "code": [
+                "zcbor",
+                "code",
+                "-c",
+                cddl_path,
+                "-d",
+                "-e",
+                "--output-cmake",
+                self.tempd / "test.cmake",
+            ],
+            "validate": ["zcbor", "validate", "-c", cddl_path, "-i", input_path],
+        }
+        for cmd, args in cmds.items():
+            with self.subTest(cmd=cmd):
+                stdout, _ = self.popen_test(args + cmd_args, exp_retcode=1)
+                self.assertIn(exp_error, stdout.decode("utf-8").replace("\r\n", "\n"))
+
+    def test_unknown_type(self):
+        self.do_test_cli_error("foo = [bar]", ["-t", "foo"], "Unknown type: bar")
+
+    def test_unknown_prelude_type(self):
+        self.do_test_cli_error(
+            "foo = {creation: tdate}",
+            ["-t", "foo", "--no-prelude"],
+            "Unknown type: tdate (tdate is defined in the CDDL prelude, which was left out with "
+            "--no-prelude or prelude=False)",
+        )
+
+    def test_control_group_as_type(self):
+        self.do_test_cli_error(
+            "colors = &(red: 1, blue: 2)\nfoo = [c: colors]",
+            ["-t", "foo"],
+            "colors is a choice from group (&(...))",
+        )
+
+    def test_unknown_range_bound(self):
+        for cddl_string in ("foo = 1..bar", "foo = bstr .size (1..bar)"):
+            with self.subTest(cddl_string=cddl_string):
+                self.do_test_cli_error(cddl_string, ["-t", "foo"], "Unknown type: bar")
+
+    def test_unknown_entry_type(self):
+        self.do_test_cli_error("foo = uint", ["-t", "bar"], "Unknown entry type: bar")
+
+    def test_unknown_prelude_entry_type(self):
+        self.do_test_cli_error(
+            "foo = uint",
+            ["-t", "tdate", "--no-prelude"],
+            "Unknown entry type: tdate (tdate is defined in the CDDL prelude, which was left out "
+            "with --no-prelude or prelude=False)",
+        )
 
 
 class TestCodeGeneration(TestCase):

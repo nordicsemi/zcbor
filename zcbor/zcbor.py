@@ -634,6 +634,12 @@ class CddlParser:
 
         counter(True)
 
+        # Check that all type references point to defined types.
+        for my_type in my_types:
+            my_types[my_type].check_references(my_type)
+        for my_control_group in my_control_groups:
+            my_control_groups[my_control_group].check_references(my_control_group, "control group")
+
         # post_validate all the definitions.
         for my_type in my_types:
             my_types[my_type].post_process()
@@ -789,8 +795,12 @@ class CddlParser:
         """Set an explicit base name for this element."""
         self.base_name = base_name.replace("-", "_")
 
-    def recurse(self, func, with_default=False):
-        """Recursively apply a function to this element and its children, key, cbor and default."""
+    def recurse(self, func, with_default=False, with_modifiers=False):
+        """Recursively apply a function to this element and its children, key, cbor and default.
+
+        with_modifiers also applies it to the elements given to control operators, except .bits,
+        whose value names a control group, and .cbor/.cborseq, which are visited as self.cbor.
+        """
 
         def func_wrapper(elem):
             """Wrapper to add error context to any CddlParsingError raised by func."""
@@ -809,6 +819,10 @@ class CddlParser:
             func_wrapper(self.key)
         if with_default and self.default:
             func_wrapper(self.default)
+        if with_modifiers:
+            for mod, val in self.modifiers.items():
+                if mod not in (".bits", ".cbor", ".cborseq") and isinstance(val, CddlParser):
+                    func_wrapper(val)
 
     def init_kwargs(self):
         """Return the kwargs that should be used to initialize a new instance of this class.
@@ -932,6 +946,8 @@ class CddlParser:
         while value.type == "OTHER" or (value.type == "GROUP" and len(value.value) == 1):
             value.enforce_no_modifier(name, exceptions={"value"})
             if value.type == "OTHER":
+                if value.value not in self.my_types:
+                    raise self.unknown_type_error(value.value, self.my_control_groups)
                 self.parse_type(value.value)
                 value = self.my_types[value.value]
             else:
@@ -1553,6 +1569,50 @@ class CddlParser:
             return False, f"Missing map key"
         return True, ""
 
+    @classmethod
+    def unknown_type_error(cls, name, my_control_groups, kind="type"):
+        """Return an error for a reference to a type name that is not in my_types."""
+        if name in my_control_groups:
+            return CddlParsingError(
+                f"{name} is a choice from group (&(...)), which zcbor only supports with .bits, "
+                "not as a type."
+            )
+        msg = f"Unknown {kind}: {name}"
+        if name in cls.get_types(PRELUDE_PATH.read_text(encoding="utf-8")):
+            msg += (
+                f" ({name} is defined in the CDDL prelude, which was left out with --no-prelude "
+                "or prelude=False)"
+            )
+        return CddlParsingError(msg)
+
+    def check_references(self, name, kind="type"):
+        """Check that all type names referenced by this type or control group are defined.
+
+        This is called on a whole type or control group (kind), named name.
+        _check_references() is the recursive part.
+        """
+        try:
+            self._check_references()
+        except CddlParsingError as e:
+            e.zcbor_add_note(f"  while checking references in {kind} {name}")
+            raise
+
+    def _check_references(self):
+        """Check that all type names referenced by this element are defined.
+
+        This is recursive, so it checks all its children + key + cbor + control operator values.
+        """
+        if self.type == "OTHER" and self.value not in self.my_types:
+            raise self.unknown_type_error(self.value, self.my_control_groups)
+        if self.bits is not None and self.bits.value not in self.my_control_groups:
+            bits_name = self.bits.value
+            if bits_name in self.my_types:
+                raise CddlParsingError(
+                    f".bits must reference a control group (&(...)), but {bits_name} is a type."
+                )
+            raise CddlParsingError(f"Unknown control group: {bits_name}")
+        self.recurse(self.__class__._check_references, with_modifiers=True)
+
     def post_validate(self):
         """Function for performing validations that must be done after all parsing is complete.
 
@@ -1576,11 +1636,6 @@ class CddlParser:
                     + " pointing to "
                     + str([self.my_types[elem.value] for elem in child_keys if elem.type == "OTHER"])
                 )
-        if self.type == "OTHER":
-            if self.value not in self.my_types.keys() or not isinstance(
-                self.my_types[self.value], type(self)
-            ):
-                raise CddlParsingError("%s has not been parsed." % self.value)
         if self.type == "LIST":
             for child in self.value[:-1]:
                 if child.type == "ANY":
@@ -2497,6 +2552,9 @@ class CodeGenerator(CddlXcoder):
     @classmethod
     def from_cddl(cddl_class, *, mode, **kwargs):
         cddl_res = super(CodeGenerator, cddl_class).from_cddl(mode=mode, **kwargs)
+        for entry in kwargs["entry_type_names"]:
+            if entry not in cddl_res.my_types:
+                raise cddl_class.unknown_type_error(entry, cddl_res.my_control_groups, "entry type")
         return cddl_res
 
     def post_process(self):
@@ -5135,6 +5193,10 @@ def parse_cddl(args):
             prelude=not args.no_prelude,
             default_max_qty=args.default_max_qty,
         )
+        if args.entry_type not in cddl_res.my_types:
+            raise DataTranslator.unknown_type_error(
+                args.entry_type, cddl_res.my_control_groups, "entry type"
+            )
     except CddlParsingError as e:
         print(format_parsing_error(e))
         sys.exit(1)
