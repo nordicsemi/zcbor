@@ -1493,6 +1493,16 @@ class DataTranslator(CddlXcoder):
             self._decode_assert(
                 isinstance(obj, exp_type),
                 f"{str(self)}: Wrong type ({type(obj)}) of {str(obj)}, expected {str(exp_type)}")
+            if self.type in ["INT", "UINT", "NINT"]:
+                # cbor2 gives a Python int for both uint and nint, and bool is a subclass of int, so
+                # check the CBOR type here: bool for bools, uint for values >= 0, and nint for
+                # values < 0.
+                cbor_type = "bool" if isinstance(obj, bool) else "uint" if obj >= 0 else "nint"
+                allowed = {"INT": ("uint", "nint"), "UINT": ("uint",), "NINT": ("nint",)}[self.type]
+                self._decode_assert(
+                    cbor_type in allowed,
+                    f"{str(self)}: Wrong type ({cbor_type}) of {str(obj)}, "
+                    f"expected {self.type.lower()}")
 
     def _check_value(self, obj):
         """Check that the decode value conforms to the restrictions in the CDDL."""
