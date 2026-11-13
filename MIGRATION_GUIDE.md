@@ -6,6 +6,10 @@
   Arguments have not changed otherwise.
   This was done to avoid ambiguity to do with positional arguments, and generally simplify passing arguments around inside zcbor.
 
+* `from_cddl()` now includes the CDDL prelude by default, like the CLI.
+  If you append zcbor/prelude.cddl to your CDDL yourself, remove that or pass `prelude=False`.
+  If your CDDL defines types with the same names as types in the prelude, pass `prelude=False` (otherwise you get an error that says so).
+
 * CDDL parsing has been refactored, and the precedence rules of the CDDL spec are now more closely followed.
   This means that zcbor might e.g. apply labels to a different level of abstraction than it did previously.
   If you have problems, try adding parentheses to clarify the intention of the CDDL.
