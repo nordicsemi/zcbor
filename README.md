@@ -437,17 +437,19 @@ Unsupported CDDL features
 Not all features outlined in the CDDL specs [RFC8610](https://datatracker.ietf.org/doc/html/rfc8610), [RFC9090](https://datatracker.ietf.org/doc/html/rfc9090), and [RFC9165](https://datatracker.ietf.org/doc/html/rfc9165) are supported by zcbor.
 The following is a list of limitations and missing features:
 
- * Generated code does not support unordered maps.
+ * Unordered maps in `zcbor validate` and `zcbor convert`: Map elements must be in the order given in the CDDL.
  * Generated code does not store `any` (or e.g. `cbor-any`): decoding skips it, encoding writes `nil`, and the struct has no member for it. zcbor gives a warning when generating such code.
  * Using `&()` to turn groups into choices (unions). `&()` is supported when used with `.bits`.
  * Representation Types (`#x.y`), except for tags (`#6.y(foo)`) which are supported.
  * Unwrapping (`~`)
- * The control operators `.regexp`, `.ne`, `.default`, and `.within` from RFC8610.
+ * The control operators `.regexp`, `.ne`, `.and`, and `.within` from RFC8610.
  * The control operators `.sdnv`, `.sdnvseq`, and `.oid` from RFC9090.
  * The control operators `.plus`, `.cat`, `.det`, `.abnf`, `.abnfb`, and `.feature` from RFC9165.
+ * The `.ne` implied by `.default` (RFC8610 section 3.8.6): Decoders and `zcbor validate` accept the default value, and encoders encode it if present.
  * Generics (`foo<a, b>`).
- * Using `:` for map keys.
+ * Using `:` after a bareword for map keys (`{foo: bar}`), since zcbor reads `foo` as a label (or a type). Use `"foo": bar` instead.
  * Cuts, either via `^` or implicitly via `:`.
+ * Byte string literals with `h` or `b64` prefixes (`h'0102'`), and floats with exponents (`1.5e3`).
  * Most of the "Extended Diagnostic Notation" is unsupported.
 
 
