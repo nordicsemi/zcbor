@@ -201,6 +201,31 @@ When accessing the data, you can choose between two internal formats:
  2. A custom format which allows accessing the data via the names from the CDDL description file.
     This format is implemented using named tuples, and is immutable, meaning that it can be used for inspecting data, but not for changing or creating data.
 
+For example:
+
+```python
+import zcbor
+
+cddl = """
+Pet = {
+    "name" => text,
+    "toys" => [* toy: tstr],
+}
+"""
+
+# The standard CDDL prelude (zcbor/prelude.cddl), which defines e.g. text, number, and tdate,
+# is included by default, like in the CLI. prelude=False leaves it out.
+# default_max_qty is the maximum number of repetitions for e.g. "*" and "+".
+types = zcbor.DataTranslator.from_cddl(cddl_string=cddl, default_max_qty=10)
+pet = types.my_types["Pet"]
+
+cbor = pet.from_json('{"name": "Rex", "toys": ["ball", "bone"]}')  # Validate and convert to CBOR
+pet.validate_str(cbor)  # Raises zcbor.CddlValidationError if the data is invalid
+decoded = pet.decode_str(cbor)  # Access the data via the names in the CDDL
+print(decoded.name, decoded.toys.toy)  # Rex ['ball', 'bone']
+print(pet.str_to_yaml(cbor))  # Convert to YAML
+```
+
 Canonical encoding
 ------------------
 
