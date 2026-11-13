@@ -444,6 +444,9 @@ static bool start_encode_fragments(zcbor_state_t *state,
 		state->frag_offset_cbor = new_offset;
 		state->str_total_len_cbor = len;
 		state->inside_cbor_bstr = true;
+		/* If the string ends in this payload section, don't encode past the end of it. */
+		state->payload_end = state->payload + MIN(
+			(size_t)state->payload_end - (size_t)state->payload, len);
 	} else {
 		state->frag_offset = new_offset;
 		state->str_total_len = len;
