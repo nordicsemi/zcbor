@@ -2171,6 +2171,21 @@ class TestFuncPointer(PopenTest, TempdTest):
             self.assertIn("#define ZCBOR_CUSTOM_CAST_FP(func) ZCBOR_CAST_FP(func)", output_c)
 
 
+class TestEmptyGroup(PopenTest, TempdTest):
+    def test_empty_group_with_bareword_key(self):
+        """Test that an empty group definition matching a bareword key does not cause an
+        IndexError during code generation (regression test for #539)."""
+        p_cddl = self.tempd / "empty_group.cddl"
+        p_cddl.write_text(
+            "x = ()\n\nz = (\n    (x: 1) / 2\n)\n",
+            encoding="utf-8",
+        )
+        self.popen_test(
+            ["zcbor", "code", "--cddl", p_cddl, "-t", "z", "-d", "-e"]
+            + ["--output-cmake", self.tempd / "empty_group.cmake"]
+        )
+
+
 class TestControlGroups(TestCase):
     def test_single_member(self):
         """Test that control groups with a single member don't cause an exception,
