@@ -23,8 +23,14 @@ shift 3
 
 cd "$(dirname "$0")" || exit 1
 
-# For convenience (use if afl fails and recommends this):
-export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
+# afl-fuzz refuses to run if core dumps are piped to a handler (see /proc/sys/kernel/core_pattern),
+# since crashes can then be missed or saved as hangs. Hangs fail this script too, so allow it for
+# convenience, unless FUZZ_STRICT is set. CI sets FUZZ_STRICT, after setting core_pattern to "core".
+if [[ -n "$FUZZ_STRICT" ]]; then
+	unset AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES
+else
+	export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
+fi
 
 # Don't abort if the CPU frequency scaling governor isn't "performance", as on many CI runners and
 # laptops. That only makes fuzzing a bit slower.
