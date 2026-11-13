@@ -13,6 +13,7 @@ version=$1
 commit=$2
 remote=$3
 release_zip=$4
+base=$5
 
 if [[ "$(git show $commit:zcbor/VERSION)" != "$version" ]]; then
     echo "Version in VERSION file does not match the version provided"
@@ -34,8 +35,8 @@ if [[ -d zcbor-release-files-$version ]]; then
     exit 5
 fi
 
-if ! git merge-base --is-ancestor $remote/main $commit; then
-    echo "Release commit is not based on upstream main branch"
+if ! git merge-base --is-ancestor $remote/$base $commit; then
+    echo "Release commit is not based on upstream $base branch"
     exit 6
 fi
 
@@ -44,12 +45,12 @@ git tag $version $commit
 # Push tag
 git push $remote $version
 # Push commit to main branch
-git push $remote $commit:main
+git push $remote $commit:$base
 # Unzip release files
 mkdir zcbor-release-files-$version
 unzip $release_zip -d zcbor-release-files-$version
 # Create release on GitHub
-gh release create $version zcbor-release-files-$version/* --repo $(git remote get-url $remote) --title "zcbor v. $version" --notes "Release notes: [RELEASE_NOTES.md](https://github.com/nordicsemi/zcbor/blob/$version/RELEASE_NOTES.md)
+gh release create -d $version zcbor-release-files-$version/* --repo $(git remote get-url $remote) --title "zcbor v. $version" --notes "Release notes: [RELEASE_NOTES.md](https://github.com/nordicsemi/zcbor/blob/$version/RELEASE_NOTES.md)
 
 Migration guide: [MIGRATION_GUIDE.md](https://github.com/nordicsemi/zcbor/blob/$version/MIGRATION_GUIDE.md)
 
