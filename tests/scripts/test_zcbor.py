@@ -2011,6 +2011,30 @@ class TestCodeGeneration(TestCase):
         code = unordered_map1.xcode(res_var=unordered_map1.full_result_var())
         self.assertIn("zcbor_unordered_map_search", code)
 
+    def test_unordered_map_empty_containers(self):
+        """Empty containers in unordered maps need no flags, and must not break the flag count."""
+        cddl_string = "test = {1: int, 2: {}, 3: []}\nEmpty = {}"
+        res = self.do_test_code_generation(
+            cddl_string, entry_type_names=["test", "Empty"], unordered_maps=True
+        )
+        # 3 keys in "test", rounded up to whole bytes.
+        self.assertEqual("8", res.my_types["test"].num_map_search_flags())
+        self.assertEqual("", res.my_types["Empty"].num_map_search_flags())
+
+    def test_unordered_map_codegen_manifest12(self):
+        """manifest12.cddl contains an empty map ("unprotected: {}")."""
+        entry_types = ["SUIT_Envelope_Tagged", "SUIT_Command_Sequence", "SUIT_Envelope"]
+        res = self.do_test_code_generation(
+            p_manifest12.read_text(encoding="utf-8"),
+            entry_type_names=entry_types,
+            unordered_maps=True,
+        )
+        for entry_type in entry_types:
+            self.assertNotEqual("", res.my_types[entry_type].num_map_search_flags())
+        envelope = res.my_types["SUIT_Envelope"]
+        code = envelope.xcode(res_var=envelope.full_result_var())
+        self.assertIn("zcbor_unordered_map_search", code)
+
     def test_optional_safe_assign_inlines_decode(self):
         """Simple safe optionals should assign present from an inlined primitive decode."""
         test = self.do_test_code_generation("test = ?opt: bool").my_types["test"]
