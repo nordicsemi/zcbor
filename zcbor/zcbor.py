@@ -3173,7 +3173,8 @@ class CodeGenerator(CddlXcoder):
             flags, nested_flags, _, __ = self.cbor._num_map_search_flags(is_in_map=False)
             assert flags == "", "Cannot have bare keys directly within .cbor."
             total_nested = s_sum((total_nested, nested_flags))
-        if self.type in ["LIST", "MAP", "GROUP", "UNION"]:
+        # Empty containers (e.g. "{}") have no children, so they need no flags.
+        if self.type in ["LIST", "MAP", "GROUP", "UNION"] and len(self.value) != 0:
             c_is_in_map = {"LIST": False, "MAP": True, "GROUP": is_in_map, "UNION": is_in_map}[self.type]
             c_flags, c_nested_flags, c_total_multi_decode, c_total_unions = zip(
                 *(child._num_map_search_flags(is_in_map=c_is_in_map) for child in self.value)
