@@ -121,4 +121,4 @@ if (TEST_INDEFINITE_LENGTH_ARRAYS)
   target_compile_definitions(app PUBLIC TEST_INDEFINITE_LENGTH_ARRAYS)
 endif()
 
-target_compile_options(corner_cases PRIVATE -Wall -Wpedantic -Wconversion -Wdouble-promotion -Wshadow -Wnull-dereference -Wduplicated-cond -Wlogical-op -Wstrict-overflow=2 -Wpointer-arith)
+target_compile_options(corner_cases PRIVATE -Wall -Wpedantic -Wconversion -Wdouble-promotion -Wshadow -Wnull-dereference -Wduplicated-cond -Wlogical-op -Wstrict-overflow=2 -Wpointer-arith -Wcast-qual)

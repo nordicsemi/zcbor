@@ -20,7 +20,7 @@ target_include_directories(zcbor PRIVATE ../../../include)
 
 target_link_libraries(app PRIVATE zcbor)
 
-target_compile_options(zcbor PRIVATE -Wpedantic -Wconversion -Wall -Wextra -Wdouble-promotion)
+target_compile_options(zcbor PRIVATE -Wpedantic -Wconversion -Wall -Wextra -Wdouble-promotion -Wcast-qual)
 
 file(READ ${CMAKE_CURRENT_LIST_DIR}/../../../zcbor/VERSION ZCBOR_VERSION_STR)
 string(REPLACE "." ";" ZCBOR_VERSION_SPLIT ${ZCBOR_VERSION_STR})

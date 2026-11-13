@@ -74,5 +74,5 @@ int cbor_encode_Pet(
 		encode_Pet(states, input);
 	}
 
-	return zcbor_entry_function(payload, payload_len, (void *)input, payload_len_out, states, (zcbor_decoder_t *)ZCBOR_CUSTOM_CAST_FP(encode_Pet), sizeof(states) / sizeof(zcbor_state_t), 0);
+	return zcbor_entry_function_encode(payload, payload_len, input, payload_len_out, states, ZCBOR_CUSTOM_CAST_FP(encode_Pet), sizeof(states) / sizeof(zcbor_state_t), 0);
 }

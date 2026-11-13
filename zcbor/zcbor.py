@@ -4171,7 +4171,8 @@ static bool {xcoder.func_name}(
             and (num_flags := xcoder.num_map_search_flags()) not in ("", "0")
         ):
             # No flags needed.
-            return "", base_states, "zcbor_entry_function", []
+            entry_func = "zcbor_entry_function_encode" if mode == "encode" else "zcbor_entry_function"
+            return "", base_states, entry_func, []
 
         # Calculate total_states at compile time (because it depends on sizeof(zcbor_state_t))
         num_flags_var = f"const size_t num_flags = {num_flags};"
@@ -4189,10 +4190,10 @@ static bool {xcoder.func_name}(
         arg_list = [
             "payload",
             "payload_len",
-            f"(void *){func_arg}",
+            f"{func_arg}",
             "payload_len_out",
             "states",
-            f"(zcbor_decoder_t *)ZCBOR_CUSTOM_CAST_FP({func_name})",
+            f"ZCBOR_CUSTOM_CAST_FP({func_name})",
             "sizeof(states) / sizeof(zcbor_state_t)",
             f"{elem_count}",
         ]

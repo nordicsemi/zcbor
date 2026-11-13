@@ -102,4 +102,4 @@ include(${PROJECT_BINARY_DIR}/defines.cmake)
 target_link_libraries(defines PRIVATE zephyr_interface)
 target_link_libraries(app PRIVATE defines)
 
-target_compile_options(defines PRIVATE -Wall -Wpedantic -Wdouble-promotion -Wshadow)
+target_compile_options(defines PRIVATE -Wall -Wpedantic -Wdouble-promotion -Wshadow -Wcast-qual)

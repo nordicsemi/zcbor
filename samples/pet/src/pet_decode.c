@@ -73,5 +73,5 @@ int cbor_decode_Pet(
 		decode_Pet(states, result);
 	}
 
-	return zcbor_entry_function(payload, payload_len, (void *)result, payload_len_out, states, (zcbor_decoder_t *)ZCBOR_CUSTOM_CAST_FP(decode_Pet), sizeof(states) / sizeof(zcbor_state_t), ZCBOR_LARGE_ELEM_COUNT);
+	return zcbor_entry_function(payload, payload_len, result, payload_len_out, states, ZCBOR_CUSTOM_CAST_FP(decode_Pet), sizeof(states) / sizeof(zcbor_state_t), ZCBOR_LARGE_ELEM_COUNT);
 }
