@@ -260,6 +260,7 @@ It then creates code that uses the C library to decode CBOR data into the struct
 Finally, it takes the "entry types" (`-t`) and creates a public API function for each of them.
 While doing these things, it will make a number of optimizations, e.g. inlining code for small types and removing unused functions.
 It outputs the generated code into header and source files and optionally creates a CMake file to build them.
+A recursive type is only supported if it is an entry type, and the recursion goes via a CBOR-encoded byte string (`bstr .cbor`/`bstr .cborseq`), which is then left as a `struct zcbor_string` to be decoded/encoded with the type's public function.
 
 The `zcbor code` command reads one or more CDDL file(s) and generates some or all of these files:
  - A header file with types (always)
