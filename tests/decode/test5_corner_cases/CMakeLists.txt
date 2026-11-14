@@ -85,6 +85,8 @@ set(py_command
     Tags
     QuantTags
     TaggedIntUnion
+    TaggedMemberUnion
+    SafeMemberUnion
     TwoMaps
     BstrMapUnion
     AmbigMap
@@ -96,6 +98,7 @@ set(py_command
     BstrMap
     OptFloatUnion
     OptFloatThenInt
+    OptTypeUnion
     CborBstrList
     MapOptElem1
     MapIndirect

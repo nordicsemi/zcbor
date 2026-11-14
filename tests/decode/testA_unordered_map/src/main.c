@@ -656,6 +656,54 @@ ZTEST(cbor_decode_testA, test_unordered_map13)
 	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);
 }
 
+ZTEST(cbor_decode_testA, test_unordered_map14)
+{
+	const uint8_t payload_unordered_map14_good[] = {
+		MAP(2),
+		0x01, 0x05,
+		0x04, 0xF5,
+		END
+	};
+	const uint8_t payload_unordered_map14_bad[] = {
+		MAP(2),
+		0x03, 0x61, 'a',
+		0x01, 0x05,
+		END
+	};
+	const uint8_t payload_unordered_map14_inv[] = {
+		MAP(2),
+		0x02, 0x05,
+		0x04, 0xF5,
+		END
+	};
+
+	struct UnorderedMap14 unordered_map14;
+
+	/* map14_bad fails after finding key 1, and map14_good must find it again. */
+	int err = cbor_decode_UnorderedMap14(payload_unordered_map14_good,
+			sizeof(payload_unordered_map14_good), &unordered_map14, NULL);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);
+	zassert_equal(UnorderedMap14_union_map14_good_m_c, unordered_map14.UnorderedMap14_union_choice);
+	zassert_equal(5, unordered_map14.UnorderedMap14_union_map14_good_m.map14_good_uint1uint);
+	zassert_true(unordered_map14.UnorderedMap14_union_map14_good_m.map14_good_uint4bool);
+
+	err = cbor_decode_UnorderedMap14(payload_unordered_map14_bad,
+			sizeof(payload_unordered_map14_bad), &unordered_map14, NULL);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);
+	zassert_equal(UnorderedMap14_union_map14_bad_m_c, unordered_map14.UnorderedMap14_union_choice);
+	zassert_equal(1, unordered_map14.UnorderedMap14_union_map14_bad_m_count);
+	struct map14_bad *bad = &unordered_map14.UnorderedMap14_union_map14_bad_m[0];
+
+	zassert_equal(union_uint1uint_c, bad->map14_bad_union_choice);
+	zassert_equal(5, bad->union_uint1uint);
+	zassert_equal(1, bad->map14_bad_uint3tstr.len);
+	zassert_mem_equal("a", bad->map14_bad_uint3tstr.value, 1);
+
+	err = cbor_decode_UnorderedMap14(payload_unordered_map14_inv,
+			sizeof(payload_unordered_map14_inv), &unordered_map14, NULL);
+	zassert_not_equal(ZCBOR_SUCCESS, err);
+}
+
 ZTEST(cbor_decode_testA, test_unordered_map15)
 {
 	const uint8_t payload_unordered_map15[] = {
