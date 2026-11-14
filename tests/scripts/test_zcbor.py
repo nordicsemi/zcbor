@@ -7,7 +7,7 @@
 from unittest import TestCase, main
 from unittest.mock import patch
 from subprocess import Popen, PIPE
-from regex import sub, search, escape, compile
+from regex import sub, search, escape, compile, S
 from pathlib import Path
 from ecdsa import VerifyingKey
 from hashlib import sha256
@@ -2229,6 +2229,27 @@ class TestEmptyGroup(PopenTest, TempdTest):
             ["zcbor", "code", "--cddl", p_cddl, "-t", "z", "-d", "-e"]
             + ["--output-cmake", self.tempd / "empty_group.cmake"]
         )
+
+
+class TestUnusedParameter(PopenTest, TempdTest):
+    def test_unused_parameter(self):
+        """Test that functions that don't use their result/input parameter mark it as unused."""
+        p_cddl = self.tempd / "unused.cddl"
+        p_cddl.write_text(
+            "EmptyMap = {}\nEmptyList = [()]\nAnyOnly = any\nUsed = [uint]\n", encoding="utf-8"
+        )
+        self.popen_test(
+            ["zcbor", "code", "--cddl", p_cddl, "-t", "EmptyMap", "EmptyList", "AnyOnly", "Used"]
+            + ["-d", "-e", "--output-cmake", self.tempd / "unused.cmake"]
+        )
+        func_re = compile(r"static bool (?P<name>\w+)\(\n[^)]*\)\n\{(?P<body>.*?)\n\}", flags=S)
+        for mode, arg in (("decode", "result"), ("encode", "input")):
+            output_c = (self.tempd / "src" / f"unused_{mode}.c").read_text(encoding="utf-8")
+            funcs = {m["name"]: m["body"] for m in func_re.finditer(output_c)}
+            for name in ("EmptyMap", "EmptyList", "AnyOnly"):
+                self.assertIn(f"\t(void){arg};", funcs[f"{mode}_{name}"])
+            self.assertNotIn(f"(void){arg};", funcs[f"{mode}_Used"])
+            self.assertIn(f"(*{arg})", funcs[f"{mode}_Used"])
 
 
 class TestControlGroups(TestCase):
