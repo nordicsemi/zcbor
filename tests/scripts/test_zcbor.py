@@ -2961,6 +2961,26 @@ class OtherTests(TestCase):
         self.assertEqual('\\"map2\\"', parsed.value[0].value[0].key.value)
         self.assertEqual(6, parsed.value[0].value[0].key.size)
 
+    def test_list_labels_matching_type_names(self):
+        """In a list, "foo:" is a label, even when foo is a type. Also in the prelude."""
+        cddl = p_prelude.read_text(encoding="utf-8") + """
+            m = uint
+            e10 = uint
+            foo = [m, e10: int, (m: int // e10: tstr)]
+            bar = {m: int}
+            """
+        parsed = cp_from_cddl(cddl)
+        for name in ("decfrac", "bigfloat", "foo"):
+            for child in parsed.my_types[name].value:
+                for member in child.value if child.type == "UNION" else [child]:
+                    self.assertIsNone(member.key)
+        foo = parsed.my_types["foo"]
+        self.assertEqual("e10", foo.value[1].label)
+        self.assertEqual(["m", "e10"], [member.label for member in foo.value[2].value])
+        bar = parsed.my_types["bar"]
+        self.assertEqual("OTHER", bar.value[0].key.type)
+        self.assertEqual("m", bar.value[0].key.value)
+
 
 if __name__ == "__main__":
     main()
