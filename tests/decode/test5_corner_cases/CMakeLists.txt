@@ -59,6 +59,12 @@ set(py_command
     MapLength
     UnionInt1
     UnionInt2
+    UnionIntOpt1
+    UnionIntOpt2
+    UnionIntRep
+    UnionIntOptList
+    UnionIntOptGroup
+    UnionIntOptAfterFail
     Intmax1
     Intmax2
     Intmax3

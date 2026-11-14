@@ -270,6 +270,18 @@ UnionInt2 = [
 	Structure_One
 ]
 
+; Unions whose members start with integers, but are optional or repeated, or are groups of
+; optional elements, so the integer might be missing.
+UnionIntOpt1 = {? (1 => uint) // (2 => bool)}
+UnionIntOpt2 = {(? 3 => uint) // (4 => bool)}
+UnionIntRep = {(5 => uint) // (* 6 => bool)}
+UnionIntOptList = [? (7, uint) // (8, bool)]
+UnionIntOptGroup = {(? 9 => uint, ? 10 => int) // (11 => bool)}
+
+; The first member can fail after consuming the tstr, so the state must be restored before the
+; optional second member.
+UnionIntOptAfterFail = [(uoaf_tstr: tstr, uoaf_bool: bool) / ? (12, uint)]
+
 Intmax1 = [
 	INT_8_MIN: -0x80,
 	INT_8_MAX: 0x7F,
