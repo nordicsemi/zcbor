@@ -28,6 +28,7 @@ set(py_command
   Numbers2
   NumberMap
   TaggedUnion
+  NestedTags
   Strings
   Simple2
   Optional

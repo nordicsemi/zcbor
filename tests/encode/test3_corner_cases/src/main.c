@@ -137,6 +137,61 @@ ZTEST(cbor_encode_test3, test_tagged_union)
 	zassert_mem_equal(exp_payload_tagged_union2, output, sizeof(exp_payload_tagged_union2), NULL);
 }
 
+/** Test that nested tags are encoded in order, outermost first. */
+ZTEST(cbor_encode_test3, test_nested_tags)
+{
+	const uint8_t exp_payload_nested_tags1[] = {LIST(8),
+		0xC6, 0xC7, 0x01, /* nt_direct: #6.6(#6.7(1)) */
+		0xC6, 0xC7, 0x02, /* nt_ref: #6.6(#6.7(2)) */
+		0xC6, 0xC7, 0x03, /* nt_alias: #6.6(#6.7(3)) */
+		0xCA, 0xC6, 0xC7, 0x04, /* nt_triple: #6.10(#6.6(#6.7(4))) */
+		0xC6, 0xC7, 0x05, /* nt_union: #6.6(#6.7(5)) */
+		0x43, 0xC6, 0xC7, 0x06, /* nt_cbor: << #6.6(#6.7(6)) >> */
+		0xC6, 0xC7, 0x07, /* nt_opt: #6.6(#6.7(7)) */
+		MAP(1), 0xC6, 0xC7, 0x01, 0xC6, 0xC7, 0x08, END /* nt_map: {#6.6(#6.7(1)): #6.6(#6.7(8))} */
+		END
+	};
+	const uint8_t exp_payload_nested_tags2[] = {LIST(7),
+		0xC6, 0xC7, 0x01, /* nt_direct: #6.6(#6.7(1)) */
+		0xC6, 0xC7, 0x02, /* nt_ref: #6.6(#6.7(2)) */
+		0xC6, 0xC7, 0x03, /* nt_alias: #6.6(#6.7(3)) */
+		0xCA, 0xC6, 0xC7, 0x04, /* nt_triple: #6.10(#6.6(#6.7(4))) */
+		0xC8, 0xC9, 0x61, 0x61, /* nt_union: #6.8(#6.9("a")) */
+		0x43, 0xC6, 0xC7, 0x06, /* nt_cbor: << #6.6(#6.7(6)) >> */
+		MAP(1), 0xC6, 0xC7, 0x01, 0xC6, 0xC7, 0x08, END /* nt_map: {#6.6(#6.7(1)): #6.6(#6.7(8))} */
+		END
+	};
+	struct NestedTags input = {
+		.nt_direct = 1,
+		.nt_ref = 2,
+		.nt_alias = 3,
+		.nt_triple = 4,
+		.nt_union_choice = NestedTags_nt_union_nt_union_uint_c,
+		.nt_union_uint = 5,
+		.nt_cbor_cbor = 6,
+		.nt_opt_present = true,
+		.nt_opt = 7,
+		.NestedTagsKey = 8,
+	};
+	uint8_t output[sizeof(exp_payload_nested_tags1) + 1];
+	size_t encode_len;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_NestedTags(output,
+		sizeof(output), &input, &encode_len), NULL);
+	zassert_equal(sizeof(exp_payload_nested_tags1), encode_len, NULL);
+	zassert_mem_equal(exp_payload_nested_tags1, output, encode_len, NULL);
+
+	input.nt_union_choice = NestedTags_nt_union_nt_union_tstr_c;
+	input.nt_union_tstr.value = (const uint8_t *)"a";
+	input.nt_union_tstr.len = 1;
+	input.nt_opt_present = false;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_NestedTags(output,
+		sizeof(output), &input, &encode_len), NULL);
+	zassert_equal(sizeof(exp_payload_nested_tags2), encode_len, NULL);
+	zassert_mem_equal(exp_payload_nested_tags2, output, encode_len, NULL);
+}
+
 ZTEST(cbor_encode_test3, test_number_map)
 {
 	size_t encode_len = 0xFFFFFFFF;

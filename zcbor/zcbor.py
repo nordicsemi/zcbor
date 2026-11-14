@@ -13,7 +13,6 @@ from collections.abc import Hashable, Mapping
 from typing import NamedTuple
 from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
 from datetime import datetime
-from copy import copy
 from itertools import tee, chain
 from cbor2 import (
     loads,
@@ -859,7 +858,7 @@ class CddlParser:
             if not self.value[0].key:
                 self.value[0].key = self.key
             self.value[0].is_key = self.is_key
-            self.value[0].tags.extend(self.tags)
+            self.value[0].tags[:0] = self.tags  # Outer tags come first.
             self.value[0].default = self.default
             return self.value
         elif allow_multi and self.type in ["GROUP"] and self.min_qty == 1 and self.max_qty == 1:
@@ -1838,26 +1837,24 @@ class DataTranslator(CddlXcoder):
             raise CddlValidationError(f"Data did not decode correctly {'(' + msg + ')' if msg else ''}")
 
     def _check_tag(self, obj):
-        """Check that no unexpected tags are attached to this data.
+        """Check that the data has the expected tags, outermost first, and no unexpected ones.
 
-        Return whether a tag was present.
+        Return the data without the checked tags.
         """
-        if not self.tags and not isinstance(obj, CBORTag):
-            return obj
-
-        tags = copy(self.tags)  # All expected tags
-        # Process all tags present in obj
-        while isinstance(obj, CBORTag):
-            if obj.tag in tags or self.type == "ANY":
-                if obj.tag in tags:
-                    tags.remove(obj.tag)
-                obj = obj.value
-                continue
-            elif self.type in ["OTHER", "GROUP", "UNION"]:
-                break
-            self._decode_assert(False, lambda: f"Tag ({obj.tag}) not expected for {self}")
-        # Check that all expected tags were found in obj.
-        self._decode_assert(not tags, lambda: f"Expected tags ({tags}), but none present.")
+        for i, tag in enumerate(self.tags):
+            self._decode_assert(
+                isinstance(obj, CBORTag) and obj.tag == tag,
+                lambda: f"Expected tags ({self.tags[i:]}), but "
+                + (f"got tag ({obj.tag})." if isinstance(obj, CBORTag) else "none present."),
+            )
+            obj = obj.value
+        # Any further tags belong to a referenced type, or to the data if ANY.
+        while isinstance(obj, CBORTag) and self.type == "ANY":
+            obj = obj.value
+        self._decode_assert(
+            not isinstance(obj, CBORTag) or self.type in ["OTHER", "GROUP", "UNION"],
+            lambda: f"Tag ({obj.tag}) not expected for {self}",
+        )
         return obj
 
     _exp_types = {
