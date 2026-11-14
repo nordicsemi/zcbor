@@ -73,6 +73,7 @@ set(py_command
   Tags
   QuantTags
   TaggedIntUnion
+  TaggedMemberUnion
   WrapListGroup
   WrapListGroupOpt1
   WrapListGroupOpt2
@@ -80,6 +81,7 @@ set(py_command
   OptCbor
   OptFloatUnion
   OptFloatThenInt
+  OptTypeUnion
   CborBstrList
   -e
   ${bit_arg}

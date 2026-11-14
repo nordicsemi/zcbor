@@ -2333,6 +2333,70 @@ ZTEST(cbor_encode_test3, test_tagged_int_union)
 }
 
 
+ZTEST(cbor_encode_test3, test_tagged_member_union)
+{
+	uint8_t tagged_member_union_exp_payload1[] = {LIST(4),
+		0xCB, 0x05, 0xCC, 0x06, 0xCD, 0x07, 0xCF, 0x08, END
+	};
+	uint8_t tagged_member_union_exp_payload2[] = {LIST(3), 0xF5, 0x61, 'a', 0xCE, 0xF4, END};
+	uint8_t tagged_member_union_exp_payload3[] = {LIST(4), 0xF4, 0xF5, 0xCD, 0x01, 0xF5, END};
+	struct TaggedMemberUnion input1 = {
+		.tmu1_choice = TaggedMemberUnion_tmu1_tmu1_tagged_c,
+		.tmu1_tagged = 5,
+		.tmu2_choice = TaggedMemberUnion_tmu2_union_c,
+		.Union_choice = TaggedMemberUnion_tmu2_union_tmu2_tagged_c,
+		.tmu2_tagged = 6,
+		.tmu3_choice = TaggedMemberUnion_tmu3_tmu3_tagged_c,
+		.tmu3_tagged = 7,
+		.tmu4_present = true,
+		.tmu4 = {
+			.tmu4_choice = TaggedMemberUnion_tmu4_tmu4_tagged_c,
+			.tmu4_tagged = 8,
+		},
+	};
+	struct TaggedMemberUnion input2 = {
+		.tmu1_choice = TaggedMemberUnion_tmu1_tmu1_bool_c,
+		.tmu1_bool = true,
+		.tmu2_choice = TaggedMemberUnion_tmu2_union_c,
+		.Union_choice = TaggedMemberUnion_tmu2_union_tmu2_tstr_c,
+		.tmu2_tstr = {.value = (const uint8_t *)"a", .len = 1},
+		.tmu3_choice = TaggedMemberUnion_tmu3_tmu3_tagged_bool_c,
+		.tmu3_tagged_bool = false,
+		.tmu4_present = false,
+	};
+	struct TaggedMemberUnion input3 = {
+		.tmu1_choice = TaggedMemberUnion_tmu1_tmu1_bool_c,
+		.tmu1_bool = false,
+		.tmu2_choice = TaggedMemberUnion_tmu2_tmu2_bool_c,
+		.tmu2_bool = true,
+		.tmu3_choice = TaggedMemberUnion_tmu3_tmu3_tagged_c,
+		.tmu3_tagged = 1,
+		.tmu4_present = true,
+		.tmu4 = {
+			.tmu4_choice = TaggedMemberUnion_tmu4_tmu4_bool_c,
+			.tmu4_bool = true,
+		},
+	};
+	uint8_t payload[20];
+	size_t out_len;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_TaggedMemberUnion(payload,
+		sizeof(payload), &input1, &out_len));
+	zassert_equal(sizeof(tagged_member_union_exp_payload1), out_len);
+	zassert_mem_equal(payload, tagged_member_union_exp_payload1, out_len);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_TaggedMemberUnion(payload,
+		sizeof(payload), &input2, &out_len));
+	zassert_equal(sizeof(tagged_member_union_exp_payload2), out_len);
+	zassert_mem_equal(payload, tagged_member_union_exp_payload2, out_len);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_TaggedMemberUnion(payload,
+		sizeof(payload), &input3, &out_len));
+	zassert_equal(sizeof(tagged_member_union_exp_payload3), out_len);
+	zassert_mem_equal(payload, tagged_member_union_exp_payload3, out_len);
+}
+
+
 ZTEST(cbor_encode_test3, test_opt_float_then_int)
 {
 	struct OptFloatThenInt input_invalid = {
@@ -2498,6 +2562,89 @@ ZTEST(cbor_encode_test3, test_opt_cbor)
 		sizeof(output), &input, &out_len), NULL);
 	zassert_equal(sizeof(exp_absent), out_len, NULL);
 	zassert_mem_equal(exp_absent, output, out_len, NULL);
+}
+
+
+ZTEST(cbor_encode_test3, test_opt_type_union)
+{
+	uint8_t exp_none_payload[] = {LIST(1), 0xF6, END};
+	uint8_t exp_all_payload1[] = {LIST(4),
+		0x05, 0x62, 'h', 'i',
+		0xFB, 0x3F, 0xF8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 1.5 */
+		0xF6, END
+	};
+	uint8_t exp_all_payload2[] = {LIST(4), 0xF5, 0x22, 0x42, 0x01, 0x02, 0xF6, END};
+	uint8_t exp_second_payload[] = {LIST(2), 0x22, 0xF6, END};
+	struct OptTypeUnion input_none = {
+		.uint_or_bool_present = false,
+		.tstr_or_nint_present = false,
+		.named_present = false,
+	};
+	struct OptTypeUnion input_all1 = {
+		.uint_or_bool_present = true,
+		.uint_or_bool = {
+			.uint_or_bool_choice = OptTypeUnion_uint_or_bool_uint_c,
+			.uint = 5,
+		},
+		.tstr_or_nint_present = true,
+		.tstr_or_nint = {
+			.tstr_or_nint_choice = OptTypeUnion_tstr_or_nint_tstr_c,
+			.tstr = {.value = "hi", .len = 2},
+		},
+		.named_present = true,
+		.named = {
+			.named_choice = OptTypeUnion_named_OptTypeUnionFloat_m_c,
+			.OptTypeUnionFloat_m = 1.5,
+		},
+	};
+	struct OptTypeUnion input_all2 = {
+		.uint_or_bool_present = true,
+		.uint_or_bool = {
+			.uint_or_bool_choice = OptTypeUnion_uint_or_bool_bool_c,
+			.Bool = true,
+		},
+		.tstr_or_nint_present = true,
+		.tstr_or_nint = {
+			.tstr_or_nint_choice = OptTypeUnion_tstr_or_nint_nint_c,
+			.nint = -3,
+		},
+		.named_present = true,
+		.named = {
+			.named_choice = OptTypeUnion_named_OptTypeUnionBstr_m_c,
+			.OptTypeUnionBstr_m = {.value = (const uint8_t *)"\x01\x02", .len = 2},
+		},
+	};
+	struct OptTypeUnion input_second = {
+		.uint_or_bool_present = false,
+		.tstr_or_nint_present = true,
+		.tstr_or_nint = {
+			.tstr_or_nint_choice = OptTypeUnion_tstr_or_nint_nint_c,
+			.nint = -3,
+		},
+		.named_present = false,
+	};
+	uint8_t output[20];
+	size_t out_len;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_OptTypeUnion(output,
+		sizeof(output), &input_none, &out_len));
+	zassert_equal(sizeof(exp_none_payload), out_len);
+	zassert_mem_equal(exp_none_payload, output, out_len);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_OptTypeUnion(output,
+		sizeof(output), &input_all1, &out_len));
+	zassert_equal(sizeof(exp_all_payload1), out_len);
+	zassert_mem_equal(exp_all_payload1, output, out_len);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_OptTypeUnion(output,
+		sizeof(output), &input_all2, &out_len));
+	zassert_equal(sizeof(exp_all_payload2), out_len);
+	zassert_mem_equal(exp_all_payload2, output, out_len);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_OptTypeUnion(output,
+		sizeof(output), &input_second, &out_len));
+	zassert_equal(sizeof(exp_second_payload), out_len);
+	zassert_mem_equal(exp_second_payload, output, out_len);
 }
 
 

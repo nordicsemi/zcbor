@@ -2718,19 +2718,25 @@ class CodeGenerator(CddlXcoder):
         )
 
     def safe_failable(self):
-        """Whether this can safely fail and return to its starting point. If not, it needs a backup"""
+        """Whether decoding this can only fail without consuming anything, i.e. returning to its
+        starting point. If not, an optional element is decoded with zcbor_present_decode() (which
+        restores the payload after a failed attempt) instead of inline, and a union restores the state
+        (zcbor_union_elem_code()) before trying the next member."""
         if self.count_var_condition():
+            # zcbor_multi_decode*() restore the state from before the failing iteration (see
+            # multi_decode_w_backup_condition()), but earlier iterations stay consumed.
+            return isinstance(self.min_qty, int) and self.min_qty <= 1
+        if self.key is not None or self.tags or self.range_check_condition():
             return False
-        if self.key is not None or self.cbor is not None or self.tags or self.range_check_condition():
-            return False
-        if self.type in ["LIST", "MAP"]:
-            return False
+        if self.cbor_bstr_condition() or self.type in ["LIST", "MAP"]:
+            return False  # zcbor_*_end_force_decode() keeps the payload where decoding failed.
         if self.type == "GROUP":
             return len(self.value) == 0 or (len(self.value) == 1 and self.value[0].safe_failable())
         if self.type == "UNION":
-            if self.implicit_union_condition():
-                return False
-            return len(self.value) == 0 or all(child.safe_failable() for child in self.value)
+            # The union restores the state between its members, but not after the last one.
+            return not self.implicit_union_condition() and (
+                len(self.value) == 0 or self.value[-1].safe_failable()
+            )
         if self.type == "OTHER":
             return self.my_types[self.value].safe_failable()
         return True
@@ -2879,15 +2885,6 @@ class CodeGenerator(CddlXcoder):
         """Declaration of the variables of all children."""
         decl = [line for child in self.value for line in child.full_declaration()]
         return decl
-
-    def simple_func_condition(self):
-        if self.range_check_condition():
-            return True
-        if self.single_func_impl_condition():
-            return True
-        if self.type == "OTHER" and self.my_types[self.value].simple_func_condition():
-            return True
-        return False
 
     def raw_type_name(self):
         """Base name if this element needs to declare a type."""
@@ -3625,7 +3622,7 @@ class CodeGenerator(CddlXcoder):
         return (
             not self.implicit_union_condition()
             and not self.value[i].expect_union_condition()
-            and self.value[i - 1].simple_func_condition()
+            and not self.value[i - 1].safe_failable()
         )
 
     def xcode_union(self, *, res_var):
@@ -3665,7 +3662,8 @@ class CodeGenerator(CddlXcoder):
                 op = comma_operator(f"({self.choice_var_access()} = {child.enum_var_name()})", "true")
                 child_values.append(f"({xcode} && {op})")
 
-            # Reset state for all but the first child.
+            # Reset state for all but the first child, if the previous child might have consumed
+            # data before failing.
             for i in range(1, len(child_values)):
                 if self.union_elem_restore_condition(i):
                     child_values[i] = f"(zcbor_union_elem_code(state) && {child_values[i]})"
@@ -4031,7 +4029,7 @@ class CodeGenerator(CddlXcoder):
                     self.mode == "decode"
                 ), f"This code needs self.mode to be 'decode', not {self.mode}."
 
-                assign = self.safe_failable()
+                assign = self.safe_failable() and not self.repeated_single_func_impl_condition()
                 default_assignment = None
                 if self.default is not None:
                     default_value = (
@@ -4054,9 +4052,6 @@ class CodeGenerator(CddlXcoder):
                     )
                     default_assignment = f"({access} = {default_value})"
                 if assign:
-                    assert (
-                        not self.repeated_single_func_impl_condition()
-                    ), "The 'assign' path should not be safe with repeated_single_func_impl_condition()."
                     decode_str = self.repeated_xcode(res_var=res_var, union_int=union_int)
                     return comma_operator(
                         default_assignment, f"({self.present_var_access()} = {decode_str})", "true"

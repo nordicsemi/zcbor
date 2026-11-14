@@ -113,6 +113,14 @@ UnorderedMap13 = {
 	}
 }
 
+; The failing first member marks key 1 as processed, which must be undone before map14_good.
+UnorderedMap14 = {
+	(+ map14_bad) // map14_good
+}
+
+map14_bad = ((1 => uint // 2 => uint), 3 => tstr)
+map14_good = (1 => uint, 4 => bool)
+
 ; A failing iteration of map15_bad can mark key 1 (or 2) as processed before failing on key 3,
 ; so the repetition must restore the map search flags.
 UnorderedMap15 = {

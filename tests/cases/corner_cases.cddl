@@ -536,6 +536,27 @@ QuantTags = [
 ; The members start with tags, so they can't be told apart by their integers.
 TaggedIntUnion = (tagged_one: #6.5(1)) / (tagged_two: #6.6(2))
 
+; Union members that can fail after consuming a tag, so the next member must start over.
+TaggedMemberUnion = [
+	tmu1: ((tmu1_tagged: #6.11(uint)) / (tmu1_bool: bool)),
+	tmu2: (((tmu2_tstr: tstr) / (tmu2_tagged: #6.12(uint))) // (tmu2_bool: bool)),
+	tmu3: ((tmu3_tagged: #6.13(uint)) / (tmu3_tagged_bool: #6.14(bool))),
+	? tmu4: ((tmu4_tagged: #6.15(uint)) // (tmu4_bool: bool)),
+]
+
+; Union members and optional elements that can only fail without consuming anything (the unions'
+; last members are safe), so the next member needs no restore.
+TaggedUintBool = #6.16(uint) / bool
+SmuUints = (* uint)
+SafeMemberUnion = [
+	smu1: ((smu1_union: (#6.17(uint) / bool)) // (smu1_tstr: tstr)),
+	smu2: ((smu2_ref: TaggedUintBool) // (smu2_tstr: tstr)),
+	smu3: ((smu3_cbor: bstr .cbor SingleInt) // (smu3_tstr: tstr)),
+	smu4: ((+ smu4_uint: uint) // (smu4_tstr: tstr)),
+	? smu5: TaggedUintBool,
+	? smu6: SmuUints,
+]
+
 map1 = {"1": int}
 map2 = {"2": int}
 map3 = {"2": int, "3": int}
@@ -561,6 +582,17 @@ OptFloatThenInt = [
 
 ; Optional float union with ranged branches: second branch must be tried after first fails.
 OptFloatUnion = [foo: ?((oneToFive: 1.0..5.0) / (sixToTen: 6.0..10.0))]
+
+; Optional unions of types (not just of values), which need their own functions.
+OptTypeUnion = [
+	?uint_or_bool: (uint / bool),
+	?tstr_or_nint: (tstr // nint),
+	?named: (OptTypeUnionFloat / OptTypeUnionBstr),
+	last: nil,
+]
+
+OptTypeUnionFloat = float
+OptTypeUnionBstr = bstr
 
 CborBstrList = [?bstr .cbor [int, tstr]]
 

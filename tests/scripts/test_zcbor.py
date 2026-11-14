@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from unittest import TestCase, main
-from unittest.mock import patch
 from subprocess import Popen, PIPE
 from regex import sub, search, escape, compile, S
 from pathlib import Path
@@ -2212,13 +2211,36 @@ class TestCodeGeneration(TestCase):
         self.assertIn("ZCBOR_CUSTOM_CAST_FP(decode_repeated_test)", code)
         self.assertNotIn("zcbor_list_start_decode(state)", code)
 
+    def test_safe_failable(self):
+        """safe_failable() is true only for elements that can't fail after consuming anything."""
+        cases = {
+            "bstr .cbor Entry": True,  # Plain zcbor_bstr_decode().
+            "bstr .cbor Other": False,  # Consumes the bstr header before decoding the content.
+            "* uint": True,  # zcbor_multi_decode() restores the failing iteration.
+            "+ uint": True,
+            "2* uint": False,  # Can fail after the first iteration.
+            "(#6.1(uint) / bool)": True,  # Members are restored, the last is safe.
+            "(bool / #6.1(uint))": False,
+            "UintBool": True,
+            "#6.1(uint)": False,
+            "uint .size 1": False,
+            "[uint]": False,
+            "(tstr // (uint, bool))": False,  # The group can fail after the uint.
+        }
+        for type_str, expected in cases.items():
+            cddl = f"test = [x: {type_str}]\nEntry = [uint]\nOther = [uint]\nUintBool = uint / bool"
+            res = self.do_test_code_generation(cddl, entry_type_names=["test", "Entry"])
+            elem = res.my_types["test"].value[0]
+            self.assertEqual(expected, elem.safe_failable(), type_str)
+
     def test_optional_assign_calls_repeated_function_when_safe_failable(self):
         """The assign path is not valid when repeated_single_func_impl_condition() is True"""
-        test = self.do_test_code_generation("test = ? (a: int, b: int)").my_types["test"]
+        test = self.do_test_code_generation("test = ? (uint / bool)").my_types["test"]
+        self.assertTrue(test.safe_failable())
         self.assertTrue(test.repeated_single_func_impl_condition())
-        with patch.object(type(test), "safe_failable", return_value=True):
-            with self.assertRaises(AssertionError):
-                test.full_xcode(res_var=test.full_result_var())
+        code = test.full_xcode(res_var=test.full_result_var())
+        self.assertIn("ZCBOR_CUSTOM_CAST_FP(decode_repeated_test)", code)
+        self.assertNotIn("zcbor_union_start_code(state)", code)
 
     def test_comment_parsing_ignores_semicolon_in_string(self):
         """Comments should not be parsed inside strings."""
