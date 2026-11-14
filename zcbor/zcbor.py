@@ -2605,7 +2605,11 @@ class CodeGenerator(CddlXcoder):
             or (self.type in ["LIST", "MAP", "GROUP"] and self.multi_member())
             or (
                 self.multi_var_condition()
-                and (self.self_repeated_multi_var_condition() or self.range_check_condition())
+                and (
+                    self.self_repeated_multi_var_condition()
+                    or self.range_check_condition()
+                    or bool(self.tags)
+                )
             )
         )
 
