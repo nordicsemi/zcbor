@@ -2401,6 +2401,108 @@ class TestTagValidation(PopenTest):
                         )
 
 
+class TestNestedTags(PopenTest, TempdTest):
+    """Nested tags must be in order, outermost first."""
+
+    cddl = """
+        Inner = #6.7(uint)
+        Alias = #6.6(Inner)
+        Grp = (#6.7(uint))
+        Direct = #6.6(#6.7(uint))
+        Ref = #6.6(Inner)
+        RefGrp = #6.6(Grp)
+        InList = [Alias]
+        Triple = #6.10(#6.6(#6.7(uint)))
+        TripleRef = #6.10(Alias)
+        Key = #6.6(#6.7(1))
+        InMap = {Key => #6.6(#6.7(uint))}
+        Union = #6.6(#6.7(uint)) / #6.8(#6.9(tstr))
+        TaggedUnion = #6.6(#6.7(uint) / #6.8(tstr))
+        Optional = [?#6.6(#6.7(uint))]
+        Repeated = [*#6.6(Inner)]
+        Cbor = [bstr .cbor #6.6(#6.7(uint))]
+        Any = #6.6(#6.7(any))
+        Anything = any
+    """
+
+    def setUp(self):
+        self.my_types = zcbor.DataTranslator.from_cddl(cddl_string=self.cddl, default_max_qty=4).my_types
+        return super().setUp()
+
+    def assert_valid(self, type_name, *objs):
+        for obj in objs:
+            with self.subTest(type_name=type_name, obj=obj):
+                self.assertTrue(self.my_types[type_name].validate_obj(obj))
+
+    def assert_invalid(self, type_name, *objs):
+        for obj in objs:
+            with self.subTest(type_name=type_name, obj=obj):
+                with self.assertRaises(zcbor.CddlValidationError):
+                    self.my_types[type_name].validate_obj(obj)
+
+    def test_tag_order_parsed(self):
+        self.assertEqual([6, 7], self.my_types["Direct"].tags)
+        self.assertEqual([10, 6, 7], self.my_types["Triple"].tags)
+        self.assertEqual([6, 7], self.my_types["Key"].tags)
+        self.assertEqual([6, 7], self.my_types["Any"].tags)
+
+    def test_tag_order(self):
+        T = cbor2.CBORTag
+        for type_name in ("Alias", "Direct", "Ref", "RefGrp"):
+            self.assert_valid(type_name, T(6, T(7, 5)))
+            self.assert_invalid(type_name, T(7, T(6, 5)), T(6, 5), T(6, T(6, T(7, 5))))
+        self.assert_valid("InList", [T(6, T(7, 5))])
+        self.assert_invalid("InList", [T(7, T(6, 5))])
+        for type_name in ("Triple", "TripleRef"):
+            self.assert_valid(type_name, T(10, T(6, T(7, 5))))
+            self.assert_invalid(
+                type_name, T(7, T(6, T(10, 5))), T(10, T(7, T(6, 5))), T(6, T(10, T(7, 5)))
+            )
+        self.assert_valid("InMap", {T(6, T(7, 1)): T(6, T(7, 5))})
+        self.assert_invalid("InMap", {T(7, T(6, 1)): T(6, T(7, 5))}, {T(6, T(7, 1)): T(7, T(6, 5))})
+        self.assert_valid("Union", T(6, T(7, 5)), T(8, T(9, "a")))
+        self.assert_invalid("Union", T(7, T(6, 5)), T(9, T(8, "a")), T(6, T(9, "a")))
+        self.assert_valid("TaggedUnion", T(6, T(7, 5)), T(6, T(8, "a")))
+        self.assert_invalid("TaggedUnion", T(7, T(6, 5)), T(8, T(6, "a")))
+        self.assert_valid("Optional", [], [T(6, T(7, 5))])
+        self.assert_invalid("Optional", [T(7, T(6, 5))])
+        self.assert_valid("Repeated", [], [T(6, T(7, 5)), T(6, T(7, 6))])
+        self.assert_invalid("Repeated", [T(6, T(7, 5)), T(7, T(6, 6))])
+        self.assert_valid("Cbor", [bytes.fromhex("c6c705")])
+        self.assert_invalid("Cbor", [bytes.fromhex("c7c605")])
+        self.assert_valid("Any", T(6, T(7, 5)), T(6, T(7, T(8, "a"))))
+        self.assert_invalid("Any", T(7, T(6, 5)), T(8, T(6, T(7, 5))))
+
+    def test_tag_order_cli(self):
+        """Tags are written to, and read from, YAML and JSON outermost first."""
+        cddl_path = Path(self.tempd, "nested_tags.cddl")
+        cddl_path.write_text(self.cddl, encoding="utf-8")
+
+        def convert(type_name, input_as, output_as, data, exp_retcode=0):
+            args = ["zcbor", "convert", "-c", str(cddl_path), "--yaml-compatibility", "-t", type_name]
+            args += ["-i", "-", "--input-as", input_as, "-o", "-", "--output-as", output_as]
+            return self.popen_test(args, data, exp_retcode=exp_retcode)[0]
+
+        def tag(tag, val):
+            return {"zcbor_tag": tag, "zcbor_tag_val": val}
+
+        for type_name, cborhex, reversed_cborhex, yaml_obj in (
+            ("Direct", b"c6c705", b"c7c605", tag(6, tag(7, 5))),
+            ("TripleRef", b"cac6c705", b"cac7c605", tag(10, tag(6, tag(7, 5)))),
+            ("Cbor", b"8143c6c705", b"8143c7c605", [{"zcbor_bstr": tag(6, tag(7, 5))}]),
+        ):
+            for output_as in ("yaml", "json"):
+                with self.subTest(type_name=type_name, output_as=output_as):
+                    out = convert(type_name, "cborhex", output_as, cborhex)
+                    self.assertEqual(yaml_obj, safe_load(out))
+                    out = convert(type_name, output_as, "cborhex", out)
+                    self.assertEqual(cborhex, out.replace(b"\r\n", b"\n").strip())
+                    reversed_out = convert("Anything", "cborhex", output_as, reversed_cborhex)
+                    convert(type_name, output_as, "cborhex", reversed_out, exp_retcode=1)
+            with self.subTest(type_name=type_name):
+                convert(type_name, "cborhex", "yaml", reversed_cborhex, exp_retcode=1)
+
+
 def cp_from_cddl(cddl):
     return zcbor.CddlParser.from_cddl(cddl_string=cddl)
 

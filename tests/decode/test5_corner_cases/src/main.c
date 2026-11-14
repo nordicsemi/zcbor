@@ -262,6 +262,89 @@ ZTEST(cbor_decode_test5, test_tagged_union)
 		sizeof(payload_tagged_union3_inv), &result, &decode_len), NULL);
 }
 
+
+/** Test that nested tags are decoded in order, outermost first, and that swapping any two
+ *  nested tags makes the decoding fail.
+ */
+ZTEST(cbor_decode_test5, test_nested_tags)
+{
+	const uint8_t payload_nested_tags1[] = {LIST(8),
+		0xC6, 0xC7, 0x01, /* nt_direct: #6.6(#6.7(1)) */
+		0xC6, 0xC7, 0x02, /* nt_ref: #6.6(#6.7(2)) */
+		0xC6, 0xC7, 0x03, /* nt_alias: #6.6(#6.7(3)) */
+		0xCA, 0xC6, 0xC7, 0x04, /* nt_triple: #6.10(#6.6(#6.7(4))) */
+		0xC6, 0xC7, 0x05, /* nt_union: #6.6(#6.7(5)) */
+		0x43, 0xC6, 0xC7, 0x06, /* nt_cbor: << #6.6(#6.7(6)) >> */
+		0xC6, 0xC7, 0x07, /* nt_opt: #6.6(#6.7(7)) */
+		MAP(1), 0xC6, 0xC7, 0x01, 0xC6, 0xC7, 0x08, END /* nt_map: {#6.6(#6.7(1)): #6.6(#6.7(8))} */
+		END
+	};
+	const uint8_t payload_nested_tags2[] = {LIST(7),
+		0xC6, 0xC7, 0x01, /* nt_direct: #6.6(#6.7(1)) */
+		0xC6, 0xC7, 0x02, /* nt_ref: #6.6(#6.7(2)) */
+		0xC6, 0xC7, 0x03, /* nt_alias: #6.6(#6.7(3)) */
+		0xCA, 0xC6, 0xC7, 0x04, /* nt_triple: #6.10(#6.6(#6.7(4))) */
+		0xC8, 0xC9, 0x61, 0x61, /* nt_union: #6.8(#6.9("a")) */
+		0x43, 0xC6, 0xC7, 0x06, /* nt_cbor: << #6.6(#6.7(6)) >> */
+		MAP(1), 0xC6, 0xC7, 0x01, 0xC6, 0xC7, 0x08, END /* nt_map: {#6.6(#6.7(1)): #6.6(#6.7(8))} */
+		END
+	};
+	/* Offsets of the first of two nested tags to swap, and the resulting error. */
+	const struct {
+		const uint8_t *payload;
+		size_t len;
+		size_t offset;
+		int err;
+	} swaps[] = {
+		{payload_nested_tags1, sizeof(payload_nested_tags1), 1, ZCBOR_ERR_WRONG_VALUE},
+		{payload_nested_tags1, sizeof(payload_nested_tags1), 4, ZCBOR_ERR_WRONG_VALUE},
+		{payload_nested_tags1, sizeof(payload_nested_tags1), 7, ZCBOR_ERR_WRONG_VALUE},
+		{payload_nested_tags1, sizeof(payload_nested_tags1), 10, ZCBOR_ERR_WRONG_VALUE},
+		{payload_nested_tags1, sizeof(payload_nested_tags1), 11, ZCBOR_ERR_WRONG_VALUE},
+		{payload_nested_tags1, sizeof(payload_nested_tags1), 14, ZCBOR_ERR_WRONG_VALUE},
+		{payload_nested_tags1, sizeof(payload_nested_tags1), 18, ZCBOR_ERR_WRONG_VALUE},
+		/* nt_opt is absent, so nt_map is decoded from it. */
+		{payload_nested_tags1, sizeof(payload_nested_tags1), 21, ZCBOR_ERR_WRONG_TYPE},
+		{payload_nested_tags1, sizeof(payload_nested_tags1), 25, ZCBOR_ERR_WRONG_VALUE},
+		{payload_nested_tags1, sizeof(payload_nested_tags1), 28, ZCBOR_ERR_WRONG_VALUE},
+		{payload_nested_tags2, sizeof(payload_nested_tags2), 14, ZCBOR_ERR_WRONG_VALUE},
+	};
+	uint8_t payload_inv[sizeof(payload_nested_tags1)];
+	struct NestedTags result;
+	size_t decode_len;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_NestedTags(payload_nested_tags1,
+		sizeof(payload_nested_tags1), &result, &decode_len), NULL);
+	zassert_equal(sizeof(payload_nested_tags1), decode_len, NULL);
+	zassert_equal(1, result.nt_direct, NULL);
+	zassert_equal(2, result.nt_ref, NULL);
+	zassert_equal(3, result.nt_alias, NULL);
+	zassert_equal(4, result.nt_triple, NULL);
+	zassert_equal(NestedTags_nt_union_nt_union_uint_c, result.nt_union_choice, NULL);
+	zassert_equal(5, result.nt_union_uint, NULL);
+	zassert_equal(6, result.nt_cbor_cbor, NULL);
+	zassert_true(result.nt_opt_present, NULL);
+	zassert_equal(7, result.nt_opt, NULL);
+	zassert_equal(8, result.NestedTagsKey, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_NestedTags(payload_nested_tags2,
+		sizeof(payload_nested_tags2), &result, &decode_len), NULL);
+	zassert_equal(sizeof(payload_nested_tags2), decode_len, NULL);
+	zassert_equal(NestedTags_nt_union_nt_union_tstr_c, result.nt_union_choice, NULL);
+	zassert_zcbor_string(&result.nt_union_tstr, "a", 1);
+	zassert_false(result.nt_opt_present, NULL);
+
+	for (size_t i = 0; i < ARRAY_SIZE(swaps); i++) {
+		memcpy(payload_inv, swaps[i].payload, swaps[i].len);
+		payload_inv[swaps[i].offset] = swaps[i].payload[swaps[i].offset + 1];
+		payload_inv[swaps[i].offset + 1] = swaps[i].payload[swaps[i].offset];
+
+		int err = cbor_decode_NestedTags(payload_inv, swaps[i].len, &result, &decode_len);
+
+		zassert_equal(swaps[i].err, err, "swap %zu: %d\r\n", i, err);
+	}
+}
+
 ZTEST(cbor_decode_test5, test_number_map)
 {
 	size_t decode_len = 0xFFFFFFFF;

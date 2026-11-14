@@ -37,6 +37,21 @@ Numbers2 = [
 
 TaggedUnion = #6.4321(bool) // #6.2345(uint)
 
+; Nested tags, which must be in order, outermost first.
+NestedTagsInner = #6.7(uint)
+NestedTagsAlias = #6.6(NestedTagsInner)
+NestedTagsKey = #6.6(#6.7(1))
+NestedTags = [
+	nt_direct: #6.6(#6.7(uint)),
+	nt_ref: #6.6(NestedTagsInner),
+	nt_alias: NestedTagsAlias,
+	nt_triple: #6.10(#6.6(#6.7(uint))),
+	nt_union: (nt_union_uint: #6.6(#6.7(uint))) / (nt_union_tstr: #6.8(#6.9(tstr))),
+	nt_cbor: bstr .cbor #6.6(#6.7(uint)),
+	? nt_opt: NestedTagsAlias,
+	nt_map: {NestedTagsKey => #6.6(#6.7(uint))},
+]
+
 ; Using .size and .cbor together with maps.
 NumberMap = {
 	"byte" => uint .size 1,
