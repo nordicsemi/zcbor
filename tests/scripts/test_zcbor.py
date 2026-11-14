@@ -1156,6 +1156,87 @@ class TestOptional(TestCase):
         self.assertEqual(decoded.mem_config[0].N, [5])
 
 
+class TestNestedQuantifiers(TestCase):
+    """Quantifiers on parenthesized groups whose content is also quantified."""
+
+    cddl = """
+        AnyOpt = [* (? uint)]
+        AnyOptMap = {* (? 1 => uint)}
+        OptOptUnion = [? (? uint / bool)]
+        OptOptUnion2 = [? (? (uint / bool))]
+        PlusOpt = [+ (? uint)]
+        OptPlus = [? (+ uint)]
+        RangeOpt = [2*3 (? uint)]
+        RangeRange = [2*3 (1*2 uint)]
+        ExactExact = [2*2 (3*3 uint)]
+        Gaps = [1*2 (2*2 uint)]
+        OptGaps = [? (2*2 uint)]
+        Named = [* NamedOpt]
+        NamedOpt = (? uint)
+        Default = [? (? uint .default 3)]
+    """
+
+    # (type name, (min_qty, max_qty) of the list's content, valid data, invalid data)
+    cases = (
+        ("AnyOpt", (0, None), ([], [1], [1, 2, 3]), (["a"], [1, "a"])),
+        ("AnyOptMap", (0, None), ({}, {1: 2}), ({2: 2}, {1: "a"})),
+        ("OptOptUnion", (0, 1), ([], [1], [True]), ([1, 2], ["a"])),
+        ("OptOptUnion2", (0, 1), ([], [1], [True]), ([1, True], ["a"])),
+        ("PlusOpt", (0, None), ([], [1, 2]), (["a"],)),
+        ("OptPlus", (0, None), ([], [1, 2]), (["a"],)),
+        ("RangeOpt", (0, 3), ([], [1, 2, 3]), ([1, 2, 3, 4],)),
+        ("RangeRange", (2, 6), ([1, 2], [1] * 6), ([1], [1] * 7)),
+        ("ExactExact", (6, 6), ([1] * 6,), ([1] * 5, [1] * 7)),
+        ("Gaps", (1, 2), ([1, 2], [1, 2, 3, 4]), ([], [1], [1, 2, 3])),
+        ("OptGaps", (0, 1), ([], [1, 2]), ([1], [1, 2, 3])),
+        ("Named", (0, None), ([], [1, 2]), (["a"],)),
+        ("Default", (0, 1), ([], [1]), ([1, 2],)),
+    )
+
+    def test_nested_quantifiers(self):
+        my_types = zcbor.DataTranslator.from_cddl(cddl_string=self.cddl, default_max_qty=10).my_types
+        for type_name, qty, valid, invalid in self.cases:
+            with self.subTest(type_name=type_name):
+                self.assertEqual(1, len(my_types[type_name].value))
+                child = my_types[type_name].value[0]
+                self.assertEqual(qty, (child.min_qty, child.max_qty))
+                for data in valid:
+                    my_types[type_name].validate_obj(data)
+                for data in invalid:
+                    with self.assertRaises(zcbor.CddlValidationError, msg=str(data)):
+                        my_types[type_name].validate_obj(data)
+        self.assertEqual(3, my_types["Default"].value[0].default.value)
+        # Groups whose quantifiers can't be combined into one are kept.
+        self.assertEqual("GROUP", my_types["Gaps"].value[0].type)
+        gaps_child = my_types["Gaps"].value[0].value[0]
+        self.assertEqual((2, 2), (gaps_child.min_qty, gaps_child.max_qty))
+
+    def test_nested_quantifiers_default(self):
+        for quantifier in ("*", "+"):
+            with self.subTest(quantifier=quantifier):
+                with self.assertRaisesRegex(
+                    zcbor.CddlParsingError, "optional element inside a repetition"
+                ):
+                    zcbor.DataTranslator.from_cddl(cddl_string=f"T = [{quantifier} (? uint .default 3)]")
+
+    def test_nested_quantifiers_corner_cases(self):
+        cddl_res = zcbor.DataTranslator.from_cddl(
+            cddl_string=p_corner_cases.read_text(encoding="utf-8"),
+            default_max_qty=16,
+        )
+        nested = cddl_res.my_types["NestedQuantifiers"]
+        decoded = nested.decode_obj([1, 2, True, "a", "b", b"", b"c", {1: None}], True)
+        self.assertEqual([1, 2], decoded.anyopt)
+        self.assertEqual([True], decoded.optopt)
+        self.assertEqual([["a", "b"]], [p.tstr for p in decoded.pairs])
+        self.assertEqual([b"", b"c"], decoded.optpair[0].bstr)
+        self.assertEqual([1], [e.uintnil_key for e in decoded.optmap.uintnil])
+        nested.validate_obj(["a", "b", "c", "d", {}])
+        for data in (["a", "b", "c", {}], ["a", "b", b"", {}], [1, True, {}]):
+            with self.assertRaises(zcbor.CddlValidationError, msg=str(data)):
+                nested.validate_obj(data)
+
+
 class CornerCaseTest(TestCase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

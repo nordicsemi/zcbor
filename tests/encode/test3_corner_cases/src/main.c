@@ -1302,6 +1302,59 @@ ZTEST(cbor_encode_test3, test_quantity_range)
 			&result_qty_range4_inv, &out_len), NULL);
 }
 
+ZTEST(cbor_encode_test3, test_nested_quantifiers)
+{
+	uint8_t exp_payload_nested_qty1[] = {LIST(9), 0x01, 0x02, 0x03, 0xF5, 0x61, 'a', 0x61, 'b',
+		0x40, 0x41, 'c', MAP(2), 0x01, 0xF6, 0x02, 0xF6, END END};
+	uint8_t exp_payload_nested_qty2[] = {LIST(5), 0x61, 'a', 0x61, 'b', 0x61, 'c', 0x61, 'd',
+		MAP(0), END END};
+	struct zcbor_string a = {(const uint8_t *)"a", 1};
+	struct zcbor_string b = {(const uint8_t *)"b", 1};
+	struct zcbor_string c = {(const uint8_t *)"c", 1};
+	struct zcbor_string d = {(const uint8_t *)"d", 1};
+	struct zcbor_string empty = {(const uint8_t *)"", 0};
+	struct NestedQuantifiers input1 = {
+		.anyopt = {1, 2, 3},
+		.anyopt_count = 3,
+		.optopt = true,
+		.optopt_present = true,
+		.pairs = {{.tstr = {a, b}, .tstr_count = 2}},
+		.pairs_count = 1,
+		.optpair = {.bstr = {empty, c}, .bstr_count = 2},
+		.optpair_present = true,
+		.uintnil = {{.uintnil_key = 1}, {.uintnil_key = 2}},
+		.uintnil_count = 2,
+	};
+	struct NestedQuantifiers input2 = {
+		.pairs = {{.tstr = {a, b}, .tstr_count = 2}, {.tstr = {c, d}, .tstr_count = 2}},
+		.pairs_count = 2,
+	};
+	struct NestedQuantifiers input3_inv = {
+		.pairs = {{.tstr = {a, b}, .tstr_count = 2}},
+		.pairs_count = 3,
+	};
+	struct NestedQuantifiers input4_inv = {
+		.pairs_count = 0,
+	};
+	uint8_t output[25];
+	size_t out_len;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_NestedQuantifiers(output, sizeof(output),
+			&input1, &out_len), NULL);
+	zassert_equal(sizeof(exp_payload_nested_qty1), out_len, "was %d\n", out_len);
+	zassert_mem_equal(exp_payload_nested_qty1, output, sizeof(exp_payload_nested_qty1), NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_NestedQuantifiers(output, sizeof(output),
+			&input2, &out_len), NULL);
+	zassert_equal(sizeof(exp_payload_nested_qty2), out_len, "was %d\n", out_len);
+	zassert_mem_equal(exp_payload_nested_qty2, output, sizeof(exp_payload_nested_qty2), NULL);
+
+	zassert_equal(ZCBOR_ERR_ITERATIONS, cbor_encode_NestedQuantifiers(output, sizeof(output),
+			&input3_inv, &out_len), NULL);
+	zassert_equal(ZCBOR_ERR_ITERATIONS, cbor_encode_NestedQuantifiers(output, sizeof(output),
+			&input4_inv, &out_len), NULL);
+}
+
 ZTEST(cbor_encode_test3, test_doublemap)
 {
 	uint8_t exp_payload_doublemap0[] = {MAP(2), 0x01, MAP(1), 0x01, 0x01, END 0x02, MAP(1), 0x02, 0x02, END END};
