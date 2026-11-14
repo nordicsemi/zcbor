@@ -517,6 +517,8 @@ class CddlParser:
         # same class as self.
         self.key = None
         self.is_key = False
+        # Whether self.key was set from a bareword ("foo:"), see set_key_or_label().
+        self.bareword_key = False
         # The element specified via.cbor or.cborseq(only for byte
         # strings).self.cbor is of the same class as self.
         self.cbor = None
@@ -1313,10 +1315,26 @@ class CddlParser:
         if key_or_label in self.my_types:
             self.set_key(key_or_label)
             assert self.key.type == "OTHER", "This should only be able to produce an OTHER key."
+            self.bareword_key = True
             if self.label is None:
                 self.set_label(key_or_label)
         else:
             self.set_label(key_or_label)
+
+    def bareword_keys_to_labels(self, members):
+        """Make bareword keys ("foo:") of list members into labels.
+
+        In a list, "foo:" is always a label, even if foo is also the name of a type.
+        Recurses into inline groups and unions. For use during CDDL parsing.
+        """
+        for member in members:
+            if member.bareword_key:
+                member.key = None
+                member.bareword_key = False
+                del member.modifiers["key"]
+            if member.type in ["GROUP", "UNION"]:
+                self.bareword_keys_to_labels(member.value)
+        return members
 
     def add_tag(self, tag):
         self.add_modifier("tag", no_duplicates=False)
@@ -1368,7 +1386,12 @@ class CddlParser:
                 ),
             ),
             # These 5 match contents enclosed by (), [], and {}, ' or ":
-            (rbracket, lambda m_self, s: m_self.type_and_value("LIST", lambda: m_self.parse_members(s))),
+            (
+                rbracket,
+                lambda m_self, s: m_self.type_and_value(
+                    "LIST", lambda: m_self.bareword_keys_to_labels(m_self.parse_members(s))
+                ),
+            ),
             (rparen, lambda m_self, s: m_self.type_and_value("GROUP", lambda: m_self.parse_members(s))),
             (rcurly, lambda m_self, s: m_self.type_and_value("MAP", lambda: m_self.parse_members(s))),
             (rquote, lambda m_self, s: m_self.type_and_value("BSTR", lambda: s)),
