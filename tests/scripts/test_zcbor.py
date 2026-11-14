@@ -1920,6 +1920,22 @@ class TestCodeGeneration(TestCase):
         self.assertEqual("\tstruct zcbor_string test_tstr_l_tstr;", res[0][0][2])
         self.assertEqual("}", res[0][0][3])
 
+    def test_duplicate_struct_members(self):
+        for cddl_string, member in (
+            ("test = [x: uint .size 4, x: uint .size 8]", "test_x"),
+            ("test = [x: uint, ?x: tstr]", "test_x"),
+            ("test = [(x: uint), (x: tstr)]", "test_x"),
+            ("test = [uint, uint]", "test_uint"),
+            ("test = [*y: [x: uint, x: int]]", "test_y_x"),
+        ):
+            with self.subTest(cddl=cddl_string):
+                test_type = self.do_test_code_generation(cddl_string).my_types["test"]
+                with self.assertRaisesRegex(
+                    zcbor.CddlParsingError, f"the same C struct member name {member}\\."
+                ):
+                    test_type.type_def()
+        self.do_test_code_generation("test = [x: uint, y: uint]").my_types["test"].type_def()
+
     def test_no_struct_for_literal_key(self):
         cddl_string = 'test = {? "image" => uint}'
         types = self.do_test_code_generation(cddl_string)
