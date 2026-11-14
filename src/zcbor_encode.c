@@ -676,6 +676,12 @@ bool zcbor_bstr_end_force_encode(zcbor_state_t *state)
 }
 
 
+/* Declarations of functions that are not in zcbor_encode.h, but are kept non-static so
+ * applications can declare and use them (see MIGRATION_GUIDE.md, 0.9.0). */
+bool zcbor_simple_encode(zcbor_state_t *state, uint8_t *input);
+bool zcbor_simple_put(zcbor_state_t *state, uint8_t input);
+
+
 bool zcbor_simple_encode(zcbor_state_t *state, uint8_t *input)
 {
 	/* Simple values 24 to 31 inclusive are unused. Ref: RFC8949 sec 3.3 */
