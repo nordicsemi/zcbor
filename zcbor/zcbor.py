@@ -2937,11 +2937,23 @@ class CodeGenerator(CddlXcoder):
         repeated part is used.
         """
         if full and self.multi_member_decl():
-            return self.enclose("struct", self.full_declaration())
+            return self.enclose_struct(self.full_declaration())
         elif not full and self.repeated_multi_member_condition():
-            return self.enclose("struct", self.repeated_declaration())
+            return self.enclose_struct(self.repeated_declaration())
         else:
             return self.var_type()
+
+    def enclose_struct(self, declaration):
+        """Enclose declarations in a struct, and check that the member names are unique."""
+        names = [m[1] for line in declaration if (m := getrp(r"(\w+)(\[\w+\])?;$").search(line))]
+        duplicates = sorted(set(name for name in names if names.count(name) > 1))
+        if duplicates:
+            raise CddlParsingError(
+                f"Two elements get the same C struct member name {', '.join(duplicates)}.\n"
+                "Names come from labels, keys, values, or type names (with '-' replaced by '_').\n"
+                "Make the names distinct, e.g. by adding or changing labels ([a: uint, b: uint])."
+            )
+        return self.enclose("struct", declaration)
 
     def type_def(self):
         """Return the type definition of this element, and all its children + key + cbor."""
