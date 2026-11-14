@@ -1264,6 +1264,158 @@ class TestYamlCompatibility(PopenTest):
         self.assertEqual(safe_load(stdout2), safe_load(p_yaml_compat_yaml.read_text(encoding="utf-8")))
 
 
+class TestYamlBstrRoundtrip(PopenTest):
+    """Converting bstrs to YAML/JSON and back must give the same bytes, also when the content is
+    valid CBOR by accident."""
+
+    cddl = """
+        Bstrs = {* tstr => bstr}
+        CborBstrs = [
+            uint_cbor: bstr .cbor uint,
+            list_cbor: bstr .cbor [* uint],
+            map_cbor: bstr .cbor {* tstr => int},
+            tstr_cbor: bstr .cbor tstr,
+            seq_cbor: bstr .cborseq uint,
+        ]
+        NonCanonical = [
+            uint_cbor: bstr .cbor uint,
+            list_cbor: bstr .cbor [* uint],
+            nested_cbor: bstr .cbor [bstr .cbor uint],
+        ]
+    """
+
+    # (bstr, how it's represented in zcbor_bstr). Keys are in reverse order to check that the map
+    # order is kept.
+    bstrs = {
+        "z_tstr": (b"ab", "6162"),  # tstr "b"
+        "y_hex_tstr": (b"\x62ab", "626162"),  # tstr "ab", which is also valid hex.
+        "x_uint": (b"\x01", 1),
+        "w_nonminimal_uint": (b"\x18\x01", "1801"),
+        "v_indefinite_list": (b"\x9f\x01\xff", "9f01ff"),
+        "u_list": (b"\x82\x01\x02", [1, 2]),
+        "t_unsorted_map": (b"\xa2\x61b\x02\x61a\x01", {"b": 2, "a": 1}),
+        "s_zcbor_bstr_map": (b"\xa1\x6azcbor_bstr\x42\x00\x00", "a16a7a63626f725f62737472420000"),
+        "r_float16": (b"\xf9\x3c\x00", "f93c00"),
+        "p_bstr": (b"\x41\x61", {"zcbor_bstr": "61"}),
+        "o_two_items": (b"\x01\x02", "0102"),
+        "n_invalid": (b"\xff", "ff"),
+        "m_empty": (b"", ""),
+        # Valid CBOR that fails to convert from YAML.
+        "l_bad_keyval": (cbor2.dumps({"zcbor_keyval0": {}}), "a16d7a63626f725f6b657976616c30a0"),
+        "k_float_overflow": (
+            cbor2.dumps({"zcbor_float16": 10**400}),
+            cbor2.dumps({"zcbor_float16": 10**400}).hex(),
+        ),
+    }
+
+    cbor_bstrs = [
+        (cbor2.dumps(5), 5),
+        (cbor2.dumps([1, 2]), [1, 2]),
+        (cbor2.dumps({"two": 2, "one": 1}), {"two": 2, "one": 1}),
+        (cbor2.dumps("ab"), cbor2.dumps("ab").hex()),
+        (b"\x01\x02", "0102"),
+    ]
+
+    # Not encoded the way cbor2 encodes it: (bstr, zcbor_bstr, bstr in canonical output).
+    non_canonical = [
+        (b"\x18\x01", "1801", b"\x01"),
+        (b"\x9f\x01\x02\xff", "9f0102ff", b"\x82\x01\x02"),
+        (cbor2.dumps([b"\x18\x01"]), [{"zcbor_bstr": "1801"}], cbor2.dumps([b"\x01"])),
+    ]
+
+    def setUp(self):
+        self.my_types = zcbor.DataTranslator.from_cddl(
+            cddl_string=self.cddl, default_max_qty=16
+        ).my_types
+        self.bstrs_cbor = cbor2.dumps({k: v[0] for k, v in self.bstrs.items()})
+        self.bstrs_yaml_obj = {k: {"zcbor_bstr": v[1]} for k, v in self.bstrs.items()}
+        self.cbor_bstrs_cbor = cbor2.dumps([b for b, _ in self.cbor_bstrs])
+        self.cbor_bstrs_yaml_obj = [{"zcbor_bstr": y} for _, y in self.cbor_bstrs]
+        self.non_canonical_cbor = cbor2.dumps([b for b, _, _ in self.non_canonical])
+        self.non_canonical_yaml_obj = [{"zcbor_bstr": y} for _, y, _ in self.non_canonical]
+        self.non_canonical_exp = cbor2.dumps([c for _, _, c in self.non_canonical])
+
+    def test_bstr_roundtrip(self):
+        for type_name, cbor, yaml_obj in (
+            ("Bstrs", self.bstrs_cbor, self.bstrs_yaml_obj),
+            ("CborBstrs", self.cbor_bstrs_cbor, self.cbor_bstrs_yaml_obj),
+            ("NonCanonical", self.non_canonical_cbor, self.non_canonical_yaml_obj),
+        ):
+            with self.subTest(type_name=type_name):
+                my_type = self.my_types[type_name]
+                yaml = my_type.str_to_yaml(cbor, yaml_compat=True)
+                self.assertEqual(yaml_obj, safe_load(yaml))
+                self.assertEqual(list(yaml_obj), list(safe_load(yaml)))  # Same order
+                self.assertEqual(cbor, my_type.from_yaml(yaml, yaml_compat=True))
+                json = my_type.str_to_json(cbor, yaml_compat=True)
+                self.assertEqual(yaml_obj, safe_load(json))
+                self.assertEqual(cbor, my_type.from_json(json, yaml_compat=True))
+                yaml = my_type.str_to_yaml(cbor)
+                self.assertEqual(cbor, my_type.from_yaml(yaml))
+
+    def test_bstr_canonical(self):
+        # Content that is read back as the same CBOR value is made canonical. Other content is
+        # kept.
+        canonical_content = {
+            "w_nonminimal_uint": b"\x01",
+            "v_indefinite_list": b"\x81\x01",
+            "t_unsorted_map": b"\xa2\x61a\x01\x61b\x02",
+        }
+        exp = {k: canonical_content.get(k, v[0]) for k, v in self.bstrs.items()}
+        self.assertEqual(
+            cbor2.dumps(exp, canonical=True),
+            self.my_types["Bstrs"].str_to_canonical(self.bstrs_cbor),
+        )
+
+        # The CBOR in .cbor bstrs is made canonical.
+        exp_cbor_bstrs = [b for b, _ in self.cbor_bstrs]
+        exp_cbor_bstrs[2] = cbor2.dumps({"one": 1, "two": 2})
+        self.assertEqual(
+            cbor2.dumps(exp_cbor_bstrs),
+            self.my_types["CborBstrs"].str_to_canonical(self.cbor_bstrs_cbor),
+        )
+        self.assertEqual(
+            self.non_canonical_exp,
+            self.my_types["NonCanonical"].str_to_canonical(self.non_canonical_cbor),
+        )
+
+    def test_bstr_roundtrip_cli(self):
+        # Must have delete=False because of permission error on Windows.
+        try:
+            with NamedTemporaryFile(mode="w", delete=False) as fc:
+                fc.write(self.cddl)
+            for type_name, cbor, yaml_obj in (
+                ("Bstrs", self.bstrs_cbor, self.bstrs_yaml_obj),
+                ("CborBstrs", self.cbor_bstrs_cbor, self.cbor_bstrs_yaml_obj),
+                ("NonCanonical", self.non_canonical_cbor, self.non_canonical_yaml_obj),
+            ):
+                args = ["zcbor", "convert", "-c", fc.name, "-t", type_name, "-i", "-", "-o", "-"]
+                for fmt, extra_args in (
+                    ("yaml", ["--yaml-compatibility"]),
+                    ("json", ["--yaml-compatibility"]),
+                    ("yaml", []),
+                ):
+                    with self.subTest(type_name=type_name, fmt=fmt, extra_args=extra_args):
+                        text, _ = self.popen_test(
+                            args + ["--input-as", "cbor", "--output-as", fmt] + extra_args, cbor
+                        )
+                        text = text.replace(b"\r\n", b"\n")
+                        if extra_args:
+                            self.assertEqual(yaml_obj, safe_load(text))
+                        cbor2_out, _ = self.popen_test(
+                            args + ["--input-as", fmt, "--output-as", "cbor"] + extra_args, text
+                        )
+                        self.assertEqual(cbor, cbor2_out)
+            args = ["zcbor", "convert", "-c", fc.name, "-t", "NonCanonical", "-i", "-", "-o", "-"]
+            canonical_out, _ = self.popen_test(
+                args + ["--input-as", "cbor", "--output-as", "cbor", "--output-canonical"],
+                self.non_canonical_cbor,
+            )
+            self.assertEqual(self.non_canonical_exp, canonical_out)
+        finally:
+            Path(fc.name).unlink()
+
+
 class TestYamlFloatCompatibility(PopenTest):
     def test_yaml_float_compatibility(self):
         # Validate without --yaml-compatibility must fail.

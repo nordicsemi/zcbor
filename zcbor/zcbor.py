@@ -2258,31 +2258,44 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
             return retval
         return obj
 
-    def _to_yaml_obj(self, obj):
+    def _to_yaml_obj(self, obj, can=False):
         """inverse of _from_yaml_obj"""
         if isinstance(obj, list) or isinstance(obj, tuple):
-            return [self._to_yaml_obj(elem) for elem in obj]
+            return [self._to_yaml_obj(elem, can) for elem in obj]
         elif isinstance(obj, (dict, zfrozendict)):
             retval = dict()
             i = 0
             for key, val in obj.items():
                 if not isinstance(key, str):
                     retval[f"zcbor_keyval{i}"] = {
-                        "key": self._to_yaml_obj(key),
-                        "val": self._to_yaml_obj(val),
+                        "key": self._to_yaml_obj(key, can),
+                        "val": self._to_yaml_obj(val, can),
                     }
                     i += 1
                 else:
-                    retval[key] = self._to_yaml_obj(val)
+                    retval[key] = self._to_yaml_obj(val, can)
             return retval
         elif isinstance(obj, bytes):
             try:
-                bstr_obj = self._to_yaml_obj(strict_loads(obj))
-            except CBORDecodeError:
-                bstr_obj = obj.hex()
-            return {"zcbor_bstr": bstr_obj}
+                content = strict_loads(obj)
+                bstr_obj = {"zcbor_bstr": self._to_yaml_obj(content)}
+                # Show the content as CBOR only if it is read back as the same bytes. It isn't if
+                # the content is e.g. a tstr (read back as hex), or isn't encoded the way cbor2
+                # encodes it. If the output will be canonical (can), it is enough that the content
+                # is read back as the same value, since it will be re-encoded canonically. The check
+                # uses the non-canonical form, so bstrs nested in the content are compared exactly.
+                read_back = self._from_yaml_obj(bstr_obj, False)
+                if can:
+                    if dumps(strict_loads(read_back), canonical=True) == dumps(content, canonical=True):
+                        return {"zcbor_bstr": self._to_yaml_obj(content, can)}
+                elif read_back == obj:
+                    return bstr_obj
+            except Exception:
+                # Any error while checking the decoded form means it can't be used.
+                pass
+            return {"zcbor_bstr": obj.hex()}
         elif isinstance(obj, CBORTag):
-            return {"zcbor_tag": obj.tag, "zcbor_tag_val": self._to_yaml_obj(obj.value)}
+            return {"zcbor_tag": obj.tag, "zcbor_tag_val": self._to_yaml_obj(obj.value, can)}
         elif obj is undefined:
             return ["zcbor_undefined"]
         assert not isinstance(obj, bytes)
@@ -2299,7 +2312,7 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
         """CBOR object => YAML str"""
         self.validate_obj(obj)
         yaml_obj = self._to_yaml_obj(obj) if yaml_compat else obj
-        return yaml_dump(yaml_obj)
+        return yaml_dump(yaml_obj, sort_keys=False)  # Keep the map order, to convert back exactly.
 
     def str_to_yaml(self, cbor_str, yaml_compat=False):
         """CBOR bytestring => YAML str"""
@@ -2337,9 +2350,10 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
 
     def str_to_canonical(self, cbor_str):
         """CBOR bytestring => canonical CBOR bytestring."""
-        return self.from_yaml(
-            self.str_to_yaml(cbor_str, yaml_compat=True), yaml_compat=True, canonical=True
-        )
+        obj = loads(cbor_str)
+        self.validate_obj(obj)
+        yaml_str = yaml_dump(self._to_yaml_obj(obj, can=True), sort_keys=False)
+        return self.from_yaml(yaml_str, yaml_compat=True, canonical=True)
 
 
 class XcoderTuple(NamedTuple):
