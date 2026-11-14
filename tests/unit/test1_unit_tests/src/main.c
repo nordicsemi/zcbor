@@ -677,7 +677,7 @@ ZTEST(zcbor_unit_tests, test_null_state)
 	zassert_false(zcbor_union_elem_code(NULL), NULL);
 	zassert_false(zcbor_union_end_code(NULL), NULL);
 	zcbor_new_state(NULL, 2, dummy_payload, sizeof(dummy_payload), 0, NULL, 0);
-	zassert_false(zcbor_entry_function_with_elem_states(dummy_payload, sizeof(dummy_payload), NULL, NULL, NULL, ZCBOR_CAST_FP(zcbor_int32_pexpect), 2, 0, 0), NULL);
+	zassert_equal(zcbor_entry_function_with_elem_states(dummy_payload, sizeof(dummy_payload), NULL, NULL, NULL, ZCBOR_CAST_FP(zcbor_int32_pexpect), 2, 0, 0), ZCBOR_ERR_BAD_ARG, NULL);
 	zcbor_update_state(NULL, dummy_payload, sizeof(dummy_payload));
 }
 
