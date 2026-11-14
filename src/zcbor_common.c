@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <string.h>
 #include "zcbor_common.h"
 #include "zcbor_print.h"
@@ -123,7 +124,7 @@ bool zcbor_new_backup(zcbor_state_t *state, size_t new_elem_count)
 bool zcbor_process_backup_num(zcbor_state_t *state, uint32_t flags,
 		size_t max_elem_count, size_t backup_num)
 {
-	ZCBOR_PRINT_FUNC_NAME_ARGS("(flags=%u, backup_num=%zu)", flags, backup_num);
+	ZCBOR_PRINT_FUNC_NAME_ARGS("(flags=%" PRIu32 ", backup_num=%zu)", flags, backup_num);
 	zcbor_log("\r\n");
 	ZCBOR_CHECK_NULL(state);
 	ZCBOR_ERR_IF(!state->constant_state, ZCBOR_ERR_CONSTANT_STATE_MISSING);
