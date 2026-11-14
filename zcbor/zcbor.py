@@ -44,6 +44,7 @@ from shutil import copyfile
 import sys
 from textwrap import wrap, indent
 from codecs import decode as codec_decode
+import warnings
 from math import prod
 import struct
 
@@ -147,6 +148,10 @@ def _custom_float_encoder(encoder, value):
 
 
 # ============================================================================
+
+
+class CddlWarning(UserWarning):
+    """Warning about CDDL that zcbor doesn't fully support, or that is likely a mistake."""
 
 
 class CddlParsingError(Exception):
@@ -3069,6 +3074,12 @@ class CodeGenerator(CddlXcoder):
         ptr_variant = ptr_result and self.type in ["UINT", "INT", "NINT", "FLOAT", "BOOL"]
         func_prefix = self.single_func_prim_prefix()
         union_action = (union_int or {}).get("action")
+        if self.type == "ANY":
+            warnings.warn(
+                f"{self.var_func_name(with_prefix=True)}: any is not fully supported in generated code. "
+                "Decoding skips it, encoding writes nil, and the struct has no member for it.",
+                CddlWarning,
+            )
         if self.mode == "decode":
             if self.type == "ANY":
                 func = "zcbor_any_skip"
@@ -5042,6 +5053,11 @@ def process_convert(args):
 
 def main():
     args = parse_args()
+    # Print CDDL warnings as "warning: <message>". By default, each one is printed once.
+    formatwarning = warnings.formatwarning
+    warnings.formatwarning = lambda msg, category, *args, **kwargs: (
+        f"warning: {msg}\n" if category is CddlWarning else formatwarning(msg, category, *args, **kwargs)
+    )
     args.process(args)
 
 
