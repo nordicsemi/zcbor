@@ -48,6 +48,12 @@
 
 * Code generation:
 
+  * Some union choice enum values can change, because of a bug fix:
+
+    * Unions whose members start with an integer key or value are no longer decoded through that integer when a member, or its first element, is optional or repeated (e.g. `{? (1 => uint) // (2 => bool)}`).
+      Such unions were mis-decoded before.
+      The enum values then no longer equal those integers, so use the enum names instead of the integer values.
+
   * Integers whose values are known to be within 8 or 16 bytes now use the corresponding integer types (`uint8_t`/`int8_t`/`uint16_t`/`int16_t`) instead of larger types.
     In certain specific cases, the type of an argument to a `cbor_decode_*` or `cbor_decode_*` can change when regenerating the code, requiring changes in your non-generated code.
     More commonly, struct members will change to use smaller int types.

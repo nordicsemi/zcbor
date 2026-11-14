@@ -1417,6 +1417,18 @@ class TestInvalidIdentifiers(CornerCaseTest):
         self.assertTrue(decoded.a_z_tstr)
 
 
+class TestUnionIntQuantified(CornerCaseTest):
+    def test_union_int_opt2(self):
+        cddl = self.cddl_res.my_types["UnionIntOpt2"]
+        self.assertEqual([], cddl.decode_str(cbor2.dumps({})).union.uint3uint)
+        self.assertEqual([5], cddl.decode_str(cbor2.dumps({3: 5})).union.uint3uint)
+
+        # CDDL choices are tried in order (RFC 8610 Appendix A), so the first member matches
+        # nothing and wins, and 4: true is left over. The C decoder fails in the same way.
+        with self.assertRaises(zcbor.CddlValidationError):
+            cddl.decode_str(cbor2.dumps({4: True}))
+
+
 class TestIntSize(PopenTest, TempdTest):
     def do_test_int_size(self, mode, defines_arg, bit_size):
         self.popen_test(

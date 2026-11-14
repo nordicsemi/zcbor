@@ -1652,6 +1652,88 @@ ZTEST(cbor_encode_test3, test_union_int)
 }
 
 
+/* The union members start with integers, but the integers are optional or repeated. */
+ZTEST(cbor_encode_test3, test_union_int_quantified)
+{
+	uint8_t exp_empty_map_payload[] = {MAP(0), END};
+	uint8_t exp_union_int_opt1_payload[] = {MAP(1), 0x01, 0x05, END};
+	uint8_t exp_union_int_rep_payload1[] = {MAP(1), 0x05, 0x05, END};
+	uint8_t exp_union_int_rep_payload2[] = {MAP(2), 0x06, 0xF5, 0x06, 0xF4, END};
+	uint8_t exp_union_int_opt_list_payload1[] = {LIST(0), END};
+	uint8_t exp_union_int_opt_group_payload1[] = {MAP(2), 0x09, 0x05, 0x0A, 0x20, END};
+	struct UnionIntOpt1 input_opt1 = {
+		.Union_choice = union_uint1uint_c,
+		.uint1uint_present = false,
+	};
+	struct UnionIntRep input_rep = {
+		.Union_choice = union_uint5uint_c,
+		.uint5uint = 5,
+	};
+	struct UnionIntOptList input_opt_list = {
+		.Union_choice = union_uint7_l_c,
+		.uint7_l_present = false,
+	};
+	struct UnionIntOptGroup input_opt_group = {
+		.Union_choice = union_uint9uint_l_c,
+		.uint9uint_present = false,
+		.uint10int_present = false,
+	};
+	uint8_t output[10];
+	size_t num_encode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_UnionIntOpt1(output, sizeof(output),
+			&input_opt1, &num_encode));
+	zassert_equal(sizeof(exp_empty_map_payload), num_encode);
+	zassert_mem_equal(exp_empty_map_payload, output, num_encode);
+
+	input_opt1.uint1uint_present = true;
+	input_opt1.uint1uint = 5;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_UnionIntOpt1(output, sizeof(output),
+			&input_opt1, &num_encode));
+	zassert_equal(sizeof(exp_union_int_opt1_payload), num_encode);
+	zassert_mem_equal(exp_union_int_opt1_payload, output, num_encode);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_UnionIntRep(output, sizeof(output),
+			&input_rep, &num_encode));
+	zassert_equal(sizeof(exp_union_int_rep_payload1), num_encode);
+	zassert_mem_equal(exp_union_int_rep_payload1, output, num_encode);
+
+	input_rep.Union_choice = union_uint6bool_c;
+	input_rep.uint6bool_count = 0;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_UnionIntRep(output, sizeof(output),
+			&input_rep, &num_encode));
+	zassert_equal(sizeof(exp_empty_map_payload), num_encode);
+	zassert_mem_equal(exp_empty_map_payload, output, num_encode);
+
+	input_rep.uint6bool_count = 2;
+	input_rep.uint6bool[0] = true;
+	input_rep.uint6bool[1] = false;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_UnionIntRep(output, sizeof(output),
+			&input_rep, &num_encode));
+	zassert_equal(sizeof(exp_union_int_rep_payload2), num_encode);
+	zassert_mem_equal(exp_union_int_rep_payload2, output, num_encode);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_UnionIntOptList(output, sizeof(output),
+			&input_opt_list, &num_encode));
+	zassert_equal(sizeof(exp_union_int_opt_list_payload1), num_encode);
+	zassert_mem_equal(exp_union_int_opt_list_payload1, output, num_encode);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_UnionIntOptGroup(output, sizeof(output),
+			&input_opt_group, &num_encode));
+	zassert_equal(sizeof(exp_empty_map_payload), num_encode);
+	zassert_mem_equal(exp_empty_map_payload, output, num_encode);
+
+	input_opt_group.uint9uint_present = true;
+	input_opt_group.uint9uint = 5;
+	input_opt_group.uint10int_present = true;
+	input_opt_group.uint10int = -1;
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_UnionIntOptGroup(output, sizeof(output),
+			&input_opt_group, &num_encode));
+	zassert_equal(sizeof(exp_union_int_opt_group_payload1), num_encode);
+	zassert_mem_equal(exp_union_int_opt_group_payload1, output, num_encode);
+}
+
+
 ZTEST(cbor_encode_test3, test_intmax)
 {
 	uint8_t exp_intmax1_payload1[] = {LIST(C),

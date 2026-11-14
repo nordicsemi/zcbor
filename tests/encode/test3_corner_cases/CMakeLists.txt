@@ -54,6 +54,11 @@ set(py_command
   CborSeqAny
   MapLength
   UnionInt2
+  UnionIntOpt1
+  UnionIntOpt2
+  UnionIntRep
+  UnionIntOptList
+  UnionIntOptGroup
   Intmax1
   Intmax2
   Intmax4

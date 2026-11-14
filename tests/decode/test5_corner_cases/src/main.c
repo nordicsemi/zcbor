@@ -2325,6 +2325,196 @@ ZTEST(cbor_decode_test5, test_union_int)
 }
 
 
+/* The union members start with integers, but the integers are optional or repeated.
+ * CDDL choices are tried in order (RFC 8610 Appendix A), so an earlier member that matches nothing wins.
+ */
+ZTEST(cbor_decode_test5, test_union_int_quantified)
+{
+	uint8_t union_int_opt1_payload1[] = {MAP(0), END};
+	uint8_t union_int_opt1_payload2[] = {MAP(1), 0x01, 0x05, END};
+	uint8_t union_int_opt1_payload3_inv[] = {MAP(1), 0x01, 0xF5, END};
+	uint8_t union_int_opt1_payload4_inv[] = {MAP(1), 0x02, 0xF5, END};
+	uint8_t union_int_opt2_payload1[] = {MAP(0), END};
+	uint8_t union_int_opt2_payload2[] = {MAP(1), 0x03, 0x05, END};
+	uint8_t union_int_opt2_payload3_inv[] = {MAP(1), 0x04, 0xF5, END};
+	uint8_t union_int_opt2_payload4_inv[] = {MAP(1), 0x04, 0x05, END};
+	uint8_t union_int_rep_payload1[] = {MAP(1), 0x05, 0x05, END};
+	uint8_t union_int_rep_payload2[] = {MAP(0), END};
+	uint8_t union_int_rep_payload3[] = {MAP(1), 0x06, 0xF5, END};
+	uint8_t union_int_rep_payload4[] = {MAP(2), 0x06, 0xF5, 0x06, 0xF4, END};
+	uint8_t union_int_opt_list_payload1[] = {LIST(0), END};
+	uint8_t union_int_opt_list_payload2[] = {LIST(2), 0x07, 0x05, END};
+	uint8_t union_int_opt_list_payload3_inv[] = {LIST(2), 0x08, 0xF5, END};
+	uint8_t union_int_opt_group_payload1[] = {MAP(0), END};
+	uint8_t union_int_opt_group_payload2[] = {MAP(2), 0x09, 0x05, 0x0A, 0x20, END};
+	uint8_t union_int_opt_group_payload3_inv[] = {MAP(1), 0x0B, 0xF5, END};
+	struct UnionIntOpt1 result_opt1;
+	struct UnionIntOpt2 result_opt2;
+	struct UnionIntRep result_rep;
+	struct UnionIntOptList result_opt_list;
+	struct UnionIntOptGroup result_opt_group;
+	size_t num_decode;
+	int err;
+
+	err = cbor_decode_UnionIntOpt1(union_int_opt1_payload1,
+		sizeof(union_int_opt1_payload1), &result_opt1, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(union_int_opt1_payload1), num_decode);
+	zassert_equal(union_uint1uint_c, result_opt1.Union_choice);
+	zassert_false(result_opt1.uint1uint_present);
+
+	err = cbor_decode_UnionIntOpt1(union_int_opt1_payload2,
+		sizeof(union_int_opt1_payload2), &result_opt1, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(union_int_opt1_payload2), num_decode);
+	zassert_equal(union_uint1uint_c, result_opt1.Union_choice);
+	zassert_true(result_opt1.uint1uint_present);
+	zassert_equal(5, result_opt1.uint1uint);
+
+	err = cbor_decode_UnionIntOpt1(union_int_opt1_payload3_inv,
+		sizeof(union_int_opt1_payload3_inv), &result_opt1, &num_decode);
+	zassert_equal(ARR_ERR1, err, "%s\n", zcbor_error_str(err));
+
+	err = cbor_decode_UnionIntOpt1(union_int_opt1_payload4_inv,
+		sizeof(union_int_opt1_payload4_inv), &result_opt1, &num_decode);
+	zassert_equal(ARR_ERR1, err, "%s\n", zcbor_error_str(err));
+
+	err = cbor_decode_UnionIntOpt2(union_int_opt2_payload1,
+		sizeof(union_int_opt2_payload1), &result_opt2, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(union_int_opt2_payload1), num_decode);
+	zassert_equal(union_uint3uint_c, result_opt2.Union_choice);
+	zassert_false(result_opt2.uint3uint_present);
+
+	err = cbor_decode_UnionIntOpt2(union_int_opt2_payload2,
+		sizeof(union_int_opt2_payload2), &result_opt2, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(union_int_opt2_payload2), num_decode);
+	zassert_equal(union_uint3uint_c, result_opt2.Union_choice);
+	zassert_true(result_opt2.uint3uint_present);
+	zassert_equal(5, result_opt2.uint3uint);
+
+	err = cbor_decode_UnionIntOpt2(union_int_opt2_payload3_inv,
+		sizeof(union_int_opt2_payload3_inv), &result_opt2, &num_decode);
+	zassert_equal(ARR_ERR1, err, "%s\n", zcbor_error_str(err));
+
+	err = cbor_decode_UnionIntOpt2(union_int_opt2_payload4_inv,
+		sizeof(union_int_opt2_payload4_inv), &result_opt2, &num_decode);
+	zassert_equal(ARR_ERR1, err, "%s\n", zcbor_error_str(err));
+
+	err = cbor_decode_UnionIntRep(union_int_rep_payload1,
+		sizeof(union_int_rep_payload1), &result_rep, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(union_int_rep_payload1), num_decode);
+	zassert_equal(union_uint5uint_c, result_rep.Union_choice);
+	zassert_equal(5, result_rep.uint5uint);
+
+	err = cbor_decode_UnionIntRep(union_int_rep_payload2,
+		sizeof(union_int_rep_payload2), &result_rep, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(union_int_rep_payload2), num_decode);
+	zassert_equal(union_uint6bool_c, result_rep.Union_choice);
+	zassert_equal(0, result_rep.uint6bool_count);
+
+	err = cbor_decode_UnionIntRep(union_int_rep_payload3,
+		sizeof(union_int_rep_payload3), &result_rep, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(union_int_rep_payload3), num_decode);
+	zassert_equal(union_uint6bool_c, result_rep.Union_choice);
+	zassert_equal(1, result_rep.uint6bool_count);
+	zassert_true(result_rep.uint6bool[0]);
+
+	err = cbor_decode_UnionIntRep(union_int_rep_payload4,
+		sizeof(union_int_rep_payload4), &result_rep, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(union_int_rep_payload4), num_decode);
+	zassert_equal(union_uint6bool_c, result_rep.Union_choice);
+	zassert_equal(2, result_rep.uint6bool_count);
+	zassert_true(result_rep.uint6bool[0]);
+	zassert_false(result_rep.uint6bool[1]);
+
+	err = cbor_decode_UnionIntOptList(union_int_opt_list_payload1,
+		sizeof(union_int_opt_list_payload1), &result_opt_list, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(union_int_opt_list_payload1), num_decode);
+	zassert_equal(union_uint7_l_c, result_opt_list.Union_choice);
+	zassert_false(result_opt_list.uint7_l_present);
+
+	err = cbor_decode_UnionIntOptList(union_int_opt_list_payload2,
+		sizeof(union_int_opt_list_payload2), &result_opt_list, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(union_int_opt_list_payload2), num_decode);
+	zassert_equal(union_uint7_l_c, result_opt_list.Union_choice);
+	zassert_true(result_opt_list.uint7_l_present);
+	zassert_equal(5, result_opt_list.uint7_l.uint);
+
+	err = cbor_decode_UnionIntOptList(union_int_opt_list_payload3_inv,
+		sizeof(union_int_opt_list_payload3_inv), &result_opt_list, &num_decode);
+	zassert_equal(ARR_ERR1, err, "%s\n", zcbor_error_str(err));
+
+	err = cbor_decode_UnionIntOptGroup(union_int_opt_group_payload1,
+		sizeof(union_int_opt_group_payload1), &result_opt_group, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(union_int_opt_group_payload1), num_decode);
+	zassert_equal(union_uint9uint_l_c, result_opt_group.Union_choice);
+	zassert_false(result_opt_group.uint9uint_present);
+	zassert_false(result_opt_group.uint10int_present);
+
+	err = cbor_decode_UnionIntOptGroup(union_int_opt_group_payload2,
+		sizeof(union_int_opt_group_payload2), &result_opt_group, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(union_int_opt_group_payload2), num_decode);
+	zassert_equal(union_uint9uint_l_c, result_opt_group.Union_choice);
+	zassert_true(result_opt_group.uint9uint_present);
+	zassert_equal(5, result_opt_group.uint9uint);
+	zassert_true(result_opt_group.uint10int_present);
+	zassert_equal(-1, result_opt_group.uint10int);
+
+	err = cbor_decode_UnionIntOptGroup(union_int_opt_group_payload3_inv,
+		sizeof(union_int_opt_group_payload3_inv), &result_opt_group, &num_decode);
+	zassert_equal(ARR_ERR1, err, "%s\n", zcbor_error_str(err));
+}
+
+
+/* The first member fails after consuming the tstr, so the optional second member must start over
+ * from the beginning, where it is absent. Then the list has elements left over. */
+ZTEST(cbor_decode_test5, test_union_int_opt_after_fail)
+{
+	uint8_t payload1[] = {LIST(2), 0x61, 'a', 0xF5, END};
+	uint8_t payload2[] = {LIST(2), 0x0C, 0x05, END};
+	uint8_t payload3[] = {LIST(0), END};
+	uint8_t payload4_inv[] = {LIST(3), 0x61, 'a', 0x0C, 0x05, END};
+	struct UnionIntOptAfterFail result;
+	size_t num_decode;
+	int err;
+
+	err = cbor_decode_UnionIntOptAfterFail(payload1, sizeof(payload1), &result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(payload1), num_decode);
+	zassert_equal(union_uoaf_tstr_l_c, result.Union_choice);
+	zassert_equal(1, result.uoaf_tstr.len);
+	zassert_mem_equal("a", result.uoaf_tstr.value, 1);
+	zassert_true(result.uoaf_bool);
+
+	err = cbor_decode_UnionIntOptAfterFail(payload2, sizeof(payload2), &result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(payload2), num_decode);
+	zassert_equal(union_uint12_l_c, result.Union_choice);
+	zassert_true(result.uint12_l_present);
+	zassert_equal(5, result.uint12_l.uint);
+
+	err = cbor_decode_UnionIntOptAfterFail(payload3, sizeof(payload3), &result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s\n", zcbor_error_str(err));
+	zassert_equal(sizeof(payload3), num_decode);
+	zassert_equal(union_uint12_l_c, result.Union_choice);
+	zassert_false(result.uint12_l_present);
+
+	err = cbor_decode_UnionIntOptAfterFail(payload4_inv, sizeof(payload4_inv), &result,
+		&num_decode);
+	zassert_equal(ARR_ERR1, err, "%s\n", zcbor_error_str(err));
+}
+
+
 ZTEST(cbor_decode_test5, test_intmax)
 {
 	uint8_t intmax1_payload1[] = {LIST(C),
