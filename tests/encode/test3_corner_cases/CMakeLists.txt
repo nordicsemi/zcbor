@@ -44,6 +44,7 @@ set(py_command
   SingleInt2
   Unabstracted
   QuantityRange
+  NestedQuantifiers
   DoubleMap
   Floats
   Floats2

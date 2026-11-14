@@ -876,10 +876,35 @@ class CddlParser:
         """Whether or not we can know the exact encoding of this element a priori."""
         return self.is_unambiguous_repeated() and (self.min_qty == self.max_qty)
 
+    def can_multiply_qty(self, min_qty, max_qty):
+        """Whether repeating this element min_qty to max_qty times can be expressed as a
+        single quantifier, i.e. there are no gaps in the resulting range of repetitions."""
+        if self.min_qty <= 1 or min_qty == max_qty:
+            return True
+        if self.max_qty is None:
+            return min_qty >= 1
+        return (min_qty + 1) * self.min_qty <= min_qty * self.max_qty + 1
+
+    def multiply_qty(self, min_qty, max_qty):
+        """Combine an outer quantifier with this element's own, e.g. '* (? x)' becomes '* x'."""
+        was_optional = (self.min_qty, self.max_qty) == (0, 1)
+        self.min_qty *= min_qty
+        self.max_qty = mult_or_none((self.max_qty, max_qty))
+        if was_optional and ".default" in self.modifiers and (self.min_qty, self.max_qty) != (0, 1):
+            raise CddlParsingError(
+                "zcbor does not support .default on an optional element inside a repetition, "
+                "e.g. * (? uint .default 3): a default can't apply to a repetition."
+            )
+        if (min_qty, max_qty) != (1, 1):
+            self.quantifier = {(0, 1): "?", (0, None): "*", (1, None): "+"}.get(
+                (self.min_qty, self.max_qty), f"{self.min_qty}*{self.max_qty or ''}"
+            )
+            self.modifiers["quantifier"] = self.quantifier
+
     def merge_modifiers(self, other):
         """merge this element's modifier list with another element's. Error if duplicates."""
         for modifier, value in other.modifiers.items():
-            if modifier != "value":
+            if modifier not in ("value", "quantifier"):
                 self.add_modifier(modifier, value, no_duplicates=(modifier != "tag"))
 
     def _flatten(self):
@@ -901,9 +926,12 @@ class CddlParser:
         self._flatten()
         if self.type == "OTHER" and self.is_socket and self.value not in self.my_types:
             return []
-        if self.type in ["GROUP", "UNION"] and (len(self.value) == 1):
-            self.value[0].min_qty *= self.min_qty
-            self.value[0].max_qty = mult_or_none((self.value[0].max_qty, self.max_qty))
+        if (
+            self.type in ["GROUP", "UNION"]
+            and (len(self.value) == 1)
+            and self.value[0].can_multiply_qty(self.min_qty, self.max_qty)
+        ):
+            self.value[0].multiply_qty(self.min_qty, self.max_qty)
             if not self.value[0].label:
                 self.value[0].label = self.label
             self.value[0].merge_modifiers(self)

@@ -167,6 +167,15 @@ QuantityRange = (
 	from3true: 3*true,
 )
 
+; Quantifiers on parenthesized groups whose content is also quantified.
+NestedQuantifiers = [
+	anyopt: * (? uint),          ; Same as * uint
+	optopt: ? (? bool),          ; Same as ? bool
+	pairs: 1*2 (2*2 tstr),       ; 2 or 4 tstrs, which can't be written as one quantifier.
+	optpair: ? (2*2 bstr),       ; 0 or 2 bstrs
+	optmap: {* (? uint => nil)}, ; Same as {* uint => nil}
+]
+
 MyKeys = (
 	?1 => int,
 	?2 => int

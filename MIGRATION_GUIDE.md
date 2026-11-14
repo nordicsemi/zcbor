@@ -64,6 +64,9 @@
     Data without the element (`_present` false, or `_count` 0 when encoding) is encoded as before, so it still decodes.
     Regenerate the code on both ends together.
 
+  * A quantified group whose only member is quantified, e.g. `[? (2*3 uint)]`, is no longer flattened into its member with a combined count when that would allow counts the CDDL doesn't.
+    The group now keeps its own level in the generated struct.
+
   * Integers whose values are known to be within 8 or 16 bits now use the corresponding integer types (`uint8_t`/`int8_t`/`uint16_t`/`int16_t`) instead of larger types.
     In certain specific cases, the type of an argument to a `cbor_decode_*` or `cbor_encode_*` can change when regenerating the code, requiring changes in your non-generated code.
     More commonly, struct members will change to use smaller int types.

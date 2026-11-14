@@ -1656,6 +1656,58 @@ ZTEST(cbor_decode_test5, test_quantity_range)
 					&result_qty_range, &out_len), NULL);
 }
 
+ZTEST(cbor_decode_test5, test_nested_quantifiers)
+{
+	uint8_t payload_nested_qty1[] = {LIST(9), 0x01, 0x02, 0x03, 0xF5, 0x61, 'a', 0x61, 'b',
+		0x40, 0x41, 'c', MAP(2), 0x01, 0xF6, 0x02, 0xF6, END END};
+	uint8_t payload_nested_qty2[] = {LIST(5), 0x61, 'a', 0x61, 'b', 0x61, 'c', 0x61, 'd',
+		MAP(0), END END};
+	uint8_t payload_nested_qty3_inv[] = {LIST(4), 0x61, 'a', 0x61, 'b', 0x61, 'c',
+		MAP(0), END END};
+	uint8_t payload_nested_qty4_inv[] = {LIST(4), 0x61, 'a', 0x61, 'b', 0x40, MAP(0), END END};
+	uint8_t payload_nested_qty5_inv[] = {LIST(3), 0x01, 0xF5, MAP(0), END END};
+	struct NestedQuantifiers result;
+	size_t out_len;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_NestedQuantifiers(payload_nested_qty1,
+					sizeof(payload_nested_qty1), &result, &out_len), NULL);
+	zassert_equal(sizeof(payload_nested_qty1), out_len, NULL);
+	zassert_equal(3, result.anyopt_count, NULL);
+	zassert_equal(1, result.anyopt[0], NULL);
+	zassert_equal(3, result.anyopt[2], NULL);
+	zassert_true(result.optopt_present, NULL);
+	zassert_true(result.optopt, NULL);
+	zassert_equal(1, result.pairs_count, NULL);
+	zassert_equal(2, result.pairs[0].tstr_count, NULL);
+	zassert_zcbor_string(&result.pairs[0].tstr[0], "a", 1);
+	zassert_zcbor_string(&result.pairs[0].tstr[1], "b", 1);
+	zassert_true(result.optpair_present, NULL);
+	zassert_equal(2, result.optpair.bstr_count, NULL);
+	zassert_zcbor_string(&result.optpair.bstr[0], "", 0);
+	zassert_zcbor_string(&result.optpair.bstr[1], "c", 1);
+	zassert_equal(2, result.uintnil_count, NULL);
+	zassert_equal(1, result.uintnil[0].uintnil_key, NULL);
+	zassert_equal(2, result.uintnil[1].uintnil_key, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_NestedQuantifiers(payload_nested_qty2,
+					sizeof(payload_nested_qty2), &result, &out_len), NULL);
+	zassert_equal(sizeof(payload_nested_qty2), out_len, NULL);
+	zassert_equal(0, result.anyopt_count, NULL);
+	zassert_false(result.optopt_present, NULL);
+	zassert_equal(2, result.pairs_count, NULL);
+	zassert_zcbor_string(&result.pairs[1].tstr[0], "c", 1);
+	zassert_zcbor_string(&result.pairs[1].tstr[1], "d", 1);
+	zassert_false(result.optpair_present, NULL);
+	zassert_equal(0, result.uintnil_count, NULL);
+
+	zassert_equal(ZCBOR_ERR_WRONG_TYPE, cbor_decode_NestedQuantifiers(payload_nested_qty3_inv,
+					sizeof(payload_nested_qty3_inv), &result, &out_len), NULL);
+	zassert_equal(ZCBOR_ERR_WRONG_TYPE, cbor_decode_NestedQuantifiers(payload_nested_qty4_inv,
+					sizeof(payload_nested_qty4_inv), &result, &out_len), NULL);
+	zassert_equal(ZCBOR_ERR_ITERATIONS, cbor_decode_NestedQuantifiers(payload_nested_qty5_inv,
+					sizeof(payload_nested_qty5_inv), &result, &out_len), NULL);
+}
+
 ZTEST(cbor_decode_test5, test_doublemap)
 {
 	uint8_t payload_doublemap0[] = {MAP(2), 0x01, 0xA1, 0x01, 0x01, 0x02, 0xA1, 0x02, 0x02, END};
