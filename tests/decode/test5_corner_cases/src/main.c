@@ -2079,6 +2079,75 @@ ZTEST(cbor_decode_test5, test_cbor_bstr)
 }
 
 
+/* The entry functions use the generated number of states, so the CborAny, CborNilUndef and
+ * CborNestedAny cases fail with ZCBOR_ERR_NO_BACKUP_MEM if the backups needed for the bstrs are
+ * not counted. CborSeqAny's contents have a count variable, so its backup was counted already. */
+ZTEST(cbor_decode_test5, test_cbor_bstr_no_var)
+{
+	uint8_t any_payload1[] = {0x43, 0x62, 'a', 'b'};
+	uint8_t any_payload2_inv[] = {0x42, 0x62, 'a'};
+	uint8_t any_payload3_inv[] = {0x42, 0x01, 0x02};
+	uint8_t nil_undef_payload1[] = {LIST(2), 0x41, 0xF6, 0x41, 0xF7, END};
+	uint8_t nil_undef_payload2_inv[] = {LIST(2), 0x41, 0xF7, 0x41, 0xF6, END};
+	uint8_t nested_any_payload1[] = {0x42, 0x41, 0xF6};
+	uint8_t nested_any_payload2_inv[] = {0x42, 0x41, 0x18};
+	uint8_t seq_any_payload1[] = {LIST(1), 0x44, 0x01, 0x41, 0x00, 0xF6, END};
+	uint8_t seq_any_payload2_inv[] = {LIST(1), 0x42, 0x01, 0x18, END};
+
+	struct zcbor_string any_result;
+	struct CborNilUndef nil_undef_result;
+	struct CborNestedAny nested_any_result;
+	struct CborSeqAny seq_any_result;
+	size_t num_decode;
+	int res;
+
+	res = cbor_decode_CborAny(any_payload1, sizeof(any_payload1), &any_result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, res, "%s\n", zcbor_error_str(res));
+	zassert_equal(sizeof(any_payload1), num_decode);
+	zassert_equal(&any_payload1[1], any_result.value);
+	zassert_equal(3, any_result.len);
+	res = cbor_decode_CborAny(any_payload2_inv, sizeof(any_payload2_inv), &any_result, &num_decode);
+	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, res, "%s\n", zcbor_error_str(res));
+	res = cbor_decode_CborAny(any_payload3_inv, sizeof(any_payload3_inv), &any_result, &num_decode);
+	zassert_equal(ZCBOR_ERR_PAYLOAD_NOT_CONSUMED, res, "%s\n", zcbor_error_str(res));
+
+	res = cbor_decode_CborNilUndef(nil_undef_payload1, sizeof(nil_undef_payload1),
+		&nil_undef_result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, res, "%s\n", zcbor_error_str(res));
+	zassert_equal(sizeof(nil_undef_payload1), num_decode);
+	zassert_equal(&nil_undef_payload1[2], nil_undef_result.bstr.value);
+	zassert_equal(1, nil_undef_result.bstr.len);
+	zassert_equal(&nil_undef_payload1[4], nil_undef_result.CborUndefAlias_bstr.value);
+	zassert_equal(1, nil_undef_result.CborUndefAlias_bstr.len);
+	res = cbor_decode_CborNilUndef(nil_undef_payload2_inv, sizeof(nil_undef_payload2_inv),
+		&nil_undef_result, &num_decode);
+	zassert_equal(ZCBOR_ERR_WRONG_VALUE, res, "%s\n", zcbor_error_str(res));
+
+	res = cbor_decode_CborNestedAny(nested_any_payload1, sizeof(nested_any_payload1),
+		&nested_any_result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, res, "%s\n", zcbor_error_str(res));
+	zassert_equal(sizeof(nested_any_payload1), num_decode);
+	zassert_equal(&nested_any_payload1[1], nested_any_result.CborNestedAny.value);
+	zassert_equal(2, nested_any_result.CborNestedAny.len);
+	zassert_equal(&nested_any_payload1[2], nested_any_result.CborNestedAny_cbor.value);
+	zassert_equal(1, nested_any_result.CborNestedAny_cbor.len);
+	res = cbor_decode_CborNestedAny(nested_any_payload2_inv, sizeof(nested_any_payload2_inv),
+		&nested_any_result, &num_decode);
+	zassert_equal(ZCBOR_ERR_NO_PAYLOAD, res, "%s\n", zcbor_error_str(res));
+
+	res = cbor_decode_CborSeqAny(seq_any_payload1, sizeof(seq_any_payload1),
+		&seq_any_result, &num_decode);
+	zassert_equal(ZCBOR_SUCCESS, res, "%s\n", zcbor_error_str(res));
+	zassert_equal(sizeof(seq_any_payload1), num_decode);
+	zassert_equal(&seq_any_payload1[2], seq_any_result.bstr.value);
+	zassert_equal(4, seq_any_result.bstr.len);
+	zassert_equal(3, seq_any_result.bstr_cbor_count);
+	res = cbor_decode_CborSeqAny(seq_any_payload2_inv, sizeof(seq_any_payload2_inv),
+		&seq_any_result, &num_decode);
+	zassert_equal(ZCBOR_ERR_PAYLOAD_NOT_CONSUMED, res, "%s\n", zcbor_error_str(res));
+}
+
+
 ZTEST(cbor_decode_test5, test_map_length)
 {
 	uint8_t map_length_payload1[] = {MAP(2),

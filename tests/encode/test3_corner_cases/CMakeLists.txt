@@ -48,6 +48,10 @@ set(py_command
   Floats
   Floats2
   CBORBstr
+  CborAny
+  CborNilUndef
+  CborNestedAny
+  CborSeqAny
   MapLength
   UnionInt2
   Intmax1

@@ -1480,6 +1480,48 @@ ZTEST(cbor_encode_test3, test_cbor_bstr)
 }
 
 
+/* The entry functions use the generated number of states, so the CborAny and CborNestedAny cases
+ * (and CborNilUndef with ZCBOR_CANONICAL, where lists need a backup) fail with
+ * ZCBOR_ERR_NO_BACKUP_MEM if the backups needed for the bstrs are not counted. CborSeqAny's
+ * contents have a count variable, so its backup was counted already. */
+ZTEST(cbor_encode_test3, test_cbor_bstr_no_var)
+{
+	/* any is encoded as nil. */
+	uint8_t exp_any_payload[] = {0x41, 0xF6};
+	uint8_t exp_nil_undef_payload[] = {LIST(2), 0x41, 0xF6, 0x41, 0xF7, END};
+	uint8_t exp_nested_any_payload[] = {0x42, 0x41, 0xF6};
+	uint8_t exp_seq_any_payload[] = {LIST(1), 0x42, 0xF6, 0xF6, END};
+
+	struct zcbor_string any_input = {0};
+	struct CborNilUndef nil_undef_input = {0};
+	struct CborNestedAny nested_any_input = {0};
+	struct CborSeqAny seq_any_input = {.bstr_cbor_count = 2};
+	uint8_t output[10];
+	size_t num_encode;
+	int res;
+
+	res = cbor_encode_CborAny(output, sizeof(output), &any_input, &num_encode);
+	zassert_equal(ZCBOR_SUCCESS, res, "%s\n", zcbor_error_str(res));
+	zassert_equal(sizeof(exp_any_payload), num_encode);
+	zassert_mem_equal(exp_any_payload, output, num_encode);
+
+	res = cbor_encode_CborNilUndef(output, sizeof(output), &nil_undef_input, &num_encode);
+	zassert_equal(ZCBOR_SUCCESS, res, "%s\n", zcbor_error_str(res));
+	zassert_equal(sizeof(exp_nil_undef_payload), num_encode);
+	zassert_mem_equal(exp_nil_undef_payload, output, num_encode);
+
+	res = cbor_encode_CborNestedAny(output, sizeof(output), &nested_any_input, &num_encode);
+	zassert_equal(ZCBOR_SUCCESS, res, "%s\n", zcbor_error_str(res));
+	zassert_equal(sizeof(exp_nested_any_payload), num_encode);
+	zassert_mem_equal(exp_nested_any_payload, output, num_encode);
+
+	res = cbor_encode_CborSeqAny(output, sizeof(output), &seq_any_input, &num_encode);
+	zassert_equal(ZCBOR_SUCCESS, res, "%s\n", zcbor_error_str(res));
+	zassert_equal(sizeof(exp_seq_any_payload), num_encode);
+	zassert_mem_equal(exp_seq_any_payload, output, num_encode);
+}
+
+
 ZTEST(cbor_encode_test3, test_map_length)
 {
 	uint8_t exp_map_length_payload1[] = {MAP(2),

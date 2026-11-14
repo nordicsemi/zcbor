@@ -232,6 +232,14 @@ CBORBstr = bstr .cbor ([
 	nilval2: bstr .cbor nil
 ])
 
+; .cbor and .cborseq with contents that need no variable in the struct (any, nil, undefined).
+; The bstr still needs a backup state.
+CborUndefAlias = undefined
+CborAny = bstr .cbor any
+CborNilUndef = [bstr .cbor nil, bstr .cbor CborUndefAlias]
+CborNestedAny = bstr .cbor (bstr .cbor any)
+CborSeqAny = [bstr .cborseq any]
+
 
 result_code = int
 mac_address = bstr .size 6
