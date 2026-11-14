@@ -52,6 +52,10 @@ set(py_command
     Floats3
     Prelude
     CBORBstr
+    CborAny
+    CborNilUndef
+    CborNestedAny
+    CborSeqAny
     MapLength
     UnionInt1
     UnionInt2

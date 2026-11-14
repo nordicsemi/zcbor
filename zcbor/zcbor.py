@@ -3236,9 +3236,17 @@ class CodeGenerator(CddlXcoder):
         else:
             return self.single_func_prim(res_var=res_var, access=val_access, ptr_result=ptr_result)
 
+    def cbor_bstr_condition(self):
+        """Whether this element is a bstr whose contents are encoded/decoded as CBOR, using
+        zcbor_bstr_start_*() and zcbor_bstr_end_*().
+
+        Unlike cbor_var_condition(), this is also true when the contents have no variable in the
+        struct, e.g. "bstr .cbor any"."""
+        return (self.cbor is not None) and not self.cbor.is_entry_type()
+
     def num_backups_self(self):
         return (
-            int(self.cbor_var_condition())
+            int(self.cbor_bstr_condition())
             + int(self.type in ["LIST", "MAP", "UNION"])
             + int(self.multi_decode_w_backup_condition())
         )
@@ -3248,7 +3256,7 @@ class CodeGenerator(CddlXcoder):
         total = 0
         if self.key:
             total += self.key.num_backups()
-        if self.cbor_var_condition():
+        if self.cbor_bstr_condition():
             total += self.cbor.num_backups()
         if self.type in ["LIST", "MAP", "GROUP", "UNION"]:
             total += max([child.num_backups() for child in self.value] + [0])
@@ -3629,7 +3637,7 @@ class CodeGenerator(CddlXcoder):
             )
 
     def xcode_bstr(self, *, res_var):
-        if self.cbor and not self.cbor.is_entry_type():
+        if self.cbor_bstr_condition():
             val_access = self.val_access(res_var=res_var)
             access_arg = f", {deref_if_not_null(val_access)}" if self.mode == "decode" else ""
             res_arg = f", &tmp_str" if self.mode == "encode" else ""
