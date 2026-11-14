@@ -1640,6 +1640,25 @@ class TestDefines(PopenTest, TempdTest):
         self.assertIn("Root_choice_two_choice_c = ROOT_CHOICE_TWO_CHOICE_VAL", type_headers["encode"])
 
 
+class TestAnyWarning(PopenTest, TempdTest):
+    def test_any_warning(self):
+        """Generating code for any gives a warning, once per element (#432)."""
+        p_cddl = self.tempd / "any.cddl"
+        p_cddl.write_text("Pet = [name: tstr, missing: any, also_missing: cbor-any]\n", encoding="utf-8")
+        _, stderr = self.popen_test(
+            ["zcbor", "code", "-c", p_cddl, "-t", "Pet", "-d", "-e"]
+            + ["--output-c", self.tempd / "any.c", "--output-h", self.tempd / "any.h"]
+        )
+        msg = (
+            ": any is not fully supported in generated code. Decoding skips it, encoding writes nil, "
+            "and the struct has no member for it."
+        )
+        self.assertEqual(
+            sorted(f"warning: {name}{msg}" for name in ("Pet_missing", "cbor_any")),
+            sorted(line for line in stderr.decode("utf-8").splitlines() if line),
+        )
+
+
 class TestCanonical(PopenTest):
     canonical_cddl = """
         Dict = {+tstr => int}

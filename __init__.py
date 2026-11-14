@@ -10,6 +10,7 @@ from pathlib import Path
 from .zcbor.zcbor import (
     CddlValidationError,
     CddlParsingError,
+    CddlWarning,
     CddlParser,
     DataTranslator,
     CodeGenerator,

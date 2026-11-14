@@ -413,6 +413,7 @@ Not all features outlined in the CDDL specs [RFC8610](https://datatracker.ietf.o
 The following is a list of limitations and missing features:
 
  * Generated code does not support unordered maps.
+ * Generated code does not store `any` (or e.g. `cbor-any`): decoding skips it, encoding writes `nil`, and the struct has no member for it. zcbor gives a warning when generating such code.
  * Using `&()` to turn groups into choices (unions). `&()` is supported when used with `.bits`.
  * Representation Types (`#x.y`), except for tags (`#6.y(foo)`) which are supported.
  * Unwrapping (`~`)
