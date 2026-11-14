@@ -2176,10 +2176,7 @@ class TestEmptyGroup(PopenTest, TempdTest):
         """Test that an empty group definition matching a bareword key does not cause an
         IndexError during code generation (regression test for #539)."""
         p_cddl = self.tempd / "empty_group.cddl"
-        p_cddl.write_text(
-            "x = ()\n\nz = (\n    (x: 1) / 2\n)\n",
-            encoding="utf-8",
-        )
+        p_cddl.write_text("x = ()\nz = ((x: 1) / 2)", encoding="utf-8")
         self.popen_test(
             ["zcbor", "code", "--cddl", p_cddl, "-t", "z", "-d", "-e"]
             + ["--output-cmake", self.tempd / "empty_group.cmake"]

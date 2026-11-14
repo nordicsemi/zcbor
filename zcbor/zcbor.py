@@ -2613,7 +2613,7 @@ class CodeGenerator(CddlXcoder):
             return None
         elif self.type in ("UINT", "NINT") and self.is_unambiguous():
             return self.value if force_literal else self.val_define_name_or_lit("VAL")
-        elif self.type == "GROUP" and not self.count_var_condition() and self.value:
+        elif self.type == "GROUP" and not self.count_var_condition() and len(self.value) > 0:
             return self.value[0].int_val(force_literal=force_literal)
         elif (
             self.type == "OTHER"
