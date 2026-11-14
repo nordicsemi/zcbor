@@ -78,6 +78,7 @@ set(py_command
     OptUnion
     CountUnion
     Tags
+    QuantTags
     TaggedIntUnion
     TwoMaps
     BstrMapUnion

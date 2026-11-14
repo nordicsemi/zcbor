@@ -497,6 +497,19 @@ Tags = [
 	tag2: ((tag2_alt1: (#6.3456(bool), #6.1234(int))) / (tag2_alt2: #6.3456(bool))),
 ]
 
+; The tags must be checked for each repetition of a quantified element.
+; The tag numbers cover all encoding sizes of the tag argument (0, 1, 2 and 4 bytes).
+QuantTags = [
+	?qt_uint: #6.23(uint),
+	*qt_tstr: #6.24(tstr),
+	+qt_bstr: #6.255(bstr),
+	2*3 qt_bool: #6.256(bool),
+	?qt_float: #6.65535(float),
+	?qt_nil: #6.65536(nil),
+	*qt_five: #6.4294967295(5),
+	qt_map: {?qt_map_val: (1 => #6.305419896(uint))}, ; 0x12345678
+]
+
 ; The members start with tags, so they can't be told apart by their integers.
 TaggedIntUnion = (tagged_one: #6.5(1)) / (tagged_two: #6.6(2))
 

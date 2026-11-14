@@ -2975,6 +2975,291 @@ ZTEST(cbor_decode_test5, test_tags)
 }
 
 
+ZTEST(cbor_decode_test5, test_quant_tags)
+{
+	/* Tags: 23: 0xD7, 24: 0xD8 0x18, 255: 0xD8 0xFF, 256: 0xD9 0x01 0x00,
+	 * 65535: 0xD9 0xFF 0xFF, 65536: 0xDA 0x00 0x01 0x00 0x00,
+	 * 4294967295: 0xDA 0xFF 0xFF 0xFF 0xFF, 305419896: 0xDA 0x12 0x34 0x56 0x78 */
+	uint8_t quant_tags_payload1[] = {LIST(4),
+		0xD8, 0xFF, 0x40, /* #6.255(h'') */
+		0xD9, 0x01, 0x00, 0xF5, /* #6.256(true) */
+		0xD9, 0x01, 0x00, 0xF4, /* #6.256(false) */
+		MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload2[] = {LIST(D),
+		0xD7, 0x05, /* #6.23(5) */
+		0xD8, 0x18, 0x61, 'a', /* #6.24("a") */
+		0xD8, 0x18, 0x62, 'b', 'c', /* #6.24("bc") */
+		0xD8, 0xFF, 0x41, 0x01, /* #6.255(h'01') */
+		0xD8, 0xFF, 0x40, /* #6.255(h'') */
+		0xD9, 0x01, 0x00, 0xF5, /* #6.256(true) */
+		0xD9, 0x01, 0x00, 0xF4, /* #6.256(false) */
+		0xD9, 0x01, 0x00, 0xF5, /* #6.256(true) */
+		0xD9, 0xFF, 0xFF, 0xFB, 0x3F, 0xF8, 0, 0, 0, 0, 0, 0, /* #6.65535(1.5) */
+		0xDA, 0x00, 0x01, 0x00, 0x00, 0xF6, /* #6.65536(nil) */
+		0xDA, 0xFF, 0xFF, 0xFF, 0xFF, 0x05, /* #6.4294967295(5) */
+		0xDA, 0xFF, 0xFF, 0xFF, 0xFF, 0x05, /* #6.4294967295(5) */
+		MAP(1), 0x01, 0xDA, 0x12, 0x34, 0x56, 0x78, 0x07, END /* {1: #6.305419896(7)} */
+		END
+	};
+
+	/* Tags encoded with a longer argument than needed. Valid unless canonical. */
+	uint8_t quant_tags_payload3_noncanon[] = {LIST(5),
+		0xD8, 0x17, 0x05, /* #6.23(5) with a 1-byte argument */
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4, MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload4_noncanon[] = {LIST(4),
+		0xD9, 0x00, 0xFF, 0x40, /* #6.255(h'') with a 2-byte argument */
+		0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4, MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload5_noncanon[] = {LIST(4),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5,
+		0xDA, 0x00, 0x00, 0x01, 0x00, 0xF4, /* #6.256(false) with a 4-byte argument */
+		MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload6_noncanon[] = {LIST(5),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4,
+		0xDA, 0x00, 0x00, 0xFF, 0xFF, /* #6.65535(1.5) with a 4-byte argument */
+		0xFB, 0x3F, 0xF8, 0, 0, 0, 0, 0, 0,
+		MAP(0), END
+		END
+	};
+
+	uint8_t quant_tags_payload7_inv[] = {LIST(9), /* No tags */
+		0x05, 0x61, 'a', 0x40, 0xF5, 0xF4,
+		0xFB, 0x3F, 0xF8, 0, 0, 0, 0, 0, 0,
+		0xF6, 0x05, MAP(1), 0x01, 0x07, END
+		END
+	};
+
+	/* Missing tags */
+	uint8_t quant_tags_payload8_inv[] = {LIST(5),
+		0x05, /* 5 (missing #6.23) */
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4, MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload9_inv[] = {LIST(5),
+		0x61, 'a', /* "a" (missing #6.24) */
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4, MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload10_inv[] = {LIST(4),
+		0x40, /* h'' (missing #6.255) */
+		0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4, MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload11_inv[] = {LIST(4),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5,
+		0xF4, /* false (missing #6.256) */
+		MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload12_inv[] = {LIST(5),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4,
+		0xFB, 0x3F, 0xF8, 0, 0, 0, 0, 0, 0, /* 1.5 (missing #6.65535) */
+		MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload13_inv[] = {LIST(5),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4,
+		0xF6, /* nil (missing #6.65536) */
+		MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload14_inv[] = {LIST(5),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4,
+		0x05, /* 5 (missing #6.4294967295) */
+		MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload15_inv[] = {LIST(4),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4,
+		MAP(1), 0x01, 0x07, END /* {1: 7} (missing #6.305419896) */
+		END
+	};
+
+	/* Wrong tags (off by one) */
+	uint8_t quant_tags_payload16_inv[] = {LIST(5),
+		0xD6, 0x05, /* #6.22(5) */
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4, MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload17_inv[] = {LIST(5),
+		0xD8, 0x19, 0x61, 'a', /* #6.25("a") */
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4, MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload18_inv[] = {LIST(4),
+		0xD8, 0xFE, 0x40, /* #6.254(h'') */
+		0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4, MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload19_inv[] = {LIST(4),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5,
+		0xD9, 0x01, 0x01, 0xF4, /* #6.257(false) */
+		MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload20_inv[] = {LIST(5),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4,
+		0xD9, 0xFF, 0xFE, 0xFB, 0x3F, 0xF8, 0, 0, 0, 0, 0, 0, /* #6.65534(1.5) */
+		MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload21_inv[] = {LIST(5),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4,
+		0xDA, 0x00, 0x01, 0x00, 0x01, 0xF6, /* #6.65537(nil) */
+		MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload22_inv[] = {LIST(5),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4,
+		0xDA, 0xFF, 0xFF, 0xFF, 0xFE, 0x05, /* #6.4294967294(5) */
+		MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload23_inv[] = {LIST(4),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4,
+		MAP(1), 0x01, 0xDA, 0x12, 0x34, 0x56, 0x79, 0x07, END /* {1: #6.305419897(7)} */
+		END
+	};
+
+	/* Other invalid payloads */
+	uint8_t quant_tags_payload24_inv[] = {LIST(5),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4,
+		0xDA, 0xFF, 0xFF, 0xFF, 0xFF, 0x06, /* #6.4294967295(6) (wrong value) */
+		MAP(0), END
+		END
+	};
+	uint8_t quant_tags_payload25_inv[] = {LIST(5),
+		0xD8, 0xFF, 0x40, 0xD9, 0x01, 0x00, 0xF5, 0xD9, 0x01, 0x00, 0xF4,
+		/* #6.65536(nil) with an 8-byte argument, which zcbor_tag_decode() doesn't support. */
+		0xDB, 0, 0, 0, 0, 0x00, 0x01, 0x00, 0x00, 0xF6,
+		MAP(0), END
+		END
+	};
+
+	struct QuantTags result;
+	size_t num_decode;
+	int ret;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_QuantTags(quant_tags_payload1,
+		sizeof(quant_tags_payload1), &result, &num_decode), NULL);
+	zassert_equal(sizeof(quant_tags_payload1), num_decode, NULL);
+	zassert_false(result.qt_uint_present, NULL);
+	zassert_equal(0, result.qt_tstr_count, NULL);
+	zassert_equal(1, result.qt_bstr_count, NULL);
+	zassert_equal(0, result.qt_bstr[0].len, NULL);
+	zassert_equal(2, result.qt_bool_count, NULL);
+	zassert_true(result.qt_bool[0], NULL);
+	zassert_false(result.qt_bool[1], NULL);
+	zassert_false(result.qt_float_present, NULL);
+	zassert_false(result.qt_nil_present, NULL);
+	zassert_equal(0, result.qt_five_count, NULL);
+	zassert_false(result.qt_map_val_present, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_QuantTags(quant_tags_payload2,
+		sizeof(quant_tags_payload2), &result, &num_decode), NULL);
+	zassert_equal(sizeof(quant_tags_payload2), num_decode, NULL);
+	zassert_true(result.qt_uint_present, NULL);
+	zassert_equal(5, result.qt_uint, NULL);
+	zassert_equal(2, result.qt_tstr_count, NULL);
+	zassert_equal(1, result.qt_tstr[0].len, NULL);
+	zassert_mem_equal("a", result.qt_tstr[0].value, 1, NULL);
+	zassert_equal(2, result.qt_tstr[1].len, NULL);
+	zassert_mem_equal("bc", result.qt_tstr[1].value, 2, NULL);
+	zassert_equal(2, result.qt_bstr_count, NULL);
+	zassert_equal(1, result.qt_bstr[0].len, NULL);
+	zassert_equal(1, result.qt_bstr[0].value[0], NULL);
+	zassert_equal(0, result.qt_bstr[1].len, NULL);
+	zassert_equal(3, result.qt_bool_count, NULL);
+	zassert_true(result.qt_bool[0], NULL);
+	zassert_false(result.qt_bool[1], NULL);
+	zassert_true(result.qt_bool[2], NULL);
+	zassert_true(result.qt_float_present, NULL);
+	zassert_equal(1.5, result.qt_float, NULL);
+	zassert_true(result.qt_nil_present, NULL);
+	zassert_equal(2, result.qt_five_count, NULL);
+	zassert_true(result.qt_map_val_present, NULL);
+	zassert_equal(7, result.qt_map_val, NULL);
+
+#ifdef ZCBOR_CANONICAL
+	ret = cbor_decode_QuantTags(quant_tags_payload3_noncanon,
+		sizeof(quant_tags_payload3_noncanon), &result, &num_decode);
+	zassert_equal(ZCBOR_ERR_ITERATIONS, ret, "%s\n", zcbor_error_str(ret));
+	ret = cbor_decode_QuantTags(quant_tags_payload4_noncanon,
+		sizeof(quant_tags_payload4_noncanon), &result, &num_decode);
+	zassert_equal(ZCBOR_ERR_ITERATIONS, ret, "%s\n", zcbor_error_str(ret));
+	ret = cbor_decode_QuantTags(quant_tags_payload5_noncanon,
+		sizeof(quant_tags_payload5_noncanon), &result, &num_decode);
+	zassert_equal(ZCBOR_ERR_ITERATIONS, ret, "%s\n", zcbor_error_str(ret));
+	ret = cbor_decode_QuantTags(quant_tags_payload6_noncanon,
+		sizeof(quant_tags_payload6_noncanon), &result, &num_decode);
+	zassert_equal(ZCBOR_ERR_WRONG_TYPE, ret, "%s\n", zcbor_error_str(ret));
+#else
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_QuantTags(quant_tags_payload3_noncanon,
+		sizeof(quant_tags_payload3_noncanon), &result, &num_decode), NULL);
+	zassert_equal(sizeof(quant_tags_payload3_noncanon), num_decode, NULL);
+	zassert_true(result.qt_uint_present, NULL);
+	zassert_equal(5, result.qt_uint, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_QuantTags(quant_tags_payload4_noncanon,
+		sizeof(quant_tags_payload4_noncanon), &result, &num_decode), NULL);
+	zassert_equal(sizeof(quant_tags_payload4_noncanon), num_decode, NULL);
+	zassert_equal(1, result.qt_bstr_count, NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_QuantTags(quant_tags_payload5_noncanon,
+		sizeof(quant_tags_payload5_noncanon), &result, &num_decode), NULL);
+	zassert_equal(sizeof(quant_tags_payload5_noncanon), num_decode, NULL);
+	zassert_equal(2, result.qt_bool_count, NULL);
+	zassert_false(result.qt_bool[1], NULL);
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_decode_QuantTags(quant_tags_payload6_noncanon,
+		sizeof(quant_tags_payload6_noncanon), &result, &num_decode), NULL);
+	zassert_equal(sizeof(quant_tags_payload6_noncanon), num_decode, NULL);
+	zassert_true(result.qt_float_present, NULL);
+	zassert_equal(1.5, result.qt_float, NULL);
+#endif
+
+	struct {
+		uint8_t *payload;
+		size_t len;
+		int err;
+	} invalid[] = {
+		{quant_tags_payload7_inv, sizeof(quant_tags_payload7_inv), ZCBOR_ERR_ITERATIONS},
+		{quant_tags_payload8_inv, sizeof(quant_tags_payload8_inv), ZCBOR_ERR_ITERATIONS},
+		{quant_tags_payload9_inv, sizeof(quant_tags_payload9_inv), ZCBOR_ERR_ITERATIONS},
+		{quant_tags_payload10_inv, sizeof(quant_tags_payload10_inv), ZCBOR_ERR_ITERATIONS},
+		{quant_tags_payload11_inv, sizeof(quant_tags_payload11_inv), ZCBOR_ERR_ITERATIONS},
+		{quant_tags_payload12_inv, sizeof(quant_tags_payload12_inv), ZCBOR_ERR_WRONG_TYPE},
+		{quant_tags_payload13_inv, sizeof(quant_tags_payload13_inv), ZCBOR_ERR_WRONG_TYPE},
+		{quant_tags_payload14_inv, sizeof(quant_tags_payload14_inv), ZCBOR_ERR_WRONG_TYPE},
+		{quant_tags_payload15_inv, sizeof(quant_tags_payload15_inv), ARR_ERR1},
+		{quant_tags_payload16_inv, sizeof(quant_tags_payload16_inv), ZCBOR_ERR_ITERATIONS},
+		{quant_tags_payload17_inv, sizeof(quant_tags_payload17_inv), ZCBOR_ERR_ITERATIONS},
+		{quant_tags_payload18_inv, sizeof(quant_tags_payload18_inv), ZCBOR_ERR_ITERATIONS},
+		{quant_tags_payload19_inv, sizeof(quant_tags_payload19_inv), ZCBOR_ERR_ITERATIONS},
+		{quant_tags_payload20_inv, sizeof(quant_tags_payload20_inv), ZCBOR_ERR_WRONG_TYPE},
+		{quant_tags_payload21_inv, sizeof(quant_tags_payload21_inv), ZCBOR_ERR_WRONG_TYPE},
+		{quant_tags_payload22_inv, sizeof(quant_tags_payload22_inv), ZCBOR_ERR_WRONG_TYPE},
+		{quant_tags_payload23_inv, sizeof(quant_tags_payload23_inv), ARR_ERR1},
+		{quant_tags_payload24_inv, sizeof(quant_tags_payload24_inv), ZCBOR_ERR_WRONG_TYPE},
+		{quant_tags_payload25_inv, sizeof(quant_tags_payload25_inv), ZCBOR_ERR_WRONG_TYPE},
+	};
+
+	for (size_t i = 0; i < ARRAY_SIZE(invalid); i++) {
+		ret = cbor_decode_QuantTags(invalid[i].payload, invalid[i].len,
+			&result, &num_decode);
+		zassert_equal(invalid[i].err, ret, "payload%zu_inv: %s != %s\n", i + 7,
+			zcbor_error_str(ret), zcbor_error_str(invalid[i].err));
+	}
+}
+
+
 ZTEST(cbor_decode_test5, test_tagged_int_union)
 {
 	uint8_t tagged_int_union_payload1[] = {0xC5, 0x01}; /* #6.5(1) */

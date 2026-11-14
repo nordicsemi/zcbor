@@ -2152,6 +2152,68 @@ ZTEST(cbor_encode_test3, test_tags)
 }
 
 
+ZTEST(cbor_encode_test3, test_quant_tags)
+{
+	uint8_t quant_tags_exp_payload1[] = {LIST(4),
+		0xD8, 0xFF, 0x40, /* #6.255(h'') */
+		0xD9, 0x01, 0x00, 0xF5, /* #6.256(true) */
+		0xD9, 0x01, 0x00, 0xF4, /* #6.256(false) */
+		MAP(0), END
+		END
+	};
+	uint8_t quant_tags_exp_payload2[] = {LIST(D),
+		0xD7, 0x05, /* #6.23(5) */
+		0xD8, 0x18, 0x61, 'a', /* #6.24("a") */
+		0xD8, 0x18, 0x62, 'b', 'c', /* #6.24("bc") */
+		0xD8, 0xFF, 0x41, 0x01, /* #6.255(h'01') */
+		0xD8, 0xFF, 0x40, /* #6.255(h'') */
+		0xD9, 0x01, 0x00, 0xF5, /* #6.256(true) */
+		0xD9, 0x01, 0x00, 0xF4, /* #6.256(false) */
+		0xD9, 0x01, 0x00, 0xF5, /* #6.256(true) */
+		0xD9, 0xFF, 0xFF, 0xFB, 0x3F, 0xF8, 0, 0, 0, 0, 0, 0, /* #6.65535(1.5) */
+		0xDA, 0x00, 0x01, 0x00, 0x00, 0xF6, /* #6.65536(nil) */
+		0xDA, 0xFF, 0xFF, 0xFF, 0xFF, 0x05, /* #6.4294967295(5) */
+		0xDA, 0xFF, 0xFF, 0xFF, 0xFF, 0x05, /* #6.4294967295(5) */
+		MAP(1), 0x01, 0xDA, 0x12, 0x34, 0x56, 0x78, 0x07, END /* {1: #6.305419896(7)} */
+		END
+	};
+	struct QuantTags input = {
+		.qt_bstr = {{.value = NULL, .len = 0}},
+		.qt_bstr_count = 1,
+		.qt_bool = {true, false},
+		.qt_bool_count = 2,
+	};
+	uint8_t payload[100];
+	size_t num_encode;
+
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_QuantTags(payload,
+		sizeof(payload), &input, &num_encode));
+	zassert_equal(sizeof(quant_tags_exp_payload1), num_encode, NULL);
+	zassert_mem_equal(payload, quant_tags_exp_payload1, sizeof(quant_tags_exp_payload1));
+
+	input = (struct QuantTags){
+		.qt_uint = 5,
+		.qt_uint_present = true,
+		.qt_tstr = {{.value = "a", .len = 1}, {.value = "bc", .len = 2}},
+		.qt_tstr_count = 2,
+		.qt_bstr = {{.value = (uint8_t []){1}, .len = 1}, {.value = NULL, .len = 0}},
+		.qt_bstr_count = 2,
+		.qt_bool = {true, false, true},
+		.qt_bool_count = 3,
+		.qt_float = 1.5,
+		.qt_float_present = true,
+		.qt_nil_present = true,
+		.qt_five_count = 2,
+		.qt_map_val = 7,
+		.qt_map_val_present = true,
+	};
+	zassert_equal(ZCBOR_SUCCESS, cbor_encode_QuantTags(payload,
+		sizeof(payload), &input, &num_encode));
+	zassert_equal(sizeof(quant_tags_exp_payload2), num_encode, NULL);
+	zassert_mem_equal(payload, quant_tags_exp_payload2, sizeof(quant_tags_exp_payload2));
+}
+
+
 ZTEST(cbor_encode_test3, test_tagged_int_union)
 {
 	uint8_t tagged_int_union_exp_payload1[] = {0xC5, 0x01}; /* #6.5(1) */
