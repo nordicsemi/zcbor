@@ -559,7 +559,9 @@ int zcbor_entry_function_with_elem_states(const uint8_t *payload, size_t payload
 	void *result, size_t *payload_len_out, zcbor_state_t *states, zcbor_decoder_t func,
 	size_t n_states, size_t elem_count, size_t n_elem_states)
 {
-	ZCBOR_CHECK_NULL(states);
+	if (states == NULL) {
+		return ZCBOR_ERR_BAD_ARG;
+	}
 
 	uint8_t *flags = NULL;
 	size_t n_elem_state_bytes = 0;
