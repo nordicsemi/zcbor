@@ -35,7 +35,7 @@ elif hasattr(builtins, "frozendict"):
 else:
     assert False, "Couldn't find a frozendict implementation."
 
-from yaml import safe_load as yaml_load, dump as yaml_dump
+from yaml import safe_load as yaml_load, dump as yaml_dump, YAMLError
 from json import loads as json_load, dumps as json_dump
 from io import BytesIO
 from subprocess import Popen, PIPE
@@ -87,39 +87,43 @@ INT_MIN = {8: INT8_MIN, 16: INT16_MIN, 32: INT32_MIN, 64: INT64_MIN}
 INT_MAX = {8: INT8_MAX, 16: INT16_MAX, 32: INT32_MAX, 64: INT64_MAX}
 
 
-# ============================================================================
-# Custom Float Precision Support for YAML Conversion
-# ============================================================================
 # These classes allow YAML files to specify float16/float32 precision using
 # zcbor_float16 and zcbor_float32 tags, overriding cbor2's default float64.
-class Float16:
+class FloatBits:
+    """Base class for custom float precision wrappers."""
+
+    def __init__(self, value):
+        """Store the value as a float and generate bytes for CBOR encoding.
+        ValueError if it isn't a float that fits the precision."""
+        try:
+            self._value = float(value)
+            self.bytes = self.prefix + struct.pack(self.pattern, self._value)
+        except (TypeError, ValueError, OverflowError) as e:
+            raise ValueError(f"Invalid {self.__class__.__name__} value {value!r}: {e}") from e
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self._value})"
+
+
+class Float16(FloatBits):
     """Wrapper for float16 (half precision) CBOR encoding (0xf9 + 2 bytes)"""
 
-    def __init__(self, value):
-        self.value = float(value)
-
-    def __repr__(self):
-        return f"Float16({self.value})"
+    pattern = ">e"
+    prefix = b"\xf9"
 
 
-class Float32:
+class Float32(FloatBits):
     """Wrapper for float32 (single precision) CBOR encoding (0xfa + 4 bytes)"""
 
-    def __init__(self, value):
-        self.value = float(value)
-
-    def __repr__(self):
-        return f"Float32({self.value})"
+    pattern = ">f"
+    prefix = b"\xfa"
 
 
-class Float64:
+class Float64(FloatBits):
     """Wrapper for float64 (double precision) CBOR encoding (0xfb + 8 bytes)"""
 
-    def __init__(self, value):
-        self.value = float(value)
-
-    def __repr__(self):
-        return f"Float64({self.value})"
+    pattern = ">d"
+    prefix = b"\xfb"
 
 
 def _custom_float_encoder(encoder, value):
@@ -130,18 +134,8 @@ def _custom_float_encoder(encoder, value):
     This encoder intercepts Float16/Float32/Float64 objects and encodes them
     with the correct CBOR type markers (0xf9/0xfa/0xfb).
     """
-    if isinstance(value, Float16):
-        # Encode as float16: 0xf9 + 2 bytes
-        f16_bytes = struct.pack(">e", value.value)
-        encoder.write(b"\xf9" + f16_bytes)
-    elif isinstance(value, Float32):
-        # Encode as float32: 0xfa + 4 bytes
-        f32_bytes = struct.pack(">f", value.value)
-        encoder.write(b"\xfa" + f32_bytes)
-    elif isinstance(value, Float64):
-        # Encode as float64: 0xfb + 8 bytes
-        f64_bytes = struct.pack(">d", value.value)
-        encoder.write(b"\xfb" + f64_bytes)
+    if isinstance(value, FloatBits):
+        encoder.write(value.bytes)
     else:
         raise TypeError(f"Cannot encode type {type(value)}: {value}")
 
@@ -541,7 +535,6 @@ class CddlParser:
         # (size, value, range, quantifier, control operator etc.)
         self.modifiers = dict()
         self.match_str = ""
-        self.errors = list()
 
         self.my_types = my_types
         self.my_control_groups = my_control_groups
@@ -1752,7 +1745,7 @@ class CddlXcoder(CddlParser):
 
 
 class CddlValidationError(Exception):
-    pass
+    detail = ""  # The message without the "Data did not decode correctly" wrapper.
 
 
 class KeyTuple(tuple):
@@ -1834,7 +1827,15 @@ class DataTranslator(CddlXcoder):
         if not test:
             if callable(msg):
                 msg = msg()
-            raise CddlValidationError(f"Data did not decode correctly {'(' + msg + ')' if msg else ''}")
+            e = CddlValidationError(f"Data did not decode correctly {'(' + msg + ')' if msg else ''}")
+            e.detail = msg
+            raise e
+
+    def _raise_union_error(self, errors):
+        """Raise a CddlValidationError with the errors of all the union's members, one per line."""
+        raise CddlValidationError(
+            f"No matches for union: {self}" + "".join("\n" + indent(e, "  ") for e in errors)
+        )
 
     def _check_tag(self, obj):
         """Check that the data has the expected tags, outermost first, and no unexpected ones.
@@ -2084,6 +2085,7 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
             return self._construct_obj(retval, do_decode)
         elif self.type == "UNION":
             retval = list()
+            errors = list()
             for child in self.value:
                 try:
                     child_obj = child._decode_single_obj(obj, do_decode)
@@ -2091,8 +2093,8 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
                     retval.append(("union_choice", child.var_name()))
                     return self._construct_obj(retval, do_decode)
                 except CddlValidationError as c:
-                    self.errors.append(str(c))
-            self._decode_assert(False, lambda: "No matches for union: " + str(self))
+                    errors.append(c.detail or str(c))
+            self._raise_union_error(errors)
         assert False, "Unexpected type: " + self.type
 
     def _handle_key(self, next_obj, do_decode):
@@ -2143,7 +2145,7 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
         elif self.type == "UNION":
             my_list = list()
             child_it = it
-            found = False
+            errors = list()
             for child in self.value:
                 try:
                     child_it, it_copy = tee(child_it)
@@ -2151,12 +2153,12 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
                     child._add_if(my_list, child_obj, do_decode)
                     my_list.append(("union_choice", child.var_name()))
                     ret = (child_it, self._construct_obj(my_list, do_decode))
-                    found = True
                     break
                 except CddlValidationError as c:
-                    self.errors.append(str(c))
+                    errors.append(c.detail or str(c))
                     child_it = it_copy
-            self._decode_assert(found, lambda: "No matches for union: " + str(self))
+            else:
+                self._raise_union_error(errors)
         else:
             ret = (it, self._decode_single_obj(self._iter_next(it), do_decode))
         return ret
@@ -2177,8 +2179,7 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
                     it, it_copy = tee(it)
                     it, retval = self._decode_obj(it, do_decode)
                     retvals.append(retval if not self.is_unambiguous_repeated() else None)
-            except CddlValidationError as c:
-                self.errors.append(str(c))
+            except CddlValidationError:
                 it = it_copy
             return it, retvals
         else:
@@ -2188,14 +2189,8 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
     def decode_obj(self, obj, do_decode):
         """CBOR object => python object"""
         it = iter([obj])
-        try:
-            _, decoded = self._decode_full(it, do_decode)
-            self._iter_is_empty(it)
-        except CddlValidationError as e:
-            if self.errors:
-                print("Errors:")
-                pprint(self.errors)
-            raise e
+        _, decoded = self._decode_full(it, do_decode)
+        self._iter_is_empty(it)
         return decoded
 
     def decode_str_yaml(self, yaml_str, yaml_compat=False, canonical=False):
@@ -2236,18 +2231,23 @@ CBOR-formatted bstr, all elements must be bstrs. If not, it is a programmer erro
                     bstr = dumps(self._from_yaml_obj(obj["zcbor_bstr"], can), canonical=can)
                 return bstr
             elif ["zcbor_tag", "zcbor_tag_val"] == list(obj.keys()):
-                return CBORTag(obj["zcbor_tag"], self._from_yaml_obj(obj["zcbor_tag_val"], can))
+                tag = obj["zcbor_tag"]
+                if not isinstance(tag, int) or not 0 <= tag < 2**64:
+                    raise ValueError(f"zcbor_tag must be an integer from 0 to 2**64-1, not {tag!r}")
+                return CBORTag(tag, self._from_yaml_obj(obj["zcbor_tag_val"], can))
             # ============ Float Precision Support ============
             elif ["zcbor_float16"] == list(obj.keys()):
-                return Float16(float(obj["zcbor_float16"]))
+                return Float16(obj["zcbor_float16"])
             elif ["zcbor_float32"] == list(obj.keys()):
-                return Float32(float(obj["zcbor_float32"]))
+                return Float32(obj["zcbor_float32"])
             elif ["zcbor_float64"] == list(obj.keys()):
-                return Float64(float(obj["zcbor_float64"]))
+                return Float64(obj["zcbor_float64"])
             # =================================================
             retval = dict()
             for key, val in obj.items():
                 if isinstance(key, str) and getrp(r"zcbor_keyval\d+").fullmatch(key) is not None:
+                    if not isinstance(val, dict) or not {"key", "val"} <= val.keys():
+                        raise ValueError(f"{key} must be a map with 'key' and 'val', not {val!r}")
                     new_key = self._from_yaml_obj(val["key"], can)
                     new_val = self._from_yaml_obj(val["val"], can)
                     if isinstance(new_key, list):
@@ -4958,24 +4958,33 @@ def parse_cddl(args):
 def read_data(args, cddl, canonical=False):
     _, in_file_ext = path.splitext(args.input)
     in_file_format = args.input_as or in_file_ext.strip(".")
-    if in_file_format in ["yaml", "yml"]:
-        f = sys.stdin if args.input == "-" else open(args.input, "r", encoding="utf-8")
-        cbor_str = cddl.from_yaml(f.read(), yaml_compat=args.yaml_compatibility, canonical=canonical)
-    elif in_file_format == "json":
-        f = sys.stdin if args.input == "-" else open(args.input, "r", encoding="utf-8")
-        cbor_str = cddl.from_json(f.read(), yaml_compat=args.yaml_compatibility, canonical=canonical)
-    else:  # CBOR or CBORHEX
-        if in_file_format == "cborhex":
+    try:
+        if in_file_format in ["yaml", "yml"]:
             f = sys.stdin if args.input == "-" else open(args.input, "r", encoding="utf-8")
-            cbor_str = bytes.fromhex(f.read().replace("\n", ""))
-        else:
-            f = sys.stdin.buffer if args.input == "-" else open(args.input, "rb")
-            cbor_str = f.read()
+            cbor_str = cddl.from_yaml(f.read(), yaml_compat=args.yaml_compatibility, canonical=canonical)
+        elif in_file_format == "json":
+            f = sys.stdin if args.input == "-" else open(args.input, "r", encoding="utf-8")
+            cbor_str = cddl.from_json(f.read(), yaml_compat=args.yaml_compatibility, canonical=canonical)
+        else:  # CBOR or CBORHEX
+            if in_file_format == "cborhex":
+                f = sys.stdin if args.input == "-" else open(args.input, "r", encoding="utf-8")
+                cbor_str = bytes.fromhex(f.read().replace("\n", ""))
+            else:
+                f = sys.stdin.buffer if args.input == "-" else open(args.input, "rb")
+                cbor_str = f.read()
 
-        cddl.validate_str(cbor_str)
-        if canonical:
-            cbor_str = cddl.str_to_canonical(cbor_str)
             cddl.validate_str(cbor_str)
+            if canonical:
+                cbor_str = cddl.str_to_canonical(cbor_str)
+                cddl.validate_str(cbor_str)
+    except CddlValidationError as e:
+        print(f"Data does not conform to the CDDL: {e}")
+        sys.exit(1)
+    except (CBORDecodeError, YAMLError, ValueError) as e:
+        # The input data is not valid data at all, e.g. truncated CBOR, or invalid YAML/JSON/hex.
+        # ValueError includes JSONDecodeError and UnicodeDecodeError.
+        print(f"Invalid input data: {e}")
+        sys.exit(1)
 
     return cbor_str
 
