@@ -1421,6 +1421,13 @@ bool zcbor_bstr_end_force_decode(zcbor_state_t *state)
 }
 
 
+/* Declarations of functions that are not in zcbor_decode.h, but are kept non-static so
+ * applications can declare and use them (see MIGRATION_GUIDE.md, 0.9.0). */
+bool zcbor_simple_decode(zcbor_state_t *state, uint8_t *result);
+bool zcbor_simple_expect(zcbor_state_t *state, uint8_t expected);
+bool zcbor_simple_pexpect(zcbor_state_t *state, uint8_t *expected);
+
+
 bool zcbor_simple_decode(zcbor_state_t *state, uint8_t *result)
 {
 	ZCBOR_PRINT_FUNC_NAME();
