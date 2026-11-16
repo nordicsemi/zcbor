@@ -17,6 +17,7 @@ from yaml import safe_load, safe_dump
 from tempfile import mkdtemp, NamedTemporaryFile
 from shutil import rmtree
 from os import linesep
+import warnings
 
 try:
     import zcbor
@@ -1656,6 +1657,90 @@ class TestAnyWarning(PopenTest, TempdTest):
         self.assertEqual(
             sorted(f"warning: {name}{msg}" for name in ("Pet_missing", "cbor_any")),
             sorted(line for line in stderr.decode("utf-8").splitlines() if line),
+        )
+
+
+class TestUnreachableChoiceWarning(PopenTest, TempdTest):
+    """Choices are tried in order (RFC 8610 Appendix A), so an alternative that can match nothing
+    makes the alternatives after it unreachable."""
+
+    msg = (
+        "{}: the choice alternative '{}' can match nothing, so the alternatives after it are "
+        "never matched (CDDL choices are tried in order)."
+    )
+
+    def choice_warnings(self, cddl_str):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            zcbor.DataTranslator.from_cddl(cddl_string=cddl_str, default_max_qty=16)
+        return [str(x.message) for x in w if x.category is zcbor.CddlWarning]
+
+    def test_warning(self):
+        for cddl_str, name, alternative in (
+            ("Opt = {(? 3 => uint) // (4 => bool)}", "Opt", "(? 3 => uint)"),
+            ("OptList = [? (7, uint) // (8, bool)]", "OptList", "? (7, uint)"),
+            ("OptFirst = {? (1 => uint) // (2 => bool)}", "OptFirst", "? (1 => uint)"),
+            (
+                "OptGroup = {(? 9 => uint, ? 10 => int) // (11 => bool)}",
+                "OptGroup",
+                "(? 9 => uint, ? 10 => int)",
+            ),
+            ("OptUint = [(? uint) // int]", "OptUint", "(? uint)"),
+            ("Empty = [() // int]", "Empty", "()"),
+            ("Ref = [Opt // int]\nOpt = (? uint)", "Ref", "Opt"),
+            ("TypeChoice = int / Opt / bool\nOpt = (? uint)", "TypeChoice", "Opt"),
+            ("Three = [int // (* uint) // bool // tstr]", "Three", "(* uint)"),
+        ):
+            with self.subTest(cddl_str):
+                self.assertEqual([self.msg.format(name, alternative)], self.choice_warnings(cddl_str))
+
+    def test_long_alternative(self):
+        """Long alternatives are shortened."""
+        cddl_str = "Long = {(? 1 => uint, ? 2 => uint, ? 3 => uint, ? 4 => uint) // (5 => bool)}"
+        self.assertEqual(
+            [self.msg.format("Long", "(? 1 => uint, ? 2 => uint, ? 3 => uint, ? 4 => ...")],
+            self.choice_warnings(cddl_str),
+        )
+
+    def test_no_warning(self):
+        for cddl_str in (
+            "Last = {(5 => uint) // (* 6 => bool)}",
+            "NoneEmpty = [(1, uint) // (2, ? bool) // int]",
+            "OptUnion = [? (uint // bool)]",
+            "OptTypeChoice = [? int / bool]",
+            "Keyed = {(3 => Opt) // (4 => bool)}\nOpt = (? uint)",
+            "Tagged = [#6.10(Opt) // int]\nOpt = (? uint)",
+            "Recursive = (? int, Recursive) // int",
+        ):
+            with self.subTest(cddl_str):
+                self.assertEqual([], self.choice_warnings(cddl_str))
+
+    def test_recursive(self):
+        """A type that is part of a recursion, but can be empty through another alternative."""
+        cddl_str = "Top = A // int\nA = B / C\nB = A\nC = (? uint)"
+        self.assertEqual(
+            [self.msg.format("Top", "A"), self.msg.format("A", "B")], self.choice_warnings(cddl_str)
+        )
+
+    def test_shared_references(self):
+        """Types that are referenced many times are not checked again for each reference, which
+        would take exponential time here."""
+        cddl_str = "T0 = uint\n" + "\n".join(f"T{i} = T{i - 1} / T{i - 1}" for i in range(1, 41))
+        self.assertEqual([], self.choice_warnings(cddl_str))
+
+    def test_prelude(self):
+        self.assertEqual([], self.choice_warnings(p_prelude.read_text(encoding="utf-8")))
+
+    def test_cli_warning(self):
+        p_cddl = self.tempd / "choice.cddl"
+        p_cddl.write_text("Choice = [(? uint) // int]\n", encoding="utf-8")
+        _, stderr = self.popen_test(
+            ["zcbor", "validate", "-c", p_cddl, "-t", "Choice", "-i", "-", "--input-as", "json"],
+            b"[]",
+        )
+        self.assertEqual(
+            ["warning: " + self.msg.format("Choice", "(? uint)")],
+            [line for line in stderr.decode("utf-8").splitlines() if line.startswith("warning:")],
         )
 
 

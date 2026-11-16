@@ -548,6 +548,8 @@ class CddlParser:
         # (size, value, range, quantifier, control operator etc.)
         self.modifiers = dict()
         self.match_str = ""
+        # The CDDL string this element was parsed from. Only used in messages.
+        self.cddl_str = ""
         self.errors = list()
 
         self.my_types = my_types
@@ -613,6 +615,13 @@ class CddlParser:
             my_types[my_type].post_process()
         for my_control_group in my_control_groups:
             my_control_groups[my_control_group].post_process_control_group()
+        # Find which types can match zero CBOR items: start with none, and recompute until nothing
+        # changes. This handles recursive types, and doesn't follow the same references repeatedly.
+        empty_types = dict.fromkeys(my_types, False)
+        while (new := {n: t.can_be_empty(empty_types) for n, t in my_types.items()}) != empty_types:
+            empty_types = new
+        for my_type in my_types:
+            my_types[my_type].warn_unreachable_choices(my_type, empty_types)
 
         return CddlTypes(my_types, my_control_groups)
 
@@ -867,6 +876,8 @@ class CddlParser:
             self.value[0].is_key = self.is_key
             self.value[0].tags[:0] = self.tags  # Outer tags come first.
             self.value[0].default = self.default
+            if self.type == "GROUP":
+                self.value[0].cddl_str = self.cddl_str
             return self.value
         elif allow_multi and self.type in ["GROUP"] and self.min_qty == 1 and self.max_qty == 1:
             return self.value
@@ -1559,6 +1570,47 @@ class CddlParser:
         # Validation of child elements.
         self.recurse(self.__class__.post_validate, with_default=True)
 
+    def can_be_empty(self, empty_types):
+        """Whether this element can match zero CBOR items, e.g. because it is optional.
+
+        empty_types tells whether each type in my_types can match zero CBOR items. References to
+        other types are looked up there instead of being followed.
+        """
+        if self.min_qty == 0:
+            return True
+        elif self.key or self.tags:
+            return False
+        elif self.type == "GROUP":
+            return all(child.can_be_empty(empty_types) for child in self.value)
+        elif self.type == "UNION":
+            return any(child.can_be_empty(empty_types) for child in self.value)
+        elif self.type == "OTHER":
+            return empty_types[self.value]
+        return False
+
+    def warn_unreachable_choices(self, type_name, empty_types):
+        """Warn about choice alternatives that make the alternatives after them unreachable.
+
+        Choices are tried in order, and the first alternative that matches is chosen (RFC 8610,
+        Appendix A), so an alternative that can match nothing always matches.
+
+        empty_types is as for can_be_empty().
+
+        This is recursive, so it will check all its children + key + cbor.
+        """
+        if self.type == "UNION":
+            alt = next((c for c in self.value[:-1] if c.can_be_empty(empty_types)), None)
+            if alt is not None:
+                alt_str = " ".join(alt.cddl_str.split())
+                if len(alt_str) > 50:
+                    alt_str = alt_str[:47] + "..."
+                warnings.warn(
+                    f"{type_name}: the choice alternative '{alt_str}' can match nothing, so the "
+                    "alternatives after it are never matched (CDDL choices are tried in order).",
+                    CddlWarning,
+                )
+        self.recurse(lambda elem: elem.warn_unreachable_choices(type_name, empty_types))
+
     def post_validate_control_group(self):
         if self.type != "GROUP":
             raise CddlParsingError(f"control groups must be of GROUP type, got {self.type}.")
@@ -1595,6 +1647,7 @@ class CddlParser:
         if base_stem is not None:
             kwargs["base_stem"] = base_stem
         value = type(self)(**kwargs)
+        value.cddl_str = instr.strip()
 
         try:
             remainder = value.get_value(instr.strip().lstrip("&"))
