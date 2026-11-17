@@ -656,4 +656,155 @@ ZTEST(cbor_decode_testA, test_unordered_map13)
 	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);
 }
 
+ZTEST(cbor_decode_testA, test_unordered_map15)
+{
+	const uint8_t payload_unordered_map15[] = {
+		MAP(2),
+		0x01, 0x05,
+		0x04, 0xF5,
+		END
+	};
+	const uint8_t payload_unordered_map15_inv[] = {
+		MAP(3),
+		0x01, 0x05,
+		0x03, 0x61, 'a',
+		0x04, 0xF5,
+		END
+	};
+
+	struct UnorderedMap15 unordered_map15;
+	struct UnorderedMap16 unordered_map16;
+
+	/* The failed map15_bad iteration finds key 1 before failing on key 3. */
+	int err = cbor_decode_UnorderedMap15(payload_unordered_map15,
+			sizeof(payload_unordered_map15), &unordered_map15, NULL);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);
+	zassert_equal(0, unordered_map15.UnorderedMap15_map15_bad_m_count);
+	zassert_equal(5, unordered_map15.UnorderedMap15_uint1uint);
+	zassert_true(unordered_map15.UnorderedMap15_uint4bool);
+
+	err = cbor_decode_UnorderedMap16(payload_unordered_map15,
+			sizeof(payload_unordered_map15), &unordered_map16, NULL);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);
+	zassert_false(unordered_map16.UnorderedMap16_map15_bad_m_present);
+	zassert_equal(5, unordered_map16.UnorderedMap16_uint1uint);
+	zassert_true(unordered_map16.UnorderedMap16_uint4bool);
+
+	/* map15_bad takes keys 1 and 3, so 1 => uint is missing. */
+	err = cbor_decode_UnorderedMap15(payload_unordered_map15_inv,
+			sizeof(payload_unordered_map15_inv), &unordered_map15, NULL);
+	zassert_not_equal(ZCBOR_SUCCESS, err);
+
+	err = cbor_decode_UnorderedMap16(payload_unordered_map15_inv,
+			sizeof(payload_unordered_map15_inv), &unordered_map16, NULL);
+	zassert_not_equal(ZCBOR_SUCCESS, err);
+}
+
+ZTEST(cbor_decode_testA, test_unordered_map17)
+{
+	const uint8_t payload_unordered_map17_1[] = {
+		MAP(2),
+		0x01, 0x05,
+		0x04, 0xF5,
+		END
+	};
+	const uint8_t payload_unordered_map17_2[] = {
+		MAP(4),
+		0x02, 0x07,
+		0x03, 0x61, 'a',
+		0x01, 0x05,
+		0x04, 0xF5,
+		END
+	};
+	const uint8_t payload_unordered_map17_inv[] = {
+		MAP(3),
+		0x01, 0x05,
+		0x02, 0x07,
+		0x04, 0xF5,
+		END
+	};
+
+	struct UnorderedMap17 unordered_map17;
+
+	int err = cbor_decode_UnorderedMap17(payload_unordered_map17_1,
+			sizeof(payload_unordered_map17_1), &unordered_map17, NULL);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);
+	zassert_equal(5, unordered_map17.UnorderedMap17_uint1uint);
+	zassert_equal(0, unordered_map17.UnorderedMap17_map15_bad_m_count);
+	zassert_true(unordered_map17.UnorderedMap17_uint4bool);
+
+	err = cbor_decode_UnorderedMap17(payload_unordered_map17_2,
+			sizeof(payload_unordered_map17_2), &unordered_map17, NULL);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);
+	zassert_equal(5, unordered_map17.UnorderedMap17_uint1uint);
+	zassert_equal(1, unordered_map17.UnorderedMap17_map15_bad_m_count);
+	struct map15_bad *rep = &unordered_map17.UnorderedMap17_map15_bad_m[0];
+
+	zassert_equal(union_uint2int_c, rep->map15_bad_union_choice);
+	zassert_equal(7, rep->union_uint2int);
+	zassert_equal(1, rep->map15_bad_uint3tstr.len);
+	zassert_mem_equal("a", rep->map15_bad_uint3tstr.value, 1);
+	zassert_true(unordered_map17.UnorderedMap17_uint4bool);
+
+	/* The failed map15_bad iteration finds key 2 before failing on key 3, so key 2 must not
+	 * be left marked as processed. */
+	err = cbor_decode_UnorderedMap17(payload_unordered_map17_inv,
+			sizeof(payload_unordered_map17_inv), &unordered_map17, NULL);
+	zassert_equal(ZCBOR_ERR_ELEMS_NOT_PROCESSED, err, "%s %d\n", zcbor_error_str(err), err);
+}
+
+ZTEST(cbor_decode_testA, test_unordered_map18)
+{
+	const uint8_t payload_unordered_map18_1[] = {
+		MAP(2),
+		0x01, 0x05,
+		0x04, 0xF5,
+		END
+	};
+	const uint8_t payload_unordered_map18_2[] = {
+		MAP(4),
+		0x06, 0x07,
+		0x05, 0x08,
+		0x01, 0x05,
+		0x04, 0xF5,
+		END
+	};
+	const uint8_t payload_unordered_map18_inv[] = {
+		MAP(4),
+		0x06, 0x07,
+		0x01, 0x05,
+		0x03, 0x61, 'a',
+		0x04, 0xF5,
+		END
+	};
+
+	struct UnorderedMap18 unordered_map18;
+
+	/* The failed map18_bad iteration finds key 1 before failing on key 3. */
+	int err = cbor_decode_UnorderedMap18(payload_unordered_map18_1,
+			sizeof(payload_unordered_map18_1), &unordered_map18, NULL);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);
+	zassert_equal(0, unordered_map18.UnorderedMap18_map18_bad_m_count);
+	zassert_equal(5, unordered_map18.UnorderedMap18_uint1uint);
+	zassert_true(unordered_map18.UnorderedMap18_uint4bool);
+
+	err = cbor_decode_UnorderedMap18(payload_unordered_map18_2,
+			sizeof(payload_unordered_map18_2), &unordered_map18, NULL);
+	zassert_equal(ZCBOR_SUCCESS, err, "%s %d\n", zcbor_error_str(err), err);
+	zassert_equal(1, unordered_map18.UnorderedMap18_map18_bad_m_count);
+	struct map18_bad *rep = &unordered_map18.UnorderedMap18_map18_bad_m[0];
+
+	zassert_equal(union_uint6uint_c, rep->map18_bad_union_choice);
+	zassert_equal(7, rep->union_uint6uint);
+	zassert_true(rep->map18_bad_uint5uint_present);
+	zassert_equal(8, rep->map18_bad_uint5uint);
+	zassert_equal(5, unordered_map18.UnorderedMap18_uint1uint);
+	zassert_true(unordered_map18.UnorderedMap18_uint4bool);
+
+	/* map18_bad takes keys 6, then 1 and 3, so 1 => uint is missing. */
+	err = cbor_decode_UnorderedMap18(payload_unordered_map18_inv,
+			sizeof(payload_unordered_map18_inv), &unordered_map18, NULL);
+	zassert_not_equal(ZCBOR_SUCCESS, err);
+}
+
 ZTEST_SUITE(cbor_decode_testA, NULL, NULL, NULL, NULL, NULL);

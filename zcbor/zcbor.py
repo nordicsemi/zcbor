@@ -633,6 +633,8 @@ class CddlParser:
             empty_types = new
         for my_type in my_types:
             my_types[my_type].warn_unreachable_choices(my_type, empty_types)
+        # All elements share the prototype, so they can reach empty_types through it.
+        prototype.empty_types = empty_types
 
         return CddlTypes(my_types, my_control_groups)
 
@@ -2733,6 +2735,50 @@ class CodeGenerator(CddlXcoder):
             return self.my_types[self.value].safe_failable()
         return True
 
+    def fail_leaves_processed(self):
+        """Whether decoding this element in an unordered map can fail after marking one or more
+        entries of the map as processed (zcbor_elem_processed()), leaving them marked.
+
+        If a failure is not propagated to the map itself, but caught by a repetition or an
+        optional element, the marked entries can then not be found by later members."""
+        if not (self.unordered_maps and self.mode == "decode"):
+            return False
+        if self.multi_var_condition():
+            # A failing iteration is undone (multi_decode_w_backup_condition() picks the _w_backup
+            # variant when needed). But if fewer than min_qty iterations succeed, the successful
+            # ones stay marked, which is only possible when min_qty > 1.
+            return not (isinstance(self.min_qty, int) and self.min_qty <= 1) and bool(self.is_in_map())
+        return self.repeated_fail_leaves_processed()
+
+    def repeated_fail_leaves_processed(self):
+        """Like fail_leaves_processed(), but for a single repetition of this element (without the
+        quantifier)."""
+        if not (self.unordered_maps and self.mode == "decode"):
+            return False
+        if self.type == "GROUP":
+            # The group leaves entries marked if a member does, or if a member can fail after an
+            # earlier member has marked its entry (processed). A member that contains a key
+            # (is_in_map()) has marked its entry when it succeeded; an optional one may not have,
+            # which is only conservative.
+            processed = False
+            for child in self.value:
+                can_fail = not child.can_be_empty(self.prototype.empty_types)
+                if child.fail_leaves_processed() or (processed and can_fail):
+                    return True
+                processed = processed or bool(child.is_in_map())
+            return False
+        if self.type == "UNION":
+            # The union restores the state before trying the next member (if needed), so only
+            # the last member, or a member with no restoring after it, can leave entries marked.
+            return any(
+                child.fail_leaves_processed()
+                and (i == len(self.value) - 1 or not self.union_elem_restore_condition(i + 1))
+                for i, child in enumerate(self.value)
+            )
+        if self.type == "OTHER":
+            return self.my_types[self.value].fail_leaves_processed()
+        return False
+
     def int_val(self, force_literal=False):
         """If this element is, or starts with, an integer, return the value or #define name."""
         if self.key:
@@ -3573,6 +3619,15 @@ class CodeGenerator(CddlXcoder):
         """Whether this element is a UNION that can be encoded/decoded without union_start/union_end functions."""
         return self.all_children_int_disambiguated() and not (self.unordered_maps and self.is_in_map())
 
+    def union_elem_restore_condition(self, i):
+        """Whether this UNION restores the state (zcbor_union_elem_code()) before trying the
+        member at index i (i > 0) when decoding. Implicit unions never do."""
+        return (
+            not self.implicit_union_condition()
+            and not self.value[i].expect_union_condition()
+            and self.value[i - 1].simple_func_condition()
+        )
+
     def xcode_union(self, *, res_var):
         """Return the full code needed to encode/decode a "UNION" element's children."""
         assert self.type in ["UNION"], "Expected UNION type."
@@ -3612,10 +3667,7 @@ class CodeGenerator(CddlXcoder):
 
             # Reset state for all but the first child.
             for i in range(1, len(child_values)):
-                if (
-                    not self.value[i].expect_union_condition()
-                    and self.value[i - 1].simple_func_condition()
-                ):
+                if self.union_elem_restore_condition(i):
                     child_values[i] = f"(zcbor_union_elem_code(state) && {child_values[i]})"
 
             child_code = f"{newl_ind}|| ".join(child_values)
@@ -3947,9 +3999,14 @@ class CodeGenerator(CddlXcoder):
         return self._val_access(res_var == self.full_result_var())
 
     def multi_decode_w_backup_condition(self):
-        return (
-            self.count_var_condition() or self.present_var_condition()
-        ) and self.repeated_single_func_impl_condition()
+        """Whether to use zcbor_multi_decode_w_backup()/zcbor_present_decode_w_backup().
+
+        The backup also restores the unordered map search state, which is needed if an
+        iteration can fail after marking map entries as processed. The variants without backup
+        only restore the payload and elem_count."""
+        return (self.count_var_condition() or self.present_var_condition()) and (
+            self.repeated_single_func_impl_condition() or self.repeated_fail_leaves_processed()
+        )
 
     def full_xcode(self, *, res_var, union_int=None):
         """Return the full code needed to encode/decode this element.
