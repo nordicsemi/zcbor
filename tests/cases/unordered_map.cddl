@@ -112,3 +112,34 @@ UnorderedMap13 = {
 		"map133": uint
 	}
 }
+
+; A failing iteration of map15_bad can mark key 1 (or 2) as processed before failing on key 3,
+; so the repetition must restore the map search flags.
+UnorderedMap15 = {
+	* map15_bad,
+	1 => uint,
+	4 => bool,
+}
+
+UnorderedMap16 = {
+	? map15_bad,
+	1 => uint,
+	4 => bool,
+}
+
+UnorderedMap17 = {
+	1 => uint,
+	* map15_bad,
+	4 => bool,
+}
+
+map15_bad = ((1 => int // 2 => int), 3 => tstr)
+
+; Here, it is the last member of the union that can fail after finding key 1.
+UnorderedMap18 = {
+	* map18_bad,
+	1 => uint,
+	4 => bool,
+}
+
+map18_bad = (((6 => uint) // (1 => uint, 3 => tstr)), ? 5 => uint)

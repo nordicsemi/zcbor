@@ -2136,6 +2136,42 @@ class TestCodeGeneration(TestCase):
         code = unordered_map1.xcode(res_var=unordered_map1.full_result_var())
         self.assertIn("zcbor_unordered_map_search", code)
 
+    def test_unordered_map_backup_when_iteration_leaves_processed(self):
+        """In unordered maps, repetitions must restore the map search flags (with a backup) if
+        an iteration can fail after marking a map entry as processed, but only then."""
+        groups = """
+            inner = (uint => tstr)
+            union_mid = (1 => uint, 3 => tstr)
+            seq = ((1 => uint // 2 => uint), 3 => tstr)
+            last_choice = (((6 => uint) // (1 => uint, 3 => tstr)), ? 5 => uint)
+            min_two = (2*3 inner, ? 7 => uint)
+            opt_tail = ((1 => uint // 2 => uint), ? 3 => uint)
+            mid_choice = (((5 => uint) // union_mid // (6 => uint)), ? 8 => uint)
+            min_one = (+ inner, ? 7 => uint)
+            empty_choice = (((5 => uint) // (6 => uint, (2 => uint // ? 3 => uint))), ? 1 => uint)
+        """
+        expected = {
+            "* seq": True,
+            "? seq": True,
+            "* last_choice": True,
+            "* min_two": True,
+            "* opt_tail": False,
+            "* mid_choice": False,
+            "* min_one": False,
+            "* empty_choice": False,
+        }
+        for member, needs_backup in expected.items():
+            with self.subTest(member=member):
+                cddl_string = f"test = {{{member}, 9 => bool}}\n{groups}"
+                for unordered_maps in (True, False):
+                    res = self.do_test_code_generation(cddl_string, unordered_maps=unordered_maps)
+                    elem = res.my_types["test"].value[0]
+                    # Make sure the backup doesn't come from the element having its own function.
+                    self.assertFalse(elem.repeated_single_func_impl_condition())
+                    self.assertEqual(
+                        needs_backup and unordered_maps, elem.multi_decode_w_backup_condition()
+                    )
+
     def test_unordered_map_empty_containers(self):
         """Empty containers in unordered maps need no flags, and must not break the flag count."""
         cddl_string = "test = {1: int, 2: {}, 3: []}\nEmpty = {}"
