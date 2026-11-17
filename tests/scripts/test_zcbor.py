@@ -17,6 +17,8 @@ from yaml import safe_load, safe_dump
 from tempfile import mkdtemp, NamedTemporaryFile
 from shutil import rmtree
 from os import linesep
+from contextlib import redirect_stdout
+from io import StringIO
 
 try:
     import zcbor
@@ -2903,6 +2905,105 @@ class OtherTests(TestCase):
         self.assertEqual("UINT", parsed.value[0].value[0].type)
         self.assertEqual('\\"map2\\"', parsed.value[0].value[0].key.value)
         self.assertEqual(6, parsed.value[0].value[0].key.size)
+
+
+class TestInvalidInputData(PopenTest, TempdTest):
+    def test_invalid_input_data(self):
+        """Test that invalid input data gives a short error message instead of a traceback."""
+        invalid = b"Invalid input data: "
+        nonconforming = b"Data does not conform to the CDDL: "
+        cddl_path = Path(self.tempd, "list.cddl")
+        cddl_path.write_text("T = [uint, tstr]", encoding="utf-8")
+        for cmd in ("validate", "convert"):
+            args = ["zcbor", cmd, "-c", str(cddl_path), "-t", "T", "-i", "-", "--input-as"]
+            if cmd == "convert":
+                args = args[:-1] + ["-o", "-", "--output-as", "json", "--input-as"]
+            self.popen_test(args + ["cbor"], bytes.fromhex("82016161"))
+            for input_as, data, exp_msg in (
+                ("cbor", bytes.fromhex("8201"), invalid),  # Truncated
+                ("cbor", bytes.fromhex("820102"), nonconforming),
+                ("cborhex", b"zz", invalid),
+                ("yaml", b"[1, ", invalid),
+                ("yaml", b"\xff\xfe", invalid),
+                ("yaml", b"[1, 2]", nonconforming),
+                ("json", b"[1, ", invalid),
+                ("json", b"[1, 2]", nonconforming),
+            ):
+                with self.subTest(cmd=cmd, input_as=input_as, data=data):
+                    stdout, stderr = self.popen_test(args + [input_as], data, exp_retcode=1)
+                    self.assertTrue(stdout.startswith(exp_msg), stdout)
+                    self.assertNotIn(b"Traceback", stderr)
+
+    def test_invalid_yaml_compat_data(self):
+        """Test that malformed zcbor_* maps give a short error message instead of a traceback."""
+        invalid = b"Invalid input data: "
+        cddl_path = Path(self.tempd, "types.cddl")
+        cddl_path.write_text(
+            "M = {* int => int}\nT = #6.1000(int)\nF16 = float16\nF32 = float32\nF64 = float64\n",
+            encoding="utf-8",
+        )
+        for cmd in ("validate", "convert"):
+            args = ["zcbor", cmd, "-c", str(cddl_path), "-i", "-", "--input-as", "json"]
+            args += ["--yaml-compatibility"]
+            if cmd == "convert":
+                args += ["-o", "-", "--output-as", "json"]
+            for typ, data in (
+                ("M", b'{"zcbor_keyval0": {"key": 1, "val": 2}}'),
+                ("T", b'{"zcbor_tag": 1000, "zcbor_tag_val": 1}'),
+                ("F16", b'{"zcbor_float16": 1.5}'),
+                ("F32", b'{"zcbor_float32": 1.5}'),
+                ("F64", b'{"zcbor_float64": 1.5}'),
+            ):
+                self.popen_test(args + ["-t", typ], data)
+            for typ, data in (
+                ("M", b'{"zcbor_keyval0": {"key": 1}}'),
+                ("M", b'{"zcbor_keyval0": null}'),
+                ("T", b'{"zcbor_tag": "x", "zcbor_tag_val": 1}'),
+                ("T", b'{"zcbor_tag": -1, "zcbor_tag_val": 1}'),
+                ("F16", b'{"zcbor_float16": "x"}'),
+                ("F16", b'{"zcbor_float16": null}'),
+                ("F16", b'{"zcbor_float16": 1e10}'),
+                ("F32", b'{"zcbor_float32": 1e300}'),
+                ("F64", b'{"zcbor_float64": null}'),
+            ):
+                with self.subTest(cmd=cmd, data=data):
+                    stdout, stderr = self.popen_test(args + ["-t", typ], data, exp_retcode=1)
+                    self.assertTrue(stdout.startswith(invalid), stdout)
+                    self.assertNotIn(b"Traceback", stderr)
+
+    def test_union_errors(self):
+        """Test that a failed union lists the error of each member, also when nested."""
+        cddl_path = Path(self.tempd, "union.cddl")
+        cddl_path.write_text('T = uint / tstr\nM = {"a" => uint / tstr}\n', encoding="utf-8")
+        for cmd in ("validate", "convert"):
+            args = ["zcbor", cmd, "-c", str(cddl_path), "-i", "-", "--input-as", "json"]
+            if cmd == "convert":
+                args += ["-o", "-", "--output-as", "json"]
+            for typ, data in (("T", b"[]"), ("M", b'{"a": []}')):
+                with self.subTest(cmd=cmd, typ=typ):
+                    stdout, stderr = self.popen_test(args + ["-t", typ], data, exp_retcode=1)
+                    self.assertTrue(
+                        stdout.startswith(b"Data does not conform to the CDDL: No matches for union"),
+                        stdout,
+                    )
+                    self.assertIn(b"\n  UINT: Wrong type", stdout)
+                    self.assertIn(b"\n  TSTR: Wrong type", stdout)
+                    self.assertNotIn(b"Errors:", stdout)
+                    self.assertNotIn(b"Traceback", stderr)
+
+    def test_union_errors_api(self):
+        """Test that decode_obj() prints nothing, and doesn't keep errors from earlier calls."""
+        cddl = zcbor.DataTranslator.from_cddl(cddl_string="T = uint / tstr", default_max_qty=16)
+        translator = cddl.my_types["T"]
+        messages = []
+        for _ in range(2):
+            with redirect_stdout(StringIO()) as stdout:
+                with self.assertRaises(zcbor.CddlValidationError) as e:
+                    translator.decode_obj([], True)
+            self.assertEqual("", stdout.getvalue())
+            messages.append(str(e.exception))
+        self.assertIn("UINT: Wrong type", messages[0])
+        self.assertLessEqual(len(messages[1]), len(messages[0]))
 
 
 if __name__ == "__main__":
