@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * Generated using zcbor version 0.9.99
+ * Generated using zcbor version 1.0.0
  * https://github.com/nordicsemi/zcbor
  */
 
