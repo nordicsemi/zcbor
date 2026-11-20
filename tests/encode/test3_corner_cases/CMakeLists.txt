@@ -48,8 +48,17 @@ set(py_command
   Floats
   Floats2
   CBORBstr
+  CborAny
+  CborNilUndef
+  CborNestedAny
+  CborSeqAny
   MapLength
   UnionInt2
+  UnionIntOpt1
+  UnionIntOpt2
+  UnionIntRep
+  UnionIntOptList
+  UnionIntOptGroup
   Intmax1
   Intmax2
   Intmax4
@@ -69,6 +78,7 @@ set(py_command
   Tags
   QuantTags
   TaggedIntUnion
+  TaggedMemberUnion
   WrapListGroup
   WrapListGroupOpt1
   WrapListGroupOpt2
@@ -76,6 +86,7 @@ set(py_command
   OptCbor
   OptFloatUnion
   OptFloatThenInt
+  OptTypeUnion
   CborBstrList
   -e
   ${bit_arg}

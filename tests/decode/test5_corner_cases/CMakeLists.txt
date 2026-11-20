@@ -52,9 +52,19 @@ set(py_command
     Floats3
     Prelude
     CBORBstr
+    CborAny
+    CborNilUndef
+    CborNestedAny
+    CborSeqAny
     MapLength
     UnionInt1
     UnionInt2
+    UnionIntOpt1
+    UnionIntOpt2
+    UnionIntRep
+    UnionIntOptList
+    UnionIntOptGroup
+    UnionIntOptAfterFail
     Intmax1
     Intmax2
     Intmax3
@@ -81,6 +91,8 @@ set(py_command
     Tags
     QuantTags
     TaggedIntUnion
+    TaggedMemberUnion
+    SafeMemberUnion
     TwoMaps
     BstrMapUnion
     AmbigMap
@@ -92,6 +104,7 @@ set(py_command
     BstrMap
     OptFloatUnion
     OptFloatThenInt
+    OptTypeUnion
     CborBstrList
     MapOptElem1
     MapIndirect

@@ -5,7 +5,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from unittest import TestCase, main
-from unittest.mock import patch
 from subprocess import Popen, PIPE
 from regex import sub, search, escape, compile, S
 from pathlib import Path
@@ -1418,6 +1417,18 @@ class TestInvalidIdentifiers(CornerCaseTest):
         self.assertTrue(decoded.a_z_tstr)
 
 
+class TestUnionIntQuantified(CornerCaseTest):
+    def test_union_int_opt2(self):
+        cddl = self.cddl_res.my_types["UnionIntOpt2"]
+        self.assertEqual([], cddl.decode_str(cbor2.dumps({})).union.uint3uint)
+        self.assertEqual([5], cddl.decode_str(cbor2.dumps({3: 5})).union.uint3uint)
+
+        # CDDL choices are tried in order (RFC 8610 Appendix A), so the first member matches
+        # nothing and wins, and 4: true is left over. The C decoder fails in the same way.
+        with self.assertRaises(zcbor.CddlValidationError):
+            cddl.decode_str(cbor2.dumps({4: True}))
+
+
 class TestIntSize(PopenTest, TempdTest):
     def do_test_int_size(self, mode, defines_arg, bit_size):
         self.popen_test(
@@ -2136,6 +2147,42 @@ class TestCodeGeneration(TestCase):
         code = unordered_map1.xcode(res_var=unordered_map1.full_result_var())
         self.assertIn("zcbor_unordered_map_search", code)
 
+    def test_unordered_map_backup_when_iteration_leaves_processed(self):
+        """In unordered maps, repetitions must restore the map search flags (with a backup) if
+        an iteration can fail after marking a map entry as processed, but only then."""
+        groups = """
+            inner = (uint => tstr)
+            union_mid = (1 => uint, 3 => tstr)
+            seq = ((1 => uint // 2 => uint), 3 => tstr)
+            last_choice = (((6 => uint) // (1 => uint, 3 => tstr)), ? 5 => uint)
+            min_two = (2*3 inner, ? 7 => uint)
+            opt_tail = ((1 => uint // 2 => uint), ? 3 => uint)
+            mid_choice = (((5 => uint) // union_mid // (6 => uint)), ? 8 => uint)
+            min_one = (+ inner, ? 7 => uint)
+            empty_choice = (((5 => uint) // (6 => uint, (2 => uint // ? 3 => uint))), ? 1 => uint)
+        """
+        expected = {
+            "* seq": True,
+            "? seq": True,
+            "* last_choice": True,
+            "* min_two": True,
+            "* opt_tail": False,
+            "* mid_choice": False,
+            "* min_one": False,
+            "* empty_choice": False,
+        }
+        for member, needs_backup in expected.items():
+            with self.subTest(member=member):
+                cddl_string = f"test = {{{member}, 9 => bool}}\n{groups}"
+                for unordered_maps in (True, False):
+                    res = self.do_test_code_generation(cddl_string, unordered_maps=unordered_maps)
+                    elem = res.my_types["test"].value[0]
+                    # Make sure the backup doesn't come from the element having its own function.
+                    self.assertFalse(elem.repeated_single_func_impl_condition())
+                    self.assertEqual(
+                        needs_backup and unordered_maps, elem.multi_decode_w_backup_condition()
+                    )
+
     def test_unordered_map_empty_containers(self):
         """Empty containers in unordered maps need no flags, and must not break the flag count."""
         cddl_string = "test = {1: int, 2: {}, 3: []}\nEmpty = {}"
@@ -2176,13 +2223,36 @@ class TestCodeGeneration(TestCase):
         self.assertIn("ZCBOR_CUSTOM_CAST_FP(decode_repeated_test)", code)
         self.assertNotIn("zcbor_list_start_decode(state)", code)
 
+    def test_safe_failable(self):
+        """safe_failable() is true only for elements that can't fail after consuming anything."""
+        cases = {
+            "bstr .cbor Entry": True,  # Plain zcbor_bstr_decode().
+            "bstr .cbor Other": False,  # Consumes the bstr header before decoding the content.
+            "* uint": True,  # zcbor_multi_decode() restores the failing iteration.
+            "+ uint": True,
+            "2* uint": False,  # Can fail after the first iteration.
+            "(#6.1(uint) / bool)": True,  # Members are restored, the last is safe.
+            "(bool / #6.1(uint))": False,
+            "UintBool": True,
+            "#6.1(uint)": False,
+            "uint .size 1": False,
+            "[uint]": False,
+            "(tstr // (uint, bool))": False,  # The group can fail after the uint.
+        }
+        for type_str, expected in cases.items():
+            cddl = f"test = [x: {type_str}]\nEntry = [uint]\nOther = [uint]\nUintBool = uint / bool"
+            res = self.do_test_code_generation(cddl, entry_type_names=["test", "Entry"])
+            elem = res.my_types["test"].value[0]
+            self.assertEqual(expected, elem.safe_failable(), type_str)
+
     def test_optional_assign_calls_repeated_function_when_safe_failable(self):
         """The assign path is not valid when repeated_single_func_impl_condition() is True"""
-        test = self.do_test_code_generation("test = ? (a: int, b: int)").my_types["test"]
+        test = self.do_test_code_generation("test = ? (uint / bool)").my_types["test"]
+        self.assertTrue(test.safe_failable())
         self.assertTrue(test.repeated_single_func_impl_condition())
-        with patch.object(type(test), "safe_failable", return_value=True):
-            with self.assertRaises(AssertionError):
-                test.full_xcode(res_var=test.full_result_var())
+        code = test.full_xcode(res_var=test.full_result_var())
+        self.assertIn("ZCBOR_CUSTOM_CAST_FP(decode_repeated_test)", code)
+        self.assertNotIn("zcbor_union_start_code(state)", code)
 
     def test_comment_parsing_ignores_semicolon_in_string(self):
         """Comments should not be parsed inside strings."""
