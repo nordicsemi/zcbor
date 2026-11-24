@@ -11,6 +11,7 @@ from os import path, linesep, makedirs
 from collections import defaultdict, namedtuple
 from collections.abc import Hashable, Mapping
 from typing import NamedTuple
+from enum import Enum
 from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
 from datetime import datetime
 from itertools import tee, chain
@@ -166,6 +167,15 @@ class CddlParsingError(Exception):
                 self.zcbor_notes = []
             if note not in self.zcbor_notes:
                 self.zcbor_notes.append(note)
+
+
+class _ParseState(Enum):
+    """Marker for a type in my_types or my_control_groups that is being parsed.
+
+    Must not be a StrEnum or str subclass, since parse_type() treats str values as unparsed CDDL.
+    """
+
+    BEING_PARSED = "being parsed"
 
 
 def getrp(pattern, flags=0, dotall=True):
@@ -571,22 +581,25 @@ class CddlParser:
         self.post_validate_control_group()
 
     def parse_type(self, name):
-        """Parse an unparsed member in my_types or my_control_groups
+        """Parse a member of my_types or my_control_groups, unless it has already been parsed.
 
         Replace the CDDL string value in my_types or my_control_groups with the parsed element.
+        Types are parsed in order, but a type whose value is needed while parsing another type (e.g.
+        as a range bound) is parsed then. While being parsed, its value is `_ParseState.BEING_PARSED`.
         """
-        cddl_string = self.my_types[name] if name in self.my_types else self.my_control_groups[name]
-        assert isinstance(cddl_string, str), f"Type {name} has already been parsed."
+        types = self.my_types if name in self.my_types else self.my_control_groups
+        cddl_string = types[name]
+        if cddl_string is _ParseState.BEING_PARSED:
+            raise CddlParsingError(f"Circular reference: the value of {name} depends on itself.")
+        if not isinstance(cddl_string, str):
+            return
+        types[name] = _ParseState.BEING_PARSED
         try:
             parsed = self.prototype.parse_one(cddl_string, base_stem=name)
         except CddlParsingError as e:
             e.zcbor_add_note(f"  while parsing type {name}")
             raise
-        if name in self.my_types:
-            parsed = parsed.flatten()[0]
-            self.my_types[name] = parsed
-        elif name in self.my_control_groups:
-            self.my_control_groups[name] = parsed
+        types[name] = parsed.flatten()[0] if types is self.my_types else parsed
 
     @classmethod
     def from_cddl(cddl_class, *, cddl_string, prelude=True, **kwargs):
@@ -919,9 +932,7 @@ class CddlParser:
         while value.type == "OTHER" or (value.type == "GROUP" and len(value.value) == 1):
             value.enforce_no_modifier(name, exceptions={"value"})
             if value.type == "OTHER":
-                assert not isinstance(
-                    self.my_types[value.value], str
-                ), f"Type {value.value} hasn't been parsed yet."
+                self.parse_type(value.value)
                 value = self.my_types[value.value]
             else:
                 value = value.value[0]
