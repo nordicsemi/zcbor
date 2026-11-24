@@ -2670,6 +2670,57 @@ class TestIntValidation(PopenTest, TempdTest):
         self.popen_test(args + ["cborhex"], b"8122", exp_retcode=1)  # [-3]
 
 
+class TestRangeBoundDefinedLater(PopenTest, TempdTest):
+    """Range bounds can name types defined later, including in the prelude, which comes last."""
+
+    def from_cddl(self, cddl):
+        cddl_res = zcbor.DataTranslator.from_cddl(cddl_string=cddl, default_max_qty=16)
+        zcbor.CodeGenerator.from_cddl(cddl_string=cddl, mode="decode", entry_type_names=["T"])
+        return cddl_res.my_types["T"]
+
+    def test_bound_defined_later(self):
+        for cddl, valid, invalid in (
+            ("T = [1..Max]\nMax = 5", [1, 5], [0, 6]),
+            ("T = [Min...10]\nMin = 5", [5, 9], [4, 10]),
+            ("T = [1..Max]\nMax = (Five)\nFive = 5", [1, 5], [0, 6]),
+            ("T = [-1.5..Max]\nMax = 1.5", [-1.5, 1.5], [-2.0, 2.0]),
+            ("T = [bstr .size Sizes]\nSizes = 1..Max\nMax = 3", [b"a", b"abc"], [b"", b"abcd"]),
+        ):
+            with self.subTest(cddl=cddl):
+                my_type = self.from_cddl(cddl)
+                for obj in valid:
+                    self.assertTrue(my_type.validate_obj([obj]))
+                for obj in invalid:
+                    with self.assertRaises(zcbor.CddlValidationError):
+                        my_type.validate_obj([obj])
+
+    def test_bound_errors(self):
+        for cddl, exp_msg in (
+            ("T = 1..tdate", "Range value cannot have: tag."),
+            ("T = 1..number", "Range value must be one of ('UINT', 'NINT', 'FLOAT'), got UNION."),
+            ("T = 1..T", "Circular reference: the value of T depends on itself."),
+            ("T = 1..B\nB = 1..T", "Circular reference: the value of T depends on itself."),
+            ("T = 1..B\nB = C\nC = B", "Circular reference detected when unpacking Range value."),
+        ):
+            with self.subTest(cddl=cddl):
+                with self.assertRaises(zcbor.CddlParsingError) as e:
+                    self.from_cddl(cddl)
+                self.assertEqual(exp_msg, str(e.exception))
+
+    def test_cli(self):
+        p_cddl = self.tempd / "range.cddl"
+        p_cddl.write_text("T = [1..Max]\nMax = 5", encoding="utf-8")
+        args = ["zcbor", "validate", "-c", str(p_cddl), "-t", "T", "-i", "-", "--input-as", "yaml"]
+        self.popen_test(args, b"[5]")
+        self.popen_test(args, b"[6]", exp_retcode=1)
+        code_args = ["zcbor", "code", "-c", str(p_cddl), "-t", "T", "-d", "--output-cmake"]
+        code_args += [str(self.tempd / "range.cmake")]
+        self.popen_test(code_args)
+        p_cddl.write_text("T = [1..B]\nB = 1..T", encoding="utf-8")
+        stdout, _ = self.popen_test(args, b"[5]", exp_retcode=1)
+        self.assertIn(b"Circular reference: the value of T depends on itself.", stdout)
+
+
 class TestTagValidation(PopenTest):
     cddl = """
         Bar = [uint]
