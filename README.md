@@ -239,7 +239,7 @@ This is controlled with the `--yaml-compatibility` option to `convert` and `vali
 This is relevant when handling YAML/JSON conversions of data that uses the unsupported features.
 The following data types are supported by CBOR, but not by YAML (or JSON which is a subset of YAML):
 
- 1. bytestrings: YAML supports only text strings. In YAML, bytestrings are represented as `{"zcbor_bstr": "<hex-formatted bytestring>"}`, or as `{"zcbor_bstr": <any type>}` if the CBOR bytestring contains CBOR-formatted data, in which the data is decoded into `<any type>`.
+ 1. bytestrings: YAML supports only text strings. In YAML, bytestrings are represented as `{"zcbor_bstr": "<hex-formatted bytestring>"}`, or as `{"zcbor_bstr": <any type>}` if the CBOR bytestring contains CBOR-formatted data, in which the data is decoded into `<any type>`. When converting from CBOR, the decoded form is only used if it converts back to the same bytes (or to the same CBOR value, when the output is made canonical), so e.g. a bytestring containing an encoded text string is written as hex.
  2. map keys other than text string: In YAML, such key value pairs are represented as `{"zcbor_keyval<unique int>": {"key": <key, not text>, "val": <value>}}`.
  3. tags: In cbor2, tags are represented by a special type, `cbor2.CBORTag`. In YAML, these are represented as `{"zcbor_tag": <tag number>, "zcbor_tag_val": <tagged data>}`.
  4. undefined: In cbor2, undefined has its own value `cbor2.types.undefined`. In YAML, undefined is represented as: `["zcbor_undefined"]`.
