@@ -157,15 +157,19 @@ class CddlWarning(UserWarning):
 
 class CddlParsingError(Exception):
     def zcbor_add_note(self, note):
+        """Add a note, unless it repeats the last one (e.g. the same CDDL string twice).
+
+        An earlier repeat that is not the last note is kept: it is another level, e.g. in a cycle.
+        """
         if hasattr(self, "add_note"):
-            if hasattr(self, "__notes__") and note in self.__notes__:
+            if getattr(self, "__notes__", [])[-1:] == [note]:
                 return
             self.add_note(note)
         else:
             # Workaround for Python versions before 3.11 where exceptions don't have add_note().
             if not hasattr(self, "zcbor_notes"):
                 self.zcbor_notes = []
-            if note not in self.zcbor_notes:
+            if self.zcbor_notes[-1:] != [note]:
                 self.zcbor_notes.append(note)
 
 
@@ -588,6 +592,7 @@ class CddlParser:
         as a range bound) is parsed then. While being parsed, its value is `_ParseState.BEING_PARSED`.
         """
         types = self.my_types if name in self.my_types else self.my_control_groups
+        kind = "type" if types is self.my_types else "control group"
         cddl_string = types[name]
         if cddl_string is _ParseState.BEING_PARSED:
             raise CddlParsingError(f"Circular reference: the value of {name} depends on itself.")
@@ -597,7 +602,7 @@ class CddlParser:
         try:
             parsed = self.prototype.parse_one(cddl_string, base_stem=name)
         except CddlParsingError as e:
-            e.zcbor_add_note(f"  while parsing type {name}")
+            e.zcbor_add_note(f"  while parsing {kind} {name}")
             raise
         types[name] = parsed.flatten()[0] if types is self.my_types else parsed
 
@@ -968,34 +973,53 @@ class CddlParser:
         if len(disallowed) > 0:
             raise CddlParsingError(f"{name} cannot have: {', '.join(disallowed)}.")
 
-    def unpack_value(self, value, name):
-        """Strip any indirections to get the actual value."""
+    def unpack_value(self, value, name, check=None):
+        """Strip any indirections to get the actual value.
+
+        check, if given, is called with the actual value, so its errors get the same notes, which
+        name the types that were unpacked.
+        """
         already_unpacked = set()
-        while value.type == "OTHER" or (value.type == "GROUP" and len(value.value) == 1):
-            value.enforce_no_modifier(name, exceptions={"value"})
-            if value.type == "OTHER":
-                if value.value not in self.my_types:
-                    raise self.unknown_type_error(value.value, self.my_control_groups)
-                self.parse_type(value.value)
-                value = self.my_types[value.value]
-            else:
-                value = value.value[0]
-            assert isinstance(value, CddlParser), f"Unknown type {value}."
-            if id(value) in already_unpacked:
-                raise CddlParsingError(f"Circular reference detected when unpacking {name}.")
-            already_unpacked.add(id(value))
+        # The types whose values are being unpacked, for error notes.
+        type_names = []
+        try:
+            while value.type == "OTHER" or (value.type == "GROUP" and len(value.value) == 1):
+                value.enforce_no_modifier(name, exceptions={"value"})
+                type_name = None
+                if value.type == "OTHER":
+                    type_name = value.value
+                    if type_name not in self.my_types:
+                        raise self.unknown_type_error(type_name, self.my_control_groups)
+                    self.parse_type(type_name)
+                    value = self.my_types[type_name]
+                else:
+                    value = value.value[0]
+                assert isinstance(value, CddlParser), f"Unknown type {value}."
+                if id(value) in already_unpacked:
+                    raise CddlParsingError(f"Circular reference detected when unpacking {name}.")
+                already_unpacked.add(id(value))
+                if type_name is not None:
+                    type_names.append(type_name)
+            if check:
+                check(value)
+        except CddlParsingError as e:
+            for type_name in reversed(type_names):
+                e.zcbor_add_note(f"  while resolving type {type_name}")
+            raise
 
         return value
 
     def extract_unambiguous_val(self, in_obj, name, valid_types=("UINT",)):
         """Extract a number value (float or integer), and check its validity."""
-        obj = self.unpack_value(in_obj, name)
-        obj.enforce_no_modifier(name, exceptions={"value"})
-        if obj.value is None:
-            raise CddlParsingError(f"{name} must be unambiguous.")
-        if obj.type not in valid_types:
-            raise CddlParsingError(f"{name} must be one of {valid_types}, got {obj.type}.")
-        return obj
+
+        def check(obj):
+            obj.enforce_no_modifier(name, exceptions={"value"})
+            if obj.value is None:
+                raise CddlParsingError(f"{name} must be unambiguous.")
+            if obj.type not in valid_types:
+                raise CddlParsingError(f"{name} must be one of {valid_types}, got {obj.type}.")
+
+        return self.unpack_value(in_obj, name, check)
 
     def set_num_range(self, range_str):
         """Extract the minimum and maximum values from a range string and populate self.
@@ -1007,9 +1031,13 @@ class CddlParser:
             raise CddlParsingError(f"Must have exactly one range specifier '..'/'...': {range_str}")
 
         def get_part(s):
-            return self.extract_unambiguous_val(
-                self.parse_one(s), "Range value", valid_types=("UINT", "NINT", "FLOAT")
-            )
+            try:
+                return self.extract_unambiguous_val(
+                    self.parse_one(s), "Range value", valid_types=("UINT", "NINT", "FLOAT")
+                )
+            except CddlParsingError as e:
+                e.zcbor_add_note(f"  while parsing range bound {s.strip()}")
+                raise
 
         min_val_obj, max_val_obj = map(get_part, range_str.replace("...", "..").split(".."))
         inc_end = "..." not in range_str

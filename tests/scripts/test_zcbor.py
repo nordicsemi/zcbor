@@ -2070,6 +2070,51 @@ Cannot have .size before type
                 exc = self.do_test_exception(cddl_string)
                 self.assertEqual("Unknown type: bar", str(exc))
 
+        # The notes name the range bound, and each type whose value was needed for it.
+        bound_notes = [
+            "  while parsing range bound Max",
+            "  while parsing CDDL: '1..Max'",
+            "  while parsing CDDL: 'baz: 1..Max'",
+            "  while parsing CDDL: '[baz: 1..Max]'",
+            "  while parsing type foo",
+        ]
+        for cddl_string, exp_notes in (
+            ("foo = [baz: 1..bar]", [n.replace("Max", "bar") for n in bound_notes]),
+            ("foo = [baz: 1..Max]\nMax = bar", ["  while resolving type Max"] + bound_notes),
+            ("Max = bar\nfoo = [baz: 1..Max]", ["  while resolving type Max"] + bound_notes),
+            (
+                "foo = [baz: 1..Max]\nMax = Max2\nMax2 = bar",
+                ["  while resolving type Max2", "  while resolving type Max"] + bound_notes,
+            ),
+            (
+                "foo = [baz: 1..Max]\nMax = 1..bar",
+                [
+                    "  while parsing range bound bar",
+                    "  while parsing CDDL: '1..bar'",
+                    "  while parsing type Max",
+                ]
+                + bound_notes,
+            ),
+            (
+                "flags = &(a: 1, b: 1..bar)\nfoo = uint .bits flags",
+                [
+                    "  while parsing range bound bar",
+                    "  while parsing CDDL: '1..bar'",
+                    "  while parsing CDDL: 'b: 1..bar'",
+                    "  while parsing CDDL: 'a: 1, b: 1..bar'",
+                    "  while parsing CDDL: '(a: 1, b: 1..bar)'",
+                    "  while parsing CDDL: '&(a: 1, b: 1..bar)'",
+                    "  while parsing control group flags",
+                ],
+            ),
+        ):
+            with self.subTest(cddl_string=cddl_string):
+                exc = self.do_test_exception(cddl_string)
+                self.assertEqual(
+                    "\n".join(["CDDL parsing error:", "Unknown type: bar"] + exp_notes),
+                    zcbor.format_parsing_error(exc),
+                )
+
     def test_unknown_prelude_type(self):
         exc = self.do_test_exception("foo = {creation: tdate}", prelude=False)
         self.assertEqual(
@@ -2913,17 +2958,71 @@ class TestRangeBoundDefinedLater(PopenTest, TempdTest):
                         my_type.validate_obj([obj])
 
     def test_bound_errors(self):
-        for cddl, exp_msg in (
-            ("T = 1..tdate", "Range value cannot have: tag."),
-            ("T = 1..number", "Range value must be one of ('UINT', 'NINT', 'FLOAT'), got UNION."),
-            ("T = 1..T", "Circular reference: the value of T depends on itself."),
-            ("T = 1..B\nB = 1..T", "Circular reference: the value of T depends on itself."),
-            ("T = 1..B\nB = C\nC = B", "Circular reference detected when unpacking Range value."),
+        # exp_notes leaves out the "while parsing CDDL" notes.
+        for cddl, exp_msg, exp_notes in (
+            (
+                "T = 1..tdate",
+                "Range value cannot have: tag.",
+                ["resolving type tdate", "parsing range bound tdate", "parsing type T"],
+            ),
+            (
+                "T = 1..number",
+                "Range value must be one of ('UINT', 'NINT', 'FLOAT'), got UNION.",
+                ["resolving type number", "parsing range bound number", "parsing type T"],
+            ),
+            (
+                "T = 1..B\nB = C\nC = number",
+                "Range value must be one of ('UINT', 'NINT', 'FLOAT'), got UNION.",
+                [
+                    "resolving type number",
+                    "resolving type C",
+                    "resolving type B",
+                    "parsing range bound B",
+                    "parsing type T",
+                ],
+            ),
+            (
+                "T = 1..T",
+                "Circular reference: the value of T depends on itself.",
+                ["parsing range bound T", "parsing type T"],
+            ),
+            (
+                "T = 1..B\nB = 1..T",
+                "Circular reference: the value of T depends on itself.",
+                [
+                    "parsing range bound T",
+                    "parsing type B",
+                    "parsing range bound B",
+                    "parsing type T",
+                ],
+            ),
+            (
+                "T = 1..B\nB = C\nC = B",
+                "Circular reference detected when unpacking Range value.",
+                ["resolving type C", "resolving type B", "parsing range bound B", "parsing type T"],
+            ),
+            (
+                "T = 1..B\nB = C\nC = 1..B",
+                "Circular reference: the value of C depends on itself.",
+                [
+                    "resolving type B",
+                    "parsing range bound B",
+                    "parsing type C",
+                    "resolving type B",
+                    "parsing range bound B",
+                    "parsing type T",
+                ],
+            ),
         ):
             with self.subTest(cddl=cddl):
                 with self.assertRaises(zcbor.CddlParsingError) as e:
                     self.from_cddl(cddl)
                 self.assertEqual(exp_msg, str(e.exception))
+                notes = zcbor.format_parsing_error(e.exception).splitlines()[2:]
+                self.assertEqual(
+                    [f"  while {n}" for n in exp_notes],
+                    [n for n in notes if not n.startswith("  while parsing CDDL: ")],
+                )
 
     def test_cli(self):
         p_cddl = self.tempd / "range.cddl"
