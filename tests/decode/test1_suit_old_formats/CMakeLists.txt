@@ -37,6 +37,10 @@ set(py_command4
 execute_process(
   COMMAND
   ${py_command3}
+  COMMAND_ERROR_IS_FATAL ANY
+)
+
+execute_process(
   COMMAND
   ${py_command4}
   COMMAND_ERROR_IS_FATAL ANY
