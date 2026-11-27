@@ -1,4 +1,4 @@
-# zcbor v. 0.9.99
+# zcbor v. 1.0.0
 
 
 * `from_cddl()` and `__init__()` now takes only keyword-only arguments.
